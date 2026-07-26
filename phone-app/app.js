@@ -94,6 +94,7 @@ function renderCustomers() {
   for (const c of filtered) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
+      <td onclick="event.stopPropagation()"><input type="checkbox" class="customer-select-checkbox" value="${c.id}" style="width:auto;" ${selectedCustomerIds.has(c.id) ? 'checked' : ''} /></td>
       <td class="cell-id">C-${String(c.id).padStart(4, '0')}</td>
       <td class="cell-name">${escapeHtml(c.name)}</td>
       <td>${escapeHtml(c.phone || '—')}</td>
@@ -102,9 +103,59 @@ function renderCustomers() {
       <td class="cell-arrow">›</td>
     `;
     tr.addEventListener('click', () => openCustomerDrawer(c));
+    tr.querySelector('.customer-select-checkbox').addEventListener('change', (e) => {
+      if (e.target.checked) selectedCustomerIds.add(c.id);
+      else selectedCustomerIds.delete(c.id);
+      updateDeleteSelectedButton();
+    });
     rowsEl.appendChild(tr);
   }
 }
+
+const selectedCustomerIds = new Set();
+
+function updateDeleteSelectedButton() {
+  const btn = document.getElementById('btn-delete-selected-customers');
+  if (selectedCustomerIds.size > 0) {
+    btn.hidden = false;
+    btn.textContent = `Delete selected (${selectedCustomerIds.size})`;
+  } else {
+    btn.hidden = true;
+  }
+  document.getElementById('customer-select-all').checked =
+    selectedCustomerIds.size > 0 && selectedCustomerIds.size === document.querySelectorAll('.customer-select-checkbox').length;
+}
+
+document.getElementById('customer-select-all').addEventListener('change', (e) => {
+  document.querySelectorAll('.customer-select-checkbox').forEach((cb) => {
+    cb.checked = e.target.checked;
+    const id = Number(cb.value);
+    if (e.target.checked) selectedCustomerIds.add(id);
+    else selectedCustomerIds.delete(id);
+  });
+  updateDeleteSelectedButton();
+});
+
+document.getElementById('btn-delete-selected-customers').addEventListener('click', async () => {
+  const count = selectedCustomerIds.size;
+  const confirmed = confirm(
+    `Delete ${count} customer(s)? This also permanently deletes all of their jobs, estimates, and invoices. This can't be undone.`
+  );
+  if (!confirmed) return;
+
+  const btn = document.getElementById('btn-delete-selected-customers');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+
+  for (const id of selectedCustomerIds) {
+    await window.api.customers.delete(id);
+  }
+  selectedCustomerIds.clear();
+  btn.disabled = false;
+
+  await loadCustomers();
+  await loadJobs();
+});
 
 function openCustomerDrawer(customer = null) {
   editingCustomerId = customer ? customer.id : null;
@@ -382,7 +433,7 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
   confirmBtn.textContent = 'Import customers';
   closeImportDrawer();
   await loadCustomers();
-  alert(`Imported ${result.created.length} customer(s).${result.skippedCount ? ` Skipped ${result.skippedCount} row(s) with no name.` : ''}`);
+  alert(`Imported: ${result.created.length} new, ${result.updatedCount || 0} updated (matched existing).${result.skippedCount ? ` Skipped ${result.skippedCount} row(s) with no name.` : ''}`);
 });
 
 document.getElementById('btn-download-template').addEventListener('click', (e) => {

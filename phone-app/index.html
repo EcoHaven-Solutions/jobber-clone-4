@@ -132,12 +132,14 @@
 
         <div class="toolbar">
           <input type="search" id="search-input" placeholder="Search by name, phone, or email" />
+          <button class="btn btn-danger" id="btn-delete-selected-customers" hidden>Delete selected</button>
         </div>
 
         <div class="table-wrap">
           <table class="ticket-table" id="customer-table">
             <thead>
               <tr>
+                <th style="width:32px;"><input type="checkbox" id="customer-select-all" style="width:auto;" /></th>
                 <th>ID</th>
                 <th>Name</th>
                 <th>Phone</th>

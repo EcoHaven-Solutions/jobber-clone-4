@@ -144,8 +144,39 @@ window.api = {
     delete: async (id) => { await sb.from('customers').delete().eq('id', id); return { id }; },
     bulkImport: async (rows) => {
       const valid = rows.filter((r) => r.name && r.name.trim());
-      const created = valid.length ? unwrap(await sb.from('customers').insert(valid).select()) : [];
-      return { created, skippedCount: rows.length - valid.length };
+      const existing = unwrap(await sb.from('customers').select('*'));
+
+      const normalizePhone = (p) => (p || '').replace(/\D/g, '');
+      const byPhone = new Map(existing.filter((c) => c.phone).map((c) => [normalizePhone(c.phone), c]));
+      const byName = new Map(existing.map((c) => [c.name.trim().toLowerCase(), c]));
+
+      let createdCount = 0;
+      let updatedCount = 0;
+
+      for (const row of valid) {
+        const phoneKey = normalizePhone(row.phone);
+        const nameKey = (row.name || '').trim().toLowerCase();
+        const match = (phoneKey && byPhone.get(phoneKey)) || byName.get(nameKey);
+
+        // Only overwrite a field if the imported row actually has a value --
+        // an empty cell in the spreadsheet shouldn't blank out existing data.
+        const merged = {};
+        for (const key of Object.keys(cleanCustomer(row))) {
+          if (row[key] !== undefined && row[key] !== '') merged[key] = row[key];
+        }
+
+        if (match) {
+          await sb.from('customers').update(cleanCustomer({ ...match, ...merged })).eq('id', match.id);
+          updatedCount += 1;
+        } else {
+          const created = unwrap(await sb.from('customers').insert(cleanCustomer(row)).select().single());
+          byPhone.set(normalizePhone(created.phone), created);
+          byName.set(created.name.trim().toLowerCase(), created);
+          createdCount += 1;
+        }
+      }
+
+      return { created: new Array(createdCount), updatedCount, skippedCount: rows.length - valid.length };
     },
   },
 
