@@ -10,6 +10,7 @@ app.setPath('userData', path.join(app.getPath('appData'), 'fieldbase'));
 const db = require('./src/db');
 const email = require('./src/email');
 const payments = require('./src/payments');
+const sms = require('./src/sms');
 const { startServer } = require('./server');
 
 const PHONE_ACCESS_PORT = 4000;
@@ -228,6 +229,17 @@ ipcMain.handle('payments:createLinkForInvoice', async (event, invoiceId) => {
   try {
     const invoice = await payments.createPaymentLinkForInvoice(invoiceId);
     return { ok: true, invoice };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+// ---- SMS (Twilio) ----
+
+ipcMain.handle('sms:sendEstimateText', async (event, quoteId) => {
+  try {
+    await sms.sendEstimateText(quoteId);
+    return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };
   }

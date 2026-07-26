@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const db = require('./src/db');
 const email = require('./src/email');
 const payments = require('./src/payments');
+const sms = require('./src/sms');
 const { buildJobsIcs } = require('./src/calendar');
 
 function startServer(port = 4000) {
@@ -174,6 +175,16 @@ function startServer(port = 4000) {
     try {
       const invoice = await payments.createPaymentLinkForInvoice(Number(req.params.id));
       res.json({ ok: true, invoice });
+    } catch (err) {
+      res.json({ ok: false, error: err.message });
+    }
+  });
+
+  // ---- SMS (Twilio) ----
+  app.post('/api/quotes/:id/text', async (req, res) => {
+    try {
+      await sms.sendEstimateText(Number(req.params.id));
+      res.json({ ok: true });
     } catch (err) {
       res.json({ ok: false, error: err.message });
     }

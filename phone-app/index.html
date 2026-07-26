@@ -3,10 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <title>EcoHaven Solutions LLC</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+  <!-- Home-screen / "installed app" support for phones -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#16160F" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="EcoHaven" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <link rel="icon" href="icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -112,11 +124,11 @@
             <p class="subtitle" id="customer-count">0 on file</p>
           </div>
           <div style="display:flex; gap:8px;">
-            <button class="btn btn-ghost" id="btn-import-csv">Import CSV</button>
+            <button class="btn btn-ghost" id="btn-import-csv">Import CSV/Excel</button>
             <button class="btn btn-primary" id="btn-new-customer">+ New customer</button>
           </div>
         </header>
-        <input type="file" id="customer-csv-input" accept=".csv" hidden />
+        <input type="file" id="customer-csv-input" accept=".csv,.xlsx,.xls" hidden />
 
         <div class="toolbar">
           <input type="search" id="search-input" placeholder="Search by name, phone, or email" />
@@ -590,6 +602,11 @@
         <textarea name="system_notes" rows="2" placeholder="Valve locations, quirks, access notes..."></textarea>
       </label>
 
+      <label style="flex-direction:row; align-items:center; gap:8px;">
+        <input type="checkbox" name="exclude_from_mass_comms" style="width:auto;" />
+        Don't include in seasonal batches or mass texts/emails
+      </label>
+
       <div class="drawer-actions">
         <button type="button" class="btn btn-danger" id="btn-delete-customer" hidden>Delete</button>
         <div class="drawer-actions-right">
@@ -610,7 +627,7 @@
     </div>
     <div class="drawer-body">
       <p class="empty-sub" style="margin-top:0;">
-        CSV should have a header row. Recognized columns: <code>name</code>
+        CSV or Excel (.xlsx/.xls) file, with a header row. Recognized columns: <code>name</code>
         (required), <code>email</code>, <code>phone</code>,
         <code>address</code>, <code>city</code>, <code>state</code>,
         <code>zip</code>, <code>notes</code>, <code>zone_count</code>,
@@ -904,6 +921,7 @@
       </label>
 
       <div class="drawer-section-label">Customers</div>
+      <p class="empty-sub" id="batch-excluded-note" style="margin:0 0 4px;"></p>
       <label style="flex-direction:row; align-items:center; gap:8px;">
         <input type="checkbox" id="batch-select-all" style="width:auto;" />
         Select all
@@ -973,7 +991,8 @@
     </form>
   </div>
 
-  <script src="web-api.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="supabase-api.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

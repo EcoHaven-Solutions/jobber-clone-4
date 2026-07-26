@@ -117,6 +117,7 @@ function openCustomerDrawer(customer = null) {
     for (const key of ['name', 'phone', 'email', 'address', 'city', 'state', 'zip', 'notes', 'zone_count', 'controller_brand', 'backflow_due_date', 'system_notes']) {
       if (form.elements[key]) form.elements[key].value = customer[key] || '';
     }
+    form.elements.exclude_from_mass_comms.checked = !!customer.exclude_from_mass_comms;
   } else {
     drawerTitle.textContent = 'New customer';
     drawerIdTag.textContent = 'NEW';
@@ -315,9 +316,19 @@ document.getElementById('btn-import-csv').addEventListener('click', () => {
 document.getElementById('customer-csv-input').addEventListener('change', () => {
   const file = document.getElementById('customer-csv-input').files[0];
   if (!file) return;
+  const isExcel = /\.xlsx?$/i.test(file.name);
   const reader = new FileReader();
+
   reader.onload = () => {
-    const rows = parseCSV(reader.result);
+    let rows;
+    if (isExcel) {
+      const workbook = XLSX.read(reader.result, { type: 'array' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false, defval: '' });
+    } else {
+      rows = parseCSV(reader.result);
+    }
+
     parsedImportRows = csvRowsToCustomers(rows).filter((c) => c.name);
 
     const summaryEl = document.getElementById('import-summary');
@@ -336,7 +347,9 @@ document.getElementById('customer-csv-input').addEventListener('change', () => {
     document.getElementById('import-drawer').hidden = false;
     document.getElementById('customer-csv-input').value = '';
   };
-  reader.readAsText(file);
+
+  if (isExcel) reader.readAsArrayBuffer(file);
+  else reader.readAsText(file);
 });
 
 function closeImportDrawer() {
@@ -655,9 +668,14 @@ jobPhotoInput.addEventListener('change', () => {
   if (!file || !editingJobId) return;
   const reader = new FileReader();
   reader.onload = async () => {
-    await window.api.jobPhotos.add(editingJobId, jobPhotoTypeSelect.value, reader.result);
-    jobPhotoInput.value = '';
-    renderJobPhotoGallery(editingJobId);
+    try {
+      await window.api.jobPhotos.add(editingJobId, jobPhotoTypeSelect.value, reader.result);
+      jobPhotoInput.value = '';
+      renderJobPhotoGallery(editingJobId);
+    } catch (err) {
+      alert(err.message);
+      jobPhotoInput.value = '';
+    }
   };
   reader.readAsDataURL(file);
 });
@@ -703,12 +721,15 @@ const batchCustomerListEl = document.getElementById('batch-customer-list');
 const batchSelectAll = document.getElementById('batch-select-all');
 
 function openBatchDrawer() {
-  if (customers.length === 0) {
+  const eligibleCustomers = customers.filter((c) => !c.exclude_from_mass_comms);
+  const excludedCount = customers.length - eligibleCustomers.length;
+
+  if (eligibleCustomers.length === 0) {
     alert('Add some customers first, then you can batch-schedule jobs for them.');
     return;
   }
   batchForm.reset();
-  batchCustomerListEl.innerHTML = customers
+  batchCustomerListEl.innerHTML = eligibleCustomers
     .map(
       (c) => `
       <label class="batch-customer-row">
@@ -717,6 +738,8 @@ function openBatchDrawer() {
       </label>`
     )
     .join('');
+  document.getElementById('batch-excluded-note').textContent =
+    excludedCount > 0 ? `${excludedCount} customer(s) opted out of mass communications and aren't shown here.` : '';
   batchSelectAll.checked = false;
   batchOverlay.hidden = false;
   batchDrawer.hidden = false;

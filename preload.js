@@ -69,5 +69,8 @@ contextBridge.exposeInMainWorld('api', {
   payments: {
     createLinkForInvoice: (invoiceId) => ipcRenderer.invoke('payments:createLinkForInvoice', invoiceId),
   },
+  sms: {
+    sendEstimateText: (quoteId) => ipcRenderer.invoke('sms:sendEstimateText', quoteId),
+  },
   isElectron: true,
 });

@@ -8,8 +8,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "start": "node server.js",
-    "desktop": "electron .",
+    "start": "electron .",
+    "server": "node server.js",
     "package": "electron-builder --mac --dir"
   },
   "build": {

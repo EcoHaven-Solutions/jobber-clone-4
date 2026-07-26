@@ -86,6 +86,9 @@ if (!window.api) {
     payments: {
       createLinkForInvoice: (invoiceId) => send(`/api/invoices/${invoiceId}/payment-link`, 'POST'),
     },
+    sms: {
+      sendEstimateText: (quoteId) => send(`/api/quotes/${quoteId}/text`, 'POST'),
+    },
     auth: {
       logout: () => send('/api/auth/logout', 'POST').then(() => { window.location.href = '/login.html'; }),
     },
