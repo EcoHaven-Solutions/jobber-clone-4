@@ -544,6 +544,27 @@
             </div>
           </form>
         </div>
+
+        <div class="table-wrap settings-card" style="margin-top:20px;">
+          <form id="mapbox-settings-form" class="drawer-body" style="padding:24px;">
+            <p class="empty-sub" style="margin-top:0;">
+              Powers <strong>address autocomplete</strong> and the
+              <strong>Route map</strong>. Sign up free at
+              <a href="https://mapbox.com/signup" target="_blank" style="color:var(--olive);">mapbox.com/signup</a>
+              (no credit card needed), then copy your default public token
+              from your account page.
+            </p>
+            <label>Mapbox access token
+              <input type="text" name="mapbox_access_token" placeholder="pk.eyJ1Ijoi..." autocomplete="off" />
+            </label>
+            <div class="drawer-actions" style="border-top:none;">
+              <div></div>
+              <div class="drawer-actions-right">
+                <button type="submit" class="btn btn-primary">Save Mapbox settings</button>
+              </div>
+            </div>
+          </form>
+        </div>
       </section>
 
     </main>
@@ -905,7 +926,7 @@
           <option value="before">Before</option>
           <option value="after">After</option>
         </select>
-        <input type="file" id="job-photo-input" accept="image/*" capture="environment" />
+        <input type="file" id="job-photo-input" accept="image/*" />
       </div>
       <div id="job-photo-gallery" class="photo-gallery"></div>
 
@@ -1172,7 +1193,7 @@
       </label>
 
       <label>Receipt photo
-        <input type="file" id="expense-receipt-input" accept="image/*" capture="environment" />
+        <input type="file" id="expense-receipt-input" accept="image/*" />
       </label>
       <div id="expense-receipt-preview-wrap" hidden>
         <img id="expense-receipt-preview" class="receipt-preview" alt="Receipt preview" />

@@ -3,6 +3,7 @@ let jobs = [];
 let quotes = [];
 let invoices = [];
 let editingCustomerId = null;
+let mapboxAccessToken = ''; // loaded from settings once loadSettings() runs
 let editingJobId = null;
 let editingQuoteId = null;
 let currentQuoteNumber = null;
@@ -209,40 +210,76 @@ addressInput.addEventListener('input', () => {
   const thisToken = ++addressSearchToken;
   addressSearchTimer = setTimeout(async () => {
     try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=us&q=${encodeURIComponent(query)}`
-      );
-      const results = await res.json();
+      const suggestions = mapboxAccessToken
+        ? await fetchMapboxSuggestions(query)
+        : await fetchNominatimSuggestions(query);
+
       if (thisToken !== addressSearchToken) return; // a newer keystroke superseded this search
 
-      if (!results || results.length === 0) {
+      if (!suggestions || suggestions.length === 0) {
         hideAddressSuggestions();
         return;
       }
 
-      addressSuggestionsEl.innerHTML = results
-        .map((r, i) => `<div class="address-suggestion-item" data-index="${i}">${escapeHtml(r.display_name)}</div>`)
+      addressSuggestionsEl.innerHTML = suggestions
+        .map((s, i) => `<div class="address-suggestion-item" data-index="${i}">${escapeHtml(s.label)}</div>`)
         .join('');
       addressSuggestionsEl.hidden = false;
 
       addressSuggestionsEl.querySelectorAll('.address-suggestion-item').forEach((el) => {
         el.addEventListener('click', () => {
-          const r = results[Number(el.dataset.index)];
-          const addr = r.address || {};
-          const streetNum = addr.house_number || '';
-          const street = addr.road || '';
-          form.elements.address.value = [streetNum, street].filter(Boolean).join(' ');
-          form.elements.city.value = addr.city || addr.town || addr.village || addr.hamlet || '';
-          form.elements.state.value = addr.state ? stateAbbreviation(addr.state) : '';
-          form.elements.zip.value = addr.postcode || '';
+          const s = suggestions[Number(el.dataset.index)];
+          form.elements.address.value = s.address || '';
+          form.elements.city.value = s.city || '';
+          form.elements.state.value = s.state || '';
+          form.elements.zip.value = s.zip || '';
           hideAddressSuggestions();
         });
       });
     } catch (err) {
       hideAddressSuggestions();
     }
-  }, 500); // debounce so we're not hammering the free service on every keystroke
+  }, 350); // debounce so we're not hammering the geocoding service on every keystroke
 });
+
+// Mapbox Geocoding v6 -- much better accuracy than the free fallback,
+// especially for rural addresses. Requires a free Mapbox token (Settings).
+async function fetchMapboxSuggestions(query) {
+  const url = `https://api.mapbox.com/search/geocode/v6/forward?q=${encodeURIComponent(query)}&access_token=${mapboxAccessToken}&country=us&types=address&autocomplete=true&limit=5`;
+  const res = await fetch(url);
+  const data = await res.json();
+  if (!data.features) return [];
+
+  return data.features.map((f) => {
+    const ctx = f.properties.context || {};
+    return {
+      label: f.properties.full_address || f.properties.name,
+      address: [ctx.address?.address_number, ctx.street?.name || ctx.address?.street_name].filter(Boolean).join(' ') || f.properties.name,
+      city: ctx.place?.name || ctx.locality?.name || '',
+      state: ctx.region?.region_code || ctx.region?.name || '',
+      zip: ctx.postcode?.name || '',
+    };
+  });
+}
+
+// Free fallback (OpenStreetMap/Nominatim) used only if no Mapbox token has
+// been set up yet in Settings -- lower accuracy but keeps things working.
+async function fetchNominatimSuggestions(query) {
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=us&q=${encodeURIComponent(query)}`
+  );
+  const results = await res.json();
+  return (results || []).map((r) => {
+    const addr = r.address || {};
+    return {
+      label: r.display_name,
+      address: [addr.house_number, addr.road].filter(Boolean).join(' '),
+      city: addr.city || addr.town || addr.village || addr.hamlet || '',
+      state: addr.state ? stateAbbreviation(addr.state) : '',
+      zip: addr.postcode || '',
+    };
+  });
+}
 
 document.addEventListener('click', (e) => {
   if (!addressSuggestionsEl.contains(e.target) && e.target !== addressInput) {
@@ -1802,6 +1839,10 @@ async function loadSettings() {
   if (settings.twilio_account_sid) twilioSettingsForm.elements.twilio_account_sid.value = settings.twilio_account_sid;
   if (settings.twilio_auth_token) twilioSettingsForm.elements.twilio_auth_token.value = settings.twilio_auth_token;
   if (settings.twilio_phone_number) twilioSettingsForm.elements.twilio_phone_number.value = settings.twilio_phone_number;
+  if (settings.mapbox_access_token) {
+    mapboxSettingsForm.elements.mapbox_access_token.value = settings.mapbox_access_token;
+    mapboxAccessToken = settings.mapbox_access_token;
+  }
 }
 
 settingsForm.addEventListener('submit', async (e) => {
@@ -1837,6 +1878,15 @@ twilioSettingsForm.addEventListener('submit', async (e) => {
   await window.api.settings.set('twilio_auth_token', data.twilio_auth_token || '');
   await window.api.settings.set('twilio_phone_number', data.twilio_phone_number || '');
   alert('Twilio settings saved.');
+});
+
+const mapboxSettingsForm = document.getElementById('mapbox-settings-form');
+mapboxSettingsForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(mapboxSettingsForm).entries());
+  await window.api.settings.set('mapbox_access_token', data.mapbox_access_token || '');
+  mapboxAccessToken = data.mapbox_access_token || '';
+  alert('Mapbox settings saved.');
 });
 
 // ===================== Reports =====================
@@ -2018,10 +2068,21 @@ async function geocodeAddress(query) {
   if (geocodeCache[query]) return geocodeCache[query];
 
   try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
-    const results = await res.json();
-    if (results && results[0]) {
-      const point = { lat: parseFloat(results[0].lat), lon: parseFloat(results[0].lon) };
+    const url = mapboxAccessToken
+      ? `https://api.mapbox.com/search/geocode/v6/forward?q=${encodeURIComponent(query)}&access_token=${mapboxAccessToken}&country=us&limit=1`
+      : `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    let point = null;
+    if (mapboxAccessToken && data.features && data.features[0]) {
+      const [lon, lat] = data.features[0].geometry.coordinates;
+      point = { lat, lon };
+    } else if (!mapboxAccessToken && data && data[0]) {
+      point = { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    }
+
+    if (point) {
       geocodeCache[query] = point;
       return point;
     }
