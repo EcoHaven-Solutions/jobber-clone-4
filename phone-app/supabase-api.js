@@ -379,10 +379,10 @@ window.api = {
   },
 
   email: {
-    sendEstimate: (id) => invokeFunction('send-notification', { type: 'estimate', id }),
-    sendInvoice: (id) => invokeFunction('send-notification', { type: 'invoice', id }),
-    sendJobReminder: (id) => invokeFunction('send-notification', { type: 'job-reminder', id }),
-    sendReviewRequest: (id) => invokeFunction('send-notification', { type: 'review-request', id }),
+    sendEstimate: (id) => invokeFunction('send-notifications', { type: 'estimate', id }),
+    sendInvoice: (id) => invokeFunction('send-notifications', { type: 'invoice', id }),
+    sendJobReminder: (id) => invokeFunction('send-notifications', { type: 'job-reminder', id }),
+    sendReviewRequest: (id) => invokeFunction('send-notifications', { type: 'review-request', id }),
   },
 
   sms: {
