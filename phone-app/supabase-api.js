@@ -65,7 +65,19 @@ async function generateDocNumber(table) {
 
 async function invokeFunction(name, body) {
   const { data, error } = await sb.functions.invoke(name, { body });
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    // error.message alone is just a generic "non-2xx status" -- the actual
+    // reason is in the function's own response body, so read that instead.
+    if (error.context && typeof error.context.json === 'function') {
+      try {
+        const errBody = await error.context.json();
+        return { ok: false, error: errBody.error || error.message };
+      } catch (e) {
+        // response wasn't JSON -- fall through to the generic message
+      }
+    }
+    return { ok: false, error: error.message };
+  }
   return data;
 }
 
