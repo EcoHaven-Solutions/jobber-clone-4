@@ -397,7 +397,7 @@ window.api = {
 
   app: {
     getPhoneAccessUrl: async () => null,
-    getCalendarUrl: async () => `${SUPABASE_URL}/functions/v1/calendar-feed`,
+    getCalendarUrl: async () => `${SUPABASE_URL}/functions/v1/smooth-action?apikey=${SUPABASE_ANON_KEY}`,
   },
 
   auth: {
