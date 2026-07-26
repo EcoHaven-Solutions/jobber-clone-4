@@ -16,7 +16,10 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 })();
 
 function unwrap({ data, error }) {
-  if (error) throw new Error(error.message);
+  if (error) {
+    const parts = [error.message, error.details, error.hint, error.code].filter(Boolean);
+    throw new Error(parts.join(' | '));
+  }
   return data;
 }
 
@@ -66,13 +69,78 @@ async function invokeFunction(name, body) {
   return data;
 }
 
+function toIntOrNull(v) {
+  if (v === undefined || v === null || v === '') return null;
+  const n = parseInt(v, 10);
+  return Number.isNaN(n) ? null : n;
+}
+function toNumOrDefault(v, def = 0) {
+  if (v === undefined || v === null || v === '') return def;
+  const n = Number(v);
+  return Number.isNaN(n) ? def : n;
+}
+function toBoolInt(v) {
+  return v === 'on' || v === true || v === 1 || v === '1' ? 1 : 0;
+}
+function toNullableText(v) {
+  return v === undefined || v === '' ? null : v;
+}
+
+function cleanCustomer(c) {
+  return {
+    ...c,
+    zone_count: toIntOrNull(c.zone_count),
+    exclude_from_mass_comms: toBoolInt(c.exclude_from_mass_comms),
+    email: toNullableText(c.email),
+    phone: toNullableText(c.phone),
+    address: toNullableText(c.address),
+    city: toNullableText(c.city),
+    state: toNullableText(c.state),
+    zip: toNullableText(c.zip),
+    notes: toNullableText(c.notes),
+    controller_brand: toNullableText(c.controller_brand),
+    backflow_due_date: toNullableText(c.backflow_due_date),
+    system_notes: toNullableText(c.system_notes),
+  };
+}
+
+function cleanJob(j) {
+  return {
+    ...j,
+    customer_id: toIntOrNull(j.customer_id),
+    scheduled_date: toNullableText(j.scheduled_date),
+    scheduled_time: toNullableText(j.scheduled_time),
+    scheduled_time_end: toNullableText(j.scheduled_time_end),
+    description: toNullableText(j.description),
+  };
+}
+
+function cleanQuoteOrInvoice(o) {
+  return {
+    ...o,
+    customer_id: toIntOrNull(o.customer_id),
+    job_id: toIntOrNull(o.job_id),
+    tax_rate: toNumOrDefault(o.tax_rate, 0),
+    notes: toNullableText(o.notes),
+    due_date: toNullableText(o.due_date),
+  };
+}
+
+function cleanExpense(e) {
+  return {
+    ...e,
+    amount: toNumOrDefault(e.amount, 0),
+    notes: toNullableText(e.notes),
+  };
+}
+
 window.api = {
   isElectron: false,
 
   customers: {
     list: async () => unwrap(await sb.from('customers').select('*').order('name')),
-    create: async (c) => unwrap(await sb.from('customers').insert(c).select().single()),
-    update: async (id, updates) => unwrap(await sb.from('customers').update(updates).eq('id', id).select().single()),
+    create: async (c) => unwrap(await sb.from('customers').insert(cleanCustomer(c)).select().single()),
+    update: async (id, updates) => unwrap(await sb.from('customers').update(cleanCustomer(updates)).eq('id', id).select().single()),
     delete: async (id) => { await sb.from('customers').delete().eq('id', id); return { id }; },
     bulkImport: async (rows) => {
       const valid = rows.filter((r) => r.name && r.name.trim());
@@ -84,8 +152,8 @@ window.api = {
   jobs: {
     list: async () => unwrap(await sb.from('jobs').select('*, customers(name, phone)').order('scheduled_date', { nullsFirst: false })).then(mapJobRows),
     listByCustomer: async (customerId) => unwrap(await sb.from('jobs').select('*, customers(name, phone)').eq('customer_id', customerId)).then(mapJobRows),
-    create: async (job) => unwrap(await sb.from('jobs').insert(job).select('*, customers(name, phone)').single()).then((r) => mapJobRows([r])[0]),
-    update: async (id, updates) => unwrap(await sb.from('jobs').update(updates).eq('id', id).select('*, customers(name, phone)').single()).then((r) => mapJobRows([r])[0]),
+    create: async (job) => unwrap(await sb.from('jobs').insert(cleanJob(job)).select('*, customers(name, phone)').single()).then((r) => mapJobRows([r])[0]),
+    update: async (id, updates) => unwrap(await sb.from('jobs').update(cleanJob(updates)).eq('id', id).select('*, customers(name, phone)').single()).then((r) => mapJobRows([r])[0]),
     delete: async (id) => { await sb.from('jobs').delete().eq('id', id); return { id }; },
     bulkCreate: async (customerIds, template) => {
       const rows = customerIds.map((customer_id) => ({ ...template, customer_id }));
@@ -134,12 +202,12 @@ window.api = {
     },
     create: async (quote) => {
       const number = await generateDocNumber('quotes');
-      const row = unwrap(await sb.from('quotes').insert({ ...stripItems(quote), number }).select().single());
+      const row = unwrap(await sb.from('quotes').insert({ ...cleanQuoteOrInvoice(stripItems(quote)), number }).select().single());
       await saveItems('quote_items', 'quote_id', row.id, quote.items);
       return window.api.quotes.get(row.id);
     },
     update: async (id, updates) => {
-      await sb.from('quotes').update(stripItems(updates)).eq('id', id);
+      await sb.from('quotes').update(cleanQuoteOrInvoice(stripItems(updates))).eq('id', id);
       if (updates.items) await saveItems('quote_items', 'quote_id', id, updates.items);
       return window.api.quotes.get(id);
     },
@@ -177,12 +245,12 @@ window.api = {
     },
     create: async (invoice) => {
       const number = await generateDocNumber('invoices');
-      const row = unwrap(await sb.from('invoices').insert({ ...stripItems(invoice), number }).select().single());
+      const row = unwrap(await sb.from('invoices').insert({ ...cleanQuoteOrInvoice(stripItems(invoice)), number }).select().single());
       await saveItems('invoice_items', 'invoice_id', row.id, invoice.items);
       return window.api.invoices.get(row.id);
     },
     update: async (id, updates) => {
-      await sb.from('invoices').update(stripItems(updates)).eq('id', id);
+      await sb.from('invoices').update(cleanQuoteOrInvoice(stripItems(updates))).eq('id', id);
       if (updates.items) await saveItems('invoice_items', 'invoice_id', id, updates.items);
       return window.api.invoices.get(id);
     },
@@ -192,8 +260,8 @@ window.api = {
   expenses: {
     list: async () => unwrap(await sb.from('expenses').select('*').order('expense_date', { ascending: false })),
     listByYear: async (year) => unwrap(await sb.from('expenses').select('*').gte('expense_date', `${year}-01-01`).lte('expense_date', `${year}-12-31`)),
-    create: async (expense) => unwrap(await sb.from('expenses').insert(stripReceiptData(expense)).select().single()),
-    update: async (id, updates) => unwrap(await sb.from('expenses').update(stripReceiptData(updates)).eq('id', id).select().single()),
+    create: async (expense) => unwrap(await sb.from('expenses').insert(cleanExpense(stripReceiptData(expense))).select().single()),
+    update: async (id, updates) => unwrap(await sb.from('expenses').update(cleanExpense(stripReceiptData(updates))).eq('id', id).select().single()),
     delete: async (id) => { await sb.from('expenses').delete().eq('id', id); return { id }; },
   },
 

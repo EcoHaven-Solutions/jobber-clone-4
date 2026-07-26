@@ -221,10 +221,15 @@ form.addEventListener('submit', async (e) => {
   const data = Object.fromEntries(new FormData(form).entries());
   if (!data.name.trim()) return;
 
-  if (editingCustomerId) {
-    await window.api.customers.update(editingCustomerId, data);
-  } else {
-    await window.api.customers.create(data);
+  try {
+    if (editingCustomerId) {
+      await window.api.customers.update(editingCustomerId, data);
+    } else {
+      await window.api.customers.create(data);
+    }
+  } catch (err) {
+    alert(`Couldn't save customer: ${err.message}`);
+    return;
   }
 
   closeCustomerDrawer();
