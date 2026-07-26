@@ -1,0 +1,34 @@
+{
+  "name": "fieldbase",
+  "productName": "EcoHaven Solutions LLC",
+  "version": "0.1.0",
+  "description": "Hosted web app for managing customers, jobs, estimates, and invoices",
+  "main": "main.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "desktop": "electron .",
+    "package": "electron-builder --mac --dir"
+  },
+  "build": {
+    "appId": "com.ecohavenpro.fieldbase",
+    "files": ["main.js", "preload.js", "server.js", "src/**/*", "renderer/**/*"],
+    "mac": {
+      "category": "public.app-category.business",
+      "identity": null,
+      "icon": "build/icon.icns"
+    }
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "nodemailer": "^6.9.14"
+  },
+  "devDependencies": {
+    "electron": "^31.3.0",
+    "electron-builder": "^24.13.3"
+  }
+}

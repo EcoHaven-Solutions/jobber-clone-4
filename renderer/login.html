@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>EcoHaven Solutions LLC — Sign in</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      background: #16160F;
+      color: #23261F;
+    }
+    .card {
+      background: #FFFFFF;
+      border-radius: 14px;
+      padding: 36px 32px;
+      width: 340px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+    }
+    .brand {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .brand-name {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      font-size: 19px;
+    }
+    .brand-sub {
+      font-size: 11px;
+      color: #6B7263;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 2px;
+    }
+    h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 17px;
+      margin: 0 0 6px;
+      text-align: center;
+    }
+    p.hint {
+      font-size: 12px;
+      color: #6B7263;
+      text-align: center;
+      margin: 0 0 20px;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: #6B7263;
+      margin-bottom: 5px;
+    }
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #E3E1D5;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 14px;
+    }
+    button {
+      width: 100%;
+      padding: 11px;
+      background: #4F5C36;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; cursor: default; }
+    .error {
+      color: #A8452A;
+      font-size: 12px;
+      margin: -6px 0 14px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <div class="brand-name">EcoHaven Solutions LLC</div>
+      <div class="brand-sub">Field Ops</div>
+    </div>
+    <h1 id="form-title">Sign in</h1>
+    <p class="hint" id="form-hint">Enter your password to continue.</p>
+    <div class="error" id="error-msg"></div>
+    <form id="auth-form">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required />
+      <button type="submit" id="submit-btn">Sign in</button>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById('auth-form');
+    const errorMsg = document.getElementById('error-msg');
+    const submitBtn = document.getElementById('submit-btn');
+    const formTitle = document.getElementById('form-title');
+    const formHint = document.getElementById('form-hint');
+    let isSetup = false;
+
+    (async function init() {
+      const res = await fetch('/api/auth/status');
+      const data = await res.json();
+      if (!data.hasPassword) {
+        isSetup = true;
+        formTitle.textContent = 'Set up your password';
+        formHint.textContent = 'Choose a password to protect this app (at least 6 characters). You\'ll use this every time you sign in from now on.';
+        submitBtn.textContent = 'Set password';
+        document.getElementById('password').setAttribute('autocomplete', 'new-password');
+      } else if (data.authed) {
+        window.location.href = '/';
+      }
+    })();
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorMsg.style.display = 'none';
+      submitBtn.disabled = true;
+      submitBtn.textContent = isSetup ? 'Setting up…' : 'Signing in…';
+
+      const password = document.getElementById('password').value;
+      const endpoint = isSetup ? '/api/auth/setup' : '/api/auth/login';
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        window.location.href = '/';
+      } else {
+        errorMsg.textContent = data.error || 'Something went wrong.';
+        errorMsg.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = isSetup ? 'Set password' : 'Sign in';
+      }
+    });
+  </script>
+</body>
+</html>

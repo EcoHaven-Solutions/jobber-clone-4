@@ -1,0 +1,2039 @@
+let customers = [];
+let jobs = [];
+let quotes = [];
+let invoices = [];
+let editingCustomerId = null;
+let editingJobId = null;
+let editingQuoteId = null;
+let currentQuoteNumber = null;
+let editingInvoiceId = null;
+let currentInvoiceNumber = null;
+let lineItemCounter = 0;
+
+const STATUS_LABELS = {
+  scheduled: 'Scheduled',
+  in_progress: 'In progress',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
+
+const QUOTE_STATUS_LABELS = {
+  draft: 'Draft',
+  sent: 'Sent',
+  approved: 'Approved',
+  declined: 'Declined',
+};
+
+const INVOICE_STATUS_LABELS = {
+  unpaid: 'Unpaid',
+  paid: 'Paid',
+};
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ===================== View switching =====================
+
+const navItems = document.querySelectorAll('.nav-item[data-view]');
+const views = document.querySelectorAll('.view');
+
+navItems.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    navItems.forEach((b) => b.classList.remove('is-active'));
+    btn.classList.add('is-active');
+    const target = btn.dataset.view;
+    views.forEach((v) => {
+      v.hidden = v.id !== `view-${target}`;
+    });
+    if (target === 'schedule' && window.initRouteMap) window.initRouteMap();
+  });
+});
+
+// ===================== Customers =====================
+
+const rowsEl = document.getElementById('customer-rows');
+const emptyEl = document.getElementById('empty-state');
+const countEl = document.getElementById('customer-count');
+const searchEl = document.getElementById('search-input');
+
+const overlay = document.getElementById('overlay');
+const drawer = document.getElementById('drawer');
+const form = document.getElementById('customer-form');
+const drawerTitle = document.getElementById('drawer-title');
+const drawerIdTag = document.getElementById('drawer-id-tag');
+const deleteBtn = document.getElementById('btn-delete-customer');
+
+async function loadCustomers() {
+  customers = await window.api.customers.list();
+  renderCustomers();
+  populateJobCustomerSelect();
+  populateQuoteCustomerSelect();
+  populateInvoiceCustomerSelect();
+}
+
+function renderCustomers() {
+  const query = searchEl.value.trim().toLowerCase();
+  const filtered = query
+    ? customers.filter((c) =>
+        [c.name, c.phone, c.email].some((f) => (f || '').toLowerCase().includes(query))
+      )
+    : customers;
+
+  countEl.textContent = `${customers.length} on file`;
+  rowsEl.innerHTML = '';
+
+  if (filtered.length === 0) {
+    emptyEl.hidden = false;
+    return;
+  }
+  emptyEl.hidden = true;
+
+  for (const c of filtered) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="cell-id">C-${String(c.id).padStart(4, '0')}</td>
+      <td class="cell-name">${escapeHtml(c.name)}</td>
+      <td>${escapeHtml(c.phone || '—')}</td>
+      <td>${escapeHtml(c.email || '—')}</td>
+      <td>${escapeHtml(c.city || '—')}</td>
+      <td class="cell-arrow">›</td>
+    `;
+    tr.addEventListener('click', () => openCustomerDrawer(c));
+    rowsEl.appendChild(tr);
+  }
+}
+
+function openCustomerDrawer(customer = null) {
+  editingCustomerId = customer ? customer.id : null;
+  form.reset();
+
+  if (customer) {
+    drawerTitle.textContent = 'Edit customer';
+    drawerIdTag.textContent = `C-${String(customer.id).padStart(4, '0')}`;
+    deleteBtn.hidden = false;
+    for (const key of ['name', 'phone', 'email', 'address', 'city', 'state', 'zip', 'notes', 'zone_count', 'controller_brand', 'backflow_due_date', 'system_notes']) {
+      if (form.elements[key]) form.elements[key].value = customer[key] || '';
+    }
+  } else {
+    drawerTitle.textContent = 'New customer';
+    drawerIdTag.textContent = 'NEW';
+    deleteBtn.hidden = true;
+  }
+
+  overlay.hidden = false;
+  drawer.hidden = false;
+}
+
+function closeCustomerDrawer() {
+  overlay.hidden = true;
+  drawer.hidden = true;
+  editingCustomerId = null;
+}
+
+// ---- Address autocomplete (free, via OpenStreetMap's Nominatim) ----
+
+const addressInput = document.getElementById('customer-address-input');
+const addressSuggestionsEl = document.getElementById('address-suggestions');
+let addressSearchTimer = null;
+let addressSearchToken = 0;
+
+function hideAddressSuggestions() {
+  addressSuggestionsEl.hidden = true;
+  addressSuggestionsEl.innerHTML = '';
+}
+
+addressInput.addEventListener('input', () => {
+  const query = addressInput.value.trim();
+  clearTimeout(addressSearchTimer);
+
+  if (query.length < 5) {
+    hideAddressSuggestions();
+    return;
+  }
+
+  const thisToken = ++addressSearchToken;
+  addressSearchTimer = setTimeout(async () => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=5&countrycodes=us&q=${encodeURIComponent(query)}`
+      );
+      const results = await res.json();
+      if (thisToken !== addressSearchToken) return; // a newer keystroke superseded this search
+
+      if (!results || results.length === 0) {
+        hideAddressSuggestions();
+        return;
+      }
+
+      addressSuggestionsEl.innerHTML = results
+        .map((r, i) => `<div class="address-suggestion-item" data-index="${i}">${escapeHtml(r.display_name)}</div>`)
+        .join('');
+      addressSuggestionsEl.hidden = false;
+
+      addressSuggestionsEl.querySelectorAll('.address-suggestion-item').forEach((el) => {
+        el.addEventListener('click', () => {
+          const r = results[Number(el.dataset.index)];
+          const addr = r.address || {};
+          const streetNum = addr.house_number || '';
+          const street = addr.road || '';
+          form.elements.address.value = [streetNum, street].filter(Boolean).join(' ');
+          form.elements.city.value = addr.city || addr.town || addr.village || addr.hamlet || '';
+          form.elements.state.value = addr.state ? stateAbbreviation(addr.state) : '';
+          form.elements.zip.value = addr.postcode || '';
+          hideAddressSuggestions();
+        });
+      });
+    } catch (err) {
+      hideAddressSuggestions();
+    }
+  }, 500); // debounce so we're not hammering the free service on every keystroke
+});
+
+document.addEventListener('click', (e) => {
+  if (!addressSuggestionsEl.contains(e.target) && e.target !== addressInput) {
+    hideAddressSuggestions();
+  }
+});
+
+const US_STATE_ABBREVIATIONS = {
+  alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA',
+  colorado: 'CO', connecticut: 'CT', delaware: 'DE', florida: 'FL', georgia: 'GA',
+  hawaii: 'HI', idaho: 'ID', illinois: 'IL', indiana: 'IN', iowa: 'IA',
+  kansas: 'KS', kentucky: 'KY', louisiana: 'LA', maine: 'ME', maryland: 'MD',
+  massachusetts: 'MA', michigan: 'MI', minnesota: 'MN', mississippi: 'MS', missouri: 'MO',
+  montana: 'MT', nebraska: 'NE', nevada: 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+  'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', ohio: 'OH',
+  oklahoma: 'OK', oregon: 'OR', pennsylvania: 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+  'south dakota': 'SD', tennessee: 'TN', texas: 'TX', utah: 'UT', vermont: 'VT',
+  virginia: 'VA', washington: 'WA', 'west virginia': 'WV', wisconsin: 'WI', wyoming: 'WY',
+};
+
+function stateAbbreviation(name) {
+  return US_STATE_ABBREVIATIONS[name.toLowerCase()] || name;
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(form).entries());
+  if (!data.name.trim()) return;
+
+  if (editingCustomerId) {
+    await window.api.customers.update(editingCustomerId, data);
+  } else {
+    await window.api.customers.create(data);
+  }
+
+  closeCustomerDrawer();
+  await loadCustomers();
+  await loadJobs();
+});
+
+deleteBtn.addEventListener('click', async () => {
+  if (!editingCustomerId) return;
+  const confirmed = confirm('Delete this customer? This also removes their job history and cannot be undone.');
+  if (!confirmed) return;
+
+  await window.api.customers.delete(editingCustomerId);
+  closeCustomerDrawer();
+  await loadCustomers();
+  await loadJobs();
+});
+
+document.getElementById('btn-new-customer').addEventListener('click', () => openCustomerDrawer());
+
+// ---- CSV customer import ----
+
+const CUSTOMER_CSV_FIELDS = [
+  'name', 'email', 'phone', 'address', 'city', 'state', 'zip', 'notes',
+  'zone_count', 'controller_brand', 'backflow_due_date', 'system_notes',
+];
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (inQuotes) {
+      if (char === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += char;
+      }
+    } else if (char === '"') {
+      inQuotes = true;
+    } else if (char === ',') {
+      row.push(field);
+      field = '';
+    } else if (char === '\n' || char === '\r') {
+      if (char === '\r' && text[i + 1] === '\n') i++;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+    } else {
+      field += char;
+    }
+  }
+  if (field.length || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows.filter((r) => r.some((cell) => cell.trim() !== ''));
+}
+
+function csvRowsToCustomers(rows) {
+  if (rows.length === 0) return [];
+  const headers = rows[0].map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'));
+  return rows.slice(1).map((row) => {
+    const obj = {};
+    headers.forEach((header, i) => {
+      if (CUSTOMER_CSV_FIELDS.includes(header)) {
+        obj[header] = (row[i] || '').trim();
+      }
+    });
+    return obj;
+  });
+}
+
+let parsedImportRows = [];
+
+document.getElementById('btn-import-csv').addEventListener('click', () => {
+  document.getElementById('customer-csv-input').click();
+});
+
+document.getElementById('customer-csv-input').addEventListener('change', () => {
+  const file = document.getElementById('customer-csv-input').files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const rows = parseCSV(reader.result);
+    parsedImportRows = csvRowsToCustomers(rows).filter((c) => c.name);
+
+    const summaryEl = document.getElementById('import-summary');
+    const previewRowsEl = document.getElementById('import-preview-rows');
+    const skippedCount = rows.length - 1 - parsedImportRows.length;
+
+    summaryEl.textContent = `${parsedImportRows.length} customer(s) ready to import${skippedCount > 0 ? ` (${skippedCount} row(s) skipped — no name)` : ''}.`;
+    previewRowsEl.innerHTML = parsedImportRows
+      .slice(0, 50)
+      .map(
+        (c) => `<tr><td>${escapeHtml(c.name || '')}</td><td>${escapeHtml(c.phone || '')}</td><td>${escapeHtml(c.email || '')}</td><td>${escapeHtml(c.city || '')}</td></tr>`
+      )
+      .join('');
+
+    document.getElementById('import-overlay').hidden = false;
+    document.getElementById('import-drawer').hidden = false;
+    document.getElementById('customer-csv-input').value = '';
+  };
+  reader.readAsText(file);
+});
+
+function closeImportDrawer() {
+  document.getElementById('import-overlay').hidden = true;
+  document.getElementById('import-drawer').hidden = true;
+  parsedImportRows = [];
+}
+
+document.getElementById('btn-close-import-drawer').addEventListener('click', closeImportDrawer);
+document.getElementById('btn-cancel-import').addEventListener('click', closeImportDrawer);
+document.getElementById('import-overlay').addEventListener('click', closeImportDrawer);
+
+document.getElementById('btn-confirm-import').addEventListener('click', async () => {
+  if (parsedImportRows.length === 0) {
+    alert('No valid rows to import.');
+    return;
+  }
+  const confirmBtn = document.getElementById('btn-confirm-import');
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Importing…';
+
+  const result = await window.api.customers.bulkImport(parsedImportRows);
+
+  confirmBtn.disabled = false;
+  confirmBtn.textContent = 'Import customers';
+  closeImportDrawer();
+  await loadCustomers();
+  alert(`Imported ${result.created.length} customer(s).${result.skippedCount ? ` Skipped ${result.skippedCount} row(s) with no name.` : ''}`);
+});
+
+document.getElementById('btn-download-template').addEventListener('click', (e) => {
+  e.preventDefault();
+  const csv = CUSTOMER_CSV_FIELDS.join(',') + '\n' + 'Jane Smith,jane@example.com,555-123-4567,123 Main St,Kennewick,WA,99336,Gate code 1234,6,Rain Bird,2026-04-01,Backflow near garage';
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'customer-import-template.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+document.getElementById('btn-close-drawer').addEventListener('click', closeCustomerDrawer);
+document.getElementById('btn-cancel-drawer').addEventListener('click', closeCustomerDrawer);
+overlay.addEventListener('click', closeCustomerDrawer);
+searchEl.addEventListener('input', renderCustomers);
+
+// ===================== Jobs =====================
+
+const jobRowsEl = document.getElementById('job-rows');
+const jobEmptyEl = document.getElementById('job-empty-state');
+const jobCountEl = document.getElementById('job-count');
+const jobStatusFilter = document.getElementById('job-status-filter');
+
+const jobOverlay = document.getElementById('job-overlay');
+const jobDrawer = document.getElementById('job-drawer');
+const jobForm = document.getElementById('job-form');
+const jobDrawerTitle = document.getElementById('job-drawer-title');
+const jobDrawerIdTag = document.getElementById('job-drawer-id-tag');
+const jobDeleteBtn = document.getElementById('btn-delete-job');
+const jobCreateInvoiceBtn = document.getElementById('btn-create-invoice-from-job');
+const jobNextOccurrenceBtn = document.getElementById('btn-next-occurrence');
+const jobSendReminderBtn = document.getElementById('btn-send-reminder');
+const jobRequestReviewBtn = document.getElementById('btn-request-review');
+const jobPhotoInput = document.getElementById('job-photo-input');
+const jobPhotoTypeSelect = document.getElementById('job-photo-type');
+const jobPhotoGallery = document.getElementById('job-photo-gallery');
+const jobCustomerSelect = document.getElementById('job-customer-select');
+
+function populateJobCustomerSelect() {
+  const current = jobCustomerSelect.value;
+  jobCustomerSelect.innerHTML = customers
+    .map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`)
+    .join('');
+  if (current) jobCustomerSelect.value = current;
+}
+
+async function loadJobs() {
+  jobs = await window.api.jobs.list();
+  renderJobs();
+  renderWeekView();
+  renderUnscheduledJobs();
+  populateInvoiceJobSelect();
+}
+
+function renderUnscheduledJobs() {
+  const wrap = document.getElementById('unscheduled-jobs-wrap');
+  const listEl = document.getElementById('unscheduled-jobs-list');
+  const needsDate = jobs.filter((j) => !j.scheduled_date && j.status !== 'cancelled' && j.status !== 'completed');
+
+  if (needsDate.length === 0) {
+    wrap.hidden = true;
+    return;
+  }
+
+  wrap.hidden = false;
+  listEl.innerHTML = needsDate
+    .map(
+      (j) => `
+      <div class="unscheduled-job-row" data-job-id="${j.id}">
+        <div>
+          <div class="ujr-title">${escapeHtml(j.title)}</div>
+          <div class="ujr-customer">${escapeHtml(j.customer_name)}</div>
+        </div>
+        <span>›</span>
+      </div>`
+    )
+    .join('');
+
+  listEl.querySelectorAll('.unscheduled-job-row').forEach((row) => {
+    row.addEventListener('click', () => {
+      const job = jobs.find((j) => j.id === Number(row.dataset.jobId));
+      if (job) openJobDrawer(job);
+    });
+  });
+}
+
+function formatTimeOnly(timeStr) {
+  if (!timeStr) return null;
+  const [h, m] = timeStr.split(':').map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
+function formatTimeRange(startTime, endTime) {
+  const start = formatTimeOnly(startTime);
+  if (!start) return null;
+  const end = formatTimeOnly(endTime);
+  return end ? `${start}–${end}` : start;
+}
+
+function formatDate(dateStr, timeStr, timeEndStr) {
+  if (!dateStr) return '<span class="badge badge-needs-schedule">Needs scheduling</span>';
+  const d = new Date(`${dateStr}T${timeStr || '00:00'}`);
+  const dateLabel = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const timeRange = formatTimeRange(timeStr, timeEndStr);
+  if (!timeRange) return `${dateLabel} · <span class="text-muted">no time set</span>`;
+  return `${dateLabel} · ${timeRange}`;
+}
+
+function renderJobs() {
+  const statusQuery = jobStatusFilter.value;
+  const filtered = statusQuery ? jobs.filter((j) => j.status === statusQuery) : jobs;
+
+  jobCountEl.textContent = `${jobs.length} total`;
+  jobRowsEl.innerHTML = '';
+
+  if (filtered.length === 0) {
+    jobEmptyEl.hidden = false;
+    return;
+  }
+  jobEmptyEl.hidden = true;
+
+  for (const j of filtered) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="cell-id">J-${String(j.id).padStart(4, '0')}</td>
+      <td>${formatDate(j.scheduled_date, j.scheduled_time, j.scheduled_time_end)}</td>
+      <td class="cell-name">${escapeHtml(j.title)}</td>
+      <td>${escapeHtml(j.customer_name)}</td>
+      <td><span class="badge badge-${j.status}">${STATUS_LABELS[j.status] || j.status}</span></td>
+      <td class="cell-arrow">›</td>
+    `;
+    tr.addEventListener('click', () => openJobDrawer(j));
+    jobRowsEl.appendChild(tr);
+  }
+}
+
+async function renderJobPhotoGallery(jobId) {
+  jobPhotoGallery.innerHTML = '';
+  if (!jobId) return;
+  const photos = await window.api.jobPhotos.list(jobId);
+  for (const photo of photos) {
+    const item = document.createElement('div');
+    item.className = 'photo-gallery-item';
+    item.innerHTML = `
+      <img src="${receiptUrl(photo.filename)}" />
+      <span class="photo-tag">${photo.type}</span>
+      <button type="button" class="photo-remove" aria-label="Remove photo">&times;</button>
+    `;
+    item.querySelector('.photo-remove').addEventListener('click', async () => {
+      await window.api.jobPhotos.delete(photo.id, jobId);
+      renderJobPhotoGallery(jobId);
+    });
+    jobPhotoGallery.appendChild(item);
+  }
+}
+
+function openJobDrawer(job = null) {
+  editingJobId = job ? job.id : null;
+  jobForm.reset();
+  populateJobCustomerSelect();
+  jobPhotoGallery.innerHTML = '';
+
+  if (job) {
+    jobDrawerTitle.textContent = 'Edit job';
+    jobDrawerIdTag.textContent = `J-${String(job.id).padStart(4, '0')}`;
+    jobDeleteBtn.hidden = false;
+    jobCreateInvoiceBtn.hidden = job.status !== 'completed';
+    jobNextOccurrenceBtn.hidden = !job.scheduled_date || job.repeat_interval === 'none';
+    jobSendReminderBtn.hidden = false;
+    jobRequestReviewBtn.hidden = job.status !== 'completed';
+    jobForm.elements.customer_id.value = job.customer_id;
+    jobForm.elements.title.value = job.title || '';
+    jobForm.elements.scheduled_date.value = job.scheduled_date || '';
+    jobForm.elements.scheduled_time.value = job.scheduled_time || '';
+    jobForm.elements.scheduled_time_end.value = job.scheduled_time_end || '';
+    jobForm.elements.status.value = job.status || 'scheduled';
+    jobForm.elements.repeat_interval.value = job.repeat_interval || 'none';
+    jobForm.elements.description.value = job.description || '';
+    renderJobPhotoGallery(job.id);
+  } else {
+    jobDrawerTitle.textContent = 'New job';
+    jobDrawerIdTag.textContent = 'NEW';
+    jobDeleteBtn.hidden = true;
+    jobCreateInvoiceBtn.hidden = true;
+    jobNextOccurrenceBtn.hidden = true;
+    jobSendReminderBtn.hidden = true;
+    jobRequestReviewBtn.hidden = true;
+  }
+
+  jobOverlay.hidden = false;
+  jobDrawer.hidden = false;
+}
+
+function closeJobDrawer() {
+  jobOverlay.hidden = true;
+  jobDrawer.hidden = true;
+  editingJobId = null;
+}
+
+jobForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(jobForm).entries());
+  if (!data.title.trim() || !data.customer_id) return;
+
+  if (editingJobId) {
+    await window.api.jobs.update(editingJobId, data);
+  } else {
+    await window.api.jobs.create(data);
+  }
+
+  closeJobDrawer();
+  await loadJobs();
+});
+
+jobDeleteBtn.addEventListener('click', async () => {
+  if (!editingJobId) return;
+  const confirmed = confirm('Delete this job? This cannot be undone.');
+  if (!confirmed) return;
+
+  await window.api.jobs.delete(editingJobId);
+  closeJobDrawer();
+  await loadJobs();
+});
+
+document.getElementById('btn-new-job').addEventListener('click', () => {
+  if (customers.length === 0) {
+    alert('Add a customer first, then you can schedule a job for them.');
+    return;
+  }
+  openJobDrawer();
+});
+document.getElementById('btn-close-job-drawer').addEventListener('click', closeJobDrawer);
+document.getElementById('btn-cancel-job-drawer').addEventListener('click', closeJobDrawer);
+jobCreateInvoiceBtn.addEventListener('click', () => {
+  const job = jobs.find((j) => j.id === editingJobId);
+  if (!job) return;
+  closeJobDrawer();
+  openInvoiceDrawer(null, job);
+});
+
+function buildJobCopyText() {
+  const customerId = jobForm.elements.customer_id.value;
+  const customer = customers.find((c) => c.id === Number(customerId));
+  const title = jobForm.elements.title.value || 'Job';
+  const scheduledDate = jobForm.elements.scheduled_date.value;
+  const timeRange = formatTimeRange(jobForm.elements.scheduled_time.value, jobForm.elements.scheduled_time_end.value);
+  const notes = jobForm.elements.description.value;
+
+  const lines = [];
+  lines.push(`EcoHaven Solutions LLC — ${title}`);
+  if (customer) lines.push(`For: ${customer.name}`);
+  if (scheduledDate) {
+    const dateLabel = new Date(`${scheduledDate}T00:00:00`).toLocaleDateString(undefined, {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+    });
+    lines.push(`When: ${dateLabel}${timeRange ? `, ${timeRange}` : ''}`);
+  } else {
+    lines.push("When: we'll follow up to schedule");
+  }
+  if (customer && customer.address) lines.push(`Where: ${customer.address}, ${customer.city || ''} ${customer.state || ''}`.trim());
+  if (notes) {
+    lines.push('');
+    lines.push(notes);
+  }
+  lines.push('');
+  lines.push('Questions? Call/text 509-866-6388 or visit ecohavenpro.com');
+  return lines.join('\n');
+}
+
+document.getElementById('btn-copy-job-text').addEventListener('click', async () => {
+  const text = buildJobCopyText();
+  try {
+    await navigator.clipboard.writeText(text);
+    alert('Copied! Paste it into Google Voice (or anywhere) to send.');
+  } catch (err) {
+    prompt('Copy this text manually:', text);
+  }
+});
+
+jobPhotoInput.addEventListener('change', () => {
+  const file = jobPhotoInput.files[0];
+  if (!file || !editingJobId) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    await window.api.jobPhotos.add(editingJobId, jobPhotoTypeSelect.value, reader.result);
+    jobPhotoInput.value = '';
+    renderJobPhotoGallery(editingJobId);
+  };
+  reader.readAsDataURL(file);
+});
+
+jobNextOccurrenceBtn.addEventListener('click', async () => {
+  if (!editingJobId) return;
+  const confirmed = confirm('Create the next occurrence of this recurring job?');
+  if (!confirmed) return;
+  await window.api.jobs.createNextOccurrence(editingJobId);
+  closeJobDrawer();
+  await loadJobs();
+  alert('Next occurrence created — check the Schedule or Jobs tab.');
+});
+
+jobSendReminderBtn.addEventListener('click', async () => {
+  if (!editingJobId) return;
+  jobSendReminderBtn.disabled = true;
+  jobSendReminderBtn.textContent = 'Sending…';
+  const result = await window.api.email.sendJobReminder(editingJobId);
+  jobSendReminderBtn.disabled = false;
+  jobSendReminderBtn.textContent = 'Send reminder';
+  alert(result.ok ? 'Reminder sent.' : `Couldn't send reminder: ${result.error}`);
+});
+
+jobRequestReviewBtn.addEventListener('click', async () => {
+  if (!editingJobId) return;
+  jobRequestReviewBtn.disabled = true;
+  jobRequestReviewBtn.textContent = 'Sending…';
+  const result = await window.api.email.sendReviewRequest(editingJobId);
+  jobRequestReviewBtn.disabled = false;
+  jobRequestReviewBtn.textContent = 'Request review';
+  alert(result.ok ? 'Review request sent.' : `Couldn't send request: ${result.error}`);
+});
+jobOverlay.addEventListener('click', closeJobDrawer);
+jobStatusFilter.addEventListener('change', renderJobs);
+
+// ---- Seasonal batch job creation ----
+
+const batchOverlay = document.getElementById('batch-overlay');
+const batchDrawer = document.getElementById('batch-drawer');
+const batchForm = document.getElementById('batch-form');
+const batchCustomerListEl = document.getElementById('batch-customer-list');
+const batchSelectAll = document.getElementById('batch-select-all');
+
+function openBatchDrawer() {
+  if (customers.length === 0) {
+    alert('Add some customers first, then you can batch-schedule jobs for them.');
+    return;
+  }
+  batchForm.reset();
+  batchCustomerListEl.innerHTML = customers
+    .map(
+      (c) => `
+      <label class="batch-customer-row">
+        <input type="checkbox" class="batch-customer-checkbox" value="${c.id}" />
+        ${escapeHtml(c.name)}
+      </label>`
+    )
+    .join('');
+  batchSelectAll.checked = false;
+  batchOverlay.hidden = false;
+  batchDrawer.hidden = false;
+}
+
+function closeBatchDrawer() {
+  batchOverlay.hidden = true;
+  batchDrawer.hidden = true;
+}
+
+batchSelectAll.addEventListener('change', () => {
+  document.querySelectorAll('.batch-customer-checkbox').forEach((cb) => {
+    cb.checked = batchSelectAll.checked;
+  });
+});
+
+batchForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(batchForm).entries());
+  const customerIds = Array.from(document.querySelectorAll('.batch-customer-checkbox:checked')).map((cb) => Number(cb.value));
+
+  if (!data.title.trim()) return;
+  if (customerIds.length === 0) {
+    alert('Select at least one customer.');
+    return;
+  }
+
+  const submitBtn = batchForm.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Creating…';
+
+  const createdJobs = await window.api.jobs.bulkCreate(customerIds, {
+    title: data.title,
+    scheduled_date: data.scheduled_date || null,
+    description: data.description || null,
+    repeat_interval: data.repeat_interval || 'none',
+    status: 'scheduled',
+  });
+
+  const batchedCustomers = customers.filter((c) => customerIds.includes(c.id));
+
+  // Auto-email anyone with an address on file; only the rest need the
+  // copy-paste text list, since they've got no other automatic channel.
+  let emailedCount = 0;
+  const emailedCustomerIds = new Set();
+  submitBtn.textContent = 'Emailing…';
+  for (const job of createdJobs) {
+    const customer = batchedCustomers.find((c) => c.id === job.customer_id);
+    if (!customer || !customer.email) continue;
+    const result = await window.api.email.sendJobReminder(job.id);
+    if (result.ok) {
+      emailedCount += 1;
+      emailedCustomerIds.add(customer.id);
+    }
+  }
+
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Create jobs';
+
+  const needsTextList = batchedCustomers.filter((c) => !emailedCustomerIds.has(c.id));
+  closeBatchDrawer();
+  await loadJobs();
+  openBatchTextListDrawer(data.title, data.scheduled_date, needsTextList, emailedCount);
+});
+
+document.getElementById('btn-seasonal-batch').addEventListener('click', openBatchDrawer);
+document.getElementById('btn-close-batch-drawer').addEventListener('click', closeBatchDrawer);
+document.getElementById('btn-cancel-batch-drawer').addEventListener('click', closeBatchDrawer);
+batchOverlay.addEventListener('click', closeBatchDrawer);
+
+// ---- Copyable text list after a batch run ----
+
+const batchTextOverlay = document.getElementById('batch-text-overlay');
+const batchTextDrawer = document.getElementById('batch-text-drawer');
+const batchTextMessage = document.getElementById('batch-text-message');
+const batchTextCustomerList = document.getElementById('batch-text-customer-list');
+
+function openBatchTextListDrawer(title, scheduledDate, needsTextList, emailedCount = 0) {
+  document.getElementById('batch-text-title').textContent =
+    emailedCount > 0 ? `Jobs created — ${emailedCount} emailed automatically` : 'Jobs created';
+
+  const dateLabel = scheduledDate
+    ? new Date(`${scheduledDate}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+    : null;
+
+  batchTextMessage.value = `Hi! Just a heads up, we have your "${title}" scheduled${dateLabel ? ` for ${dateLabel}` : ''}. Reply if you need to reschedule. — EcoHaven Solutions LLC, 509-866-6388`;
+
+  if (needsTextList.length === 0) {
+    batchTextCustomerList.innerHTML = '<div class="batch-customer-row">Everyone in this batch was emailed automatically — nothing left to text.</div>';
+  } else {
+    const withPhones = needsTextList.filter((c) => c.phone);
+    batchTextCustomerList.innerHTML = withPhones.length
+      ? withPhones.map((c) => `<div class="batch-customer-row">${escapeHtml(c.name)} — ${escapeHtml(c.phone)}</div>`).join('')
+      : '<div class="batch-customer-row">No phone numbers on file for these customers.</div>';
+  }
+
+  batchTextOverlay.hidden = false;
+  batchTextDrawer.hidden = false;
+}
+
+function closeBatchTextListDrawer() {
+  batchTextOverlay.hidden = true;
+  batchTextDrawer.hidden = true;
+}
+
+document.getElementById('btn-copy-batch-message').addEventListener('click', async () => {
+  await navigator.clipboard.writeText(batchTextMessage.value);
+  alert('Message copied.');
+});
+
+document.getElementById('btn-copy-batch-phones').addEventListener('click', async () => {
+  const phones = Array.from(batchTextCustomerList.querySelectorAll('.batch-customer-row'))
+    .map((row) => row.textContent.split('—').pop().trim())
+    .filter((p) => p && p !== 'No phone numbers on file for these customers.');
+  if (phones.length === 0) {
+    alert('No phone numbers to copy.');
+    return;
+  }
+  await navigator.clipboard.writeText(phones.join('\n'));
+  alert('Phone numbers copied, one per line.');
+});
+
+document.getElementById('btn-close-batch-text-drawer').addEventListener('click', closeBatchTextListDrawer);
+document.getElementById('btn-done-batch-text').addEventListener('click', closeBatchTextListDrawer);
+batchTextOverlay.addEventListener('click', closeBatchTextListDrawer);
+
+// ===================== Schedule (weekly view, home tab) =====================
+
+const weekGridEl = document.getElementById('week-grid');
+const weekRangeLabel = document.getElementById('week-range-label');
+
+function startOfWeek(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - d.getDay()); // back up to Sunday
+  return d;
+}
+
+let currentWeekStart = startOfWeek(new Date());
+
+function dateStr(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function isSameDate(a, b) {
+  return dateStr(a) === dateStr(b);
+}
+
+function renderWeekView() {
+  if (!weekGridEl) return;
+  const today = new Date();
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(currentWeekStart);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+
+  weekRangeLabel.textContent = `${days[0].toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${days[6].toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+  weekGridEl.innerHTML = '';
+  for (const day of days) {
+    const dayJobs = jobs
+      .filter((j) => j.scheduled_date === dateStr(day))
+      .sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || ''));
+
+    const col = document.createElement('div');
+    col.className = 'week-day' + (isSameDate(day, today) ? ' is-today' : '');
+
+    const header = document.createElement('div');
+    header.className = 'week-day-header';
+    header.textContent = day.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    col.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'week-day-body';
+
+    if (dayJobs.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'week-day-empty';
+      empty.textContent = '—';
+      body.appendChild(empty);
+    } else {
+      for (const job of dayJobs) {
+        const card = document.createElement('div');
+        card.className = `week-job-card status-${job.status}`;
+        card.innerHTML = `
+          <div class="wjc-time">${formatTimeRange(job.scheduled_time, job.scheduled_time_end) || 'No time set'}</div>
+          <div class="wjc-title">${escapeHtml(job.title)}</div>
+          <div class="wjc-customer">${escapeHtml(job.customer_name)}</div>
+        `;
+        card.addEventListener('click', () => openJobDrawer(job));
+        body.appendChild(card);
+      }
+    }
+
+    col.appendChild(body);
+    weekGridEl.appendChild(col);
+  }
+}
+
+document.getElementById('btn-week-prev').addEventListener('click', () => {
+  currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+  renderWeekView();
+});
+
+document.getElementById('btn-week-next').addEventListener('click', () => {
+  currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+  renderWeekView();
+});
+
+document.getElementById('btn-week-today').addEventListener('click', () => {
+  currentWeekStart = startOfWeek(new Date());
+  renderWeekView();
+});
+
+document.getElementById('btn-new-job-from-schedule').addEventListener('click', () => {
+  if (customers.length === 0) {
+    alert('Add a customer first, then you can schedule a job for them.');
+    return;
+  }
+  openJobDrawer();
+});
+
+// ===================== Quotes =====================
+
+const quoteRowsEl = document.getElementById('quote-rows');
+const quoteEmptyEl = document.getElementById('quote-empty-state');
+const quoteCountEl = document.getElementById('quote-count');
+const quoteStatusFilter = document.getElementById('quote-status-filter');
+
+const quoteOverlay = document.getElementById('quote-overlay');
+const quoteDrawer = document.getElementById('quote-drawer');
+const quoteForm = document.getElementById('quote-form');
+const quoteDrawerTitle = document.getElementById('quote-drawer-title');
+const quoteDrawerIdTag = document.getElementById('quote-drawer-id-tag');
+const quoteDeleteBtn = document.getElementById('btn-delete-quote');
+const quoteConvertBtn = document.getElementById('btn-convert-quote');
+const quoteEmailBtn = document.getElementById('btn-email-quote');
+const quoteCustomerSelect = document.getElementById('quote-customer-select');
+const lineItemRowsEl = document.getElementById('line-item-rows');
+const quoteTotalDisplay = document.getElementById('quote-total-display');
+
+function populateQuoteCustomerSelect() {
+  const current = quoteCustomerSelect.value;
+  quoteCustomerSelect.innerHTML = customers
+    .map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`)
+    .join('');
+  if (current) quoteCustomerSelect.value = current;
+}
+
+async function loadQuotes() {
+  quotes = await window.api.quotes.list();
+  renderQuotes();
+}
+
+function formatCurrency(amount) {
+  return `$${Number(amount || 0).toFixed(2)}`;
+}
+
+function renderQuotes() {
+  const statusQuery = quoteStatusFilter.value;
+  const filtered = statusQuery ? quotes.filter((q) => q.status === statusQuery) : quotes;
+
+  quoteCountEl.textContent = `${quotes.length} on file`;
+  quoteRowsEl.innerHTML = '';
+
+  if (filtered.length === 0) {
+    quoteEmptyEl.hidden = false;
+    return;
+  }
+  quoteEmptyEl.hidden = true;
+
+  for (const q of filtered) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="cell-id">E-${q.number}</td>
+      <td>${escapeHtml(q.customer_name)}</td>
+      <td class="cell-name">${escapeHtml(q.title)}</td>
+      <td>${formatCurrency(q.total)}</td>
+      <td><span class="badge badge-${q.status}">${QUOTE_STATUS_LABELS[q.status] || q.status}</span></td>
+      <td class="cell-arrow">›</td>
+    `;
+    tr.addEventListener('click', async () => {
+      const full = await window.api.quotes.get(q.id);
+      openQuoteDrawer(full);
+    });
+    quoteRowsEl.appendChild(tr);
+  }
+}
+
+function createLineItemRow(item, onChange) {
+  lineItemCounter += 1;
+  const row = document.createElement('div');
+  row.className = 'line-item-row';
+  row.innerHTML = `
+    <div class="li-main-row">
+      <input type="text" class="li-desc" placeholder="Description" value="${escapeHtml(item.description || '')}" />
+      <input type="number" class="li-qty" min="0" step="any" value="${item.quantity ?? 1}" />
+      <input type="number" class="li-price" min="0" step="0.01" value="${item.unit_price ?? 0}" />
+      <button type="button" class="line-item-remove" aria-label="Remove item">&times;</button>
+    </div>
+    <input type="text" class="li-notes" placeholder="Details (optional) — e.g. brand, model, specifics" value="${escapeHtml(item.notes || '')}" />
+  `;
+
+  row.querySelector('.li-qty').addEventListener('input', onChange);
+  row.querySelector('.li-price').addEventListener('input', onChange);
+  row.querySelector('.line-item-remove').addEventListener('click', () => {
+    row.remove();
+    onChange();
+  });
+
+  return row;
+}
+
+function collectLineItemsFrom(container) {
+  return Array.from(container.querySelectorAll('.line-item-row'))
+    .map((row) => ({
+      description: row.querySelector('.li-desc').value.trim(),
+      quantity: parseFloat(row.querySelector('.li-qty').value) || 0,
+      unit_price: parseFloat(row.querySelector('.li-price').value) || 0,
+      notes: row.querySelector('.li-notes').value.trim(),
+    }))
+    // Only drop rows that are completely untouched (no description AND no
+    // price) -- e.g. a spare "+ Add item" row nobody filled in.
+    .filter((item) => item.description || item.unit_price);
+}
+
+// Used for the live running total: counts every row's quantity × price as you
+// type, even before a description is entered. collectLineItemsFrom (above) is
+// only for the actual save, where blank rows should be skipped.
+function sumLineItemsFrom(container) {
+  return Array.from(container.querySelectorAll('.line-item-row')).reduce((sum, row) => {
+    const qty = parseFloat(row.querySelector('.li-qty').value) || 0;
+    const price = parseFloat(row.querySelector('.li-price').value) || 0;
+    return sum + qty * price;
+  }, 0);
+}
+
+function addLineItemRow(item = {}) {
+  lineItemRowsEl.appendChild(createLineItemRow(item, updateQuoteTotal));
+}
+
+function collectLineItems() {
+  return collectLineItemsFrom(lineItemRowsEl);
+}
+
+function updateQuoteTotal() {
+  const subtotal = sumLineItemsFrom(lineItemRowsEl);
+  const rate = parseFloat(quoteForm.elements.tax_rate.value) || 0;
+  const tax = subtotal * (rate / 100);
+  document.getElementById('quote-subtotal-display').textContent = formatCurrency(subtotal);
+  document.getElementById('quote-tax-display').textContent = formatCurrency(tax);
+  quoteTotalDisplay.textContent = formatCurrency(subtotal + tax);
+}
+
+function openQuoteDrawer(quote = null) {
+  editingQuoteId = quote ? quote.id : null;
+  quoteForm.reset();
+  populateQuoteCustomerSelect();
+  lineItemRowsEl.innerHTML = '';
+
+  if (quote) {
+    quoteDrawerTitle.textContent = 'Edit estimate';
+    quoteDrawerIdTag.textContent = `E-${quote.number}`;
+    currentQuoteNumber = quote.number;
+    quoteDeleteBtn.hidden = false;
+    quoteConvertBtn.hidden = !!quote.job_id;
+    const customer = customers.find((c) => c.id === quote.customer_id);
+    quoteEmailBtn.hidden = !(customer && customer.email);
+    quoteForm.elements.customer_id.value = quote.customer_id;
+    quoteForm.elements.title.value = quote.title || '';
+    quoteForm.elements.status.value = quote.status || 'draft';
+    quoteForm.elements.tax_rate.value = quote.tax_rate || 0;
+    quoteForm.elements.notes.value = quote.notes || '';
+    (quote.items && quote.items.length ? quote.items : [{}]).forEach(addLineItemRow);
+  } else {
+    quoteDrawerTitle.textContent = 'New estimate';
+    quoteDrawerIdTag.textContent = 'NEW';
+    quoteDeleteBtn.hidden = true;
+    quoteConvertBtn.hidden = true;
+    quoteEmailBtn.hidden = true;
+    currentQuoteNumber = null;
+    quoteForm.elements.tax_rate.value = defaultTaxRate;
+    addLineItemRow();
+  }
+
+  updateQuoteTotal();
+  quoteOverlay.hidden = false;
+  quoteDrawer.hidden = false;
+}
+
+function closeQuoteDrawer() {
+  quoteOverlay.hidden = true;
+  quoteDrawer.hidden = true;
+  editingQuoteId = null;
+}
+
+function buildQuoteDataFromForm() {
+  const data = Object.fromEntries(new FormData(quoteForm).entries());
+  data.items = collectLineItems();
+  return data;
+}
+
+async function saveCurrentQuote() {
+  const data = buildQuoteDataFromForm();
+  if (!data.title.trim() || !data.customer_id) return false;
+
+  if (editingQuoteId) {
+    await window.api.quotes.update(editingQuoteId, data);
+  } else {
+    const created = await window.api.quotes.create(data);
+    editingQuoteId = created.id;
+  }
+  return true;
+}
+
+quoteForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const saved = await saveCurrentQuote();
+  if (!saved) return;
+
+  closeQuoteDrawer();
+  await loadQuotes();
+});
+
+quoteDeleteBtn.addEventListener('click', async () => {
+  if (!editingQuoteId) return;
+  const confirmed = confirm('Delete this estimate? This cannot be undone.');
+  if (!confirmed) return;
+
+  await window.api.quotes.delete(editingQuoteId);
+  closeQuoteDrawer();
+  await loadQuotes();
+});
+
+quoteConvertBtn.addEventListener('click', async () => {
+  if (!editingQuoteId) return;
+  const confirmed = confirm('Convert this estimate into a scheduled job? You can set the date from the Jobs tab afterward.');
+  if (!confirmed) return;
+
+  await saveCurrentQuote();
+  await window.api.quotes.convertToJob(editingQuoteId, {});
+  closeQuoteDrawer();
+  await loadQuotes();
+  await loadJobs();
+  alert('Job created. Open the Jobs tab to set a date and time.');
+});
+
+function buildQuoteCopyText() {
+  const customerId = quoteForm.elements.customer_id.value;
+  const customer = customers.find((c) => c.id === Number(customerId));
+  const title = quoteForm.elements.title.value || 'Estimate';
+  const items = collectLineItems();
+  const subtotal = sumLineItemsFrom(lineItemRowsEl);
+  const rate = parseFloat(quoteForm.elements.tax_rate.value) || 0;
+  const tax = subtotal * (rate / 100);
+  const total = subtotal + tax;
+  const idTag = editingQuoteId ? `E-${currentQuoteNumber || editingQuoteId}` : 'NEW';
+
+  const lines = [];
+  lines.push(`EcoHaven Solutions LLC — Estimate ${idTag}`);
+  lines.push(title);
+  if (customer) lines.push(`For: ${customer.name}`);
+  lines.push('');
+  items.forEach((item) => {
+    lines.push(`${item.description || 'Item'} x${item.quantity} — ${formatCurrency(item.quantity * item.unit_price)}`);
+    if (item.notes) lines.push(`  (${item.notes})`);
+  });
+  lines.push('');
+  lines.push(`Subtotal: ${formatCurrency(subtotal)}`);
+  if (rate) lines.push(`Tax (${rate}%): ${formatCurrency(tax)}`);
+  lines.push(`Total: ${formatCurrency(total)}`);
+  lines.push('');
+  lines.push('Questions? Call/text 509-866-6388 or visit ecohavenpro.com');
+  return lines.join('\n');
+}
+
+document.getElementById('btn-copy-quote-text').addEventListener('click', async () => {
+  const text = buildQuoteCopyText();
+  try {
+    await navigator.clipboard.writeText(text);
+    alert('Copied! Paste it into Google Voice (or anywhere) to send.');
+  } catch (err) {
+    prompt('Copy this text manually:', text);
+  }
+});
+
+quoteEmailBtn.addEventListener('click', async () => {
+  if (!editingQuoteId) return;
+  quoteEmailBtn.disabled = true;
+  quoteEmailBtn.textContent = 'Saving…';
+  await saveCurrentQuote();
+  quoteEmailBtn.textContent = 'Sending…';
+  const result = await window.api.email.sendEstimate(editingQuoteId);
+  quoteEmailBtn.disabled = false;
+  quoteEmailBtn.textContent = 'Email to customer';
+  if (result.ok) {
+    alert('Estimate emailed to the customer.');
+    await loadQuotes();
+  } else {
+    alert(`Couldn't send email: ${result.error}`);
+  }
+});
+
+document.getElementById('btn-new-quote').addEventListener('click', () => {
+  if (customers.length === 0) {
+    alert('Add a customer first, then you can build an estimate for them.');
+    return;
+  }
+  openQuoteDrawer();
+});
+document.getElementById('btn-close-quote-drawer').addEventListener('click', closeQuoteDrawer);
+document.getElementById('btn-cancel-quote-drawer').addEventListener('click', closeQuoteDrawer);
+document.getElementById('btn-add-line-item').addEventListener('click', () => addLineItemRow());
+document.getElementById('quote-tax-rate').addEventListener('input', updateQuoteTotal);
+quoteOverlay.addEventListener('click', closeQuoteDrawer);
+quoteStatusFilter.addEventListener('change', renderQuotes);
+
+// ===================== Invoices =====================
+
+const invoiceRowsEl = document.getElementById('invoice-rows');
+const invoiceEmptyEl = document.getElementById('invoice-empty-state');
+const invoiceCountEl = document.getElementById('invoice-count');
+const invoiceStatusFilter = document.getElementById('invoice-status-filter');
+
+const invoiceOverlay = document.getElementById('invoice-overlay');
+const invoiceDrawer = document.getElementById('invoice-drawer');
+const invoiceForm = document.getElementById('invoice-form');
+const invoiceDrawerTitle = document.getElementById('invoice-drawer-title');
+const invoiceDrawerIdTag = document.getElementById('invoice-drawer-id-tag');
+const invoiceDeleteBtn = document.getElementById('btn-delete-invoice');
+const invoiceEmailBtn = document.getElementById('btn-email-invoice');
+const invoicePaymentLinkBtn = document.getElementById('btn-create-payment-link');
+const invoicePaymentLinkWrap = document.getElementById('invoice-payment-link-wrap');
+const invoicePaymentLinkDisplay = document.getElementById('invoice-payment-link-display');
+const invoiceCustomerSelect = document.getElementById('invoice-customer-select');
+const invoiceJobSelect = document.getElementById('invoice-job-select');
+const invoiceLineItemRowsEl = document.getElementById('invoice-line-item-rows');
+const invoiceTotalDisplay = document.getElementById('invoice-total-display');
+
+function populateInvoiceCustomerSelect() {
+  const current = invoiceCustomerSelect.value;
+  invoiceCustomerSelect.innerHTML = customers
+    .map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`)
+    .join('');
+  if (current) invoiceCustomerSelect.value = current;
+}
+
+function populateInvoiceJobSelect() {
+  const current = invoiceJobSelect.value;
+  invoiceJobSelect.innerHTML =
+    '<option value="">No linked job</option>' +
+    jobs
+      .map((j) => `<option value="${j.id}">J-${String(j.id).padStart(4, '0')} — ${escapeHtml(j.title)} (${escapeHtml(j.customer_name)})</option>`)
+      .join('');
+  if (current) invoiceJobSelect.value = current;
+}
+
+async function loadInvoices() {
+  invoices = await window.api.invoices.list();
+  renderInvoices();
+}
+
+function renderInvoices() {
+  const statusQuery = invoiceStatusFilter.value;
+  const filtered = statusQuery ? invoices.filter((i) => i.status === statusQuery) : invoices;
+
+  invoiceCountEl.textContent = `${invoices.length} on file`;
+  invoiceRowsEl.innerHTML = '';
+
+  if (filtered.length === 0) {
+    invoiceEmptyEl.hidden = false;
+    return;
+  }
+  invoiceEmptyEl.hidden = true;
+
+  for (const inv of filtered) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="cell-id">I-${inv.number}</td>
+      <td>${escapeHtml(inv.customer_name)}</td>
+      <td class="cell-name">${escapeHtml(inv.title)}</td>
+      <td>${inv.due_date || '—'}</td>
+      <td>${formatCurrency(inv.total)}</td>
+      <td><span class="badge badge-${inv.status}">${INVOICE_STATUS_LABELS[inv.status] || inv.status}</span></td>
+      <td class="cell-arrow">›</td>
+    `;
+    tr.addEventListener('click', async () => {
+      const full = await window.api.invoices.get(inv.id);
+      openInvoiceDrawer(full);
+    });
+    invoiceRowsEl.appendChild(tr);
+  }
+}
+
+function addInvoiceLineItemRow(item = {}) {
+  invoiceLineItemRowsEl.appendChild(createLineItemRow(item, updateInvoiceTotal));
+}
+
+function updateInvoiceTotal() {
+  const subtotal = sumLineItemsFrom(invoiceLineItemRowsEl);
+  const rate = parseFloat(invoiceForm.elements.tax_rate.value) || 0;
+  const tax = subtotal * (rate / 100);
+  document.getElementById('invoice-subtotal-display').textContent = formatCurrency(subtotal);
+  document.getElementById('invoice-tax-display').textContent = formatCurrency(tax);
+  invoiceTotalDisplay.textContent = formatCurrency(subtotal + tax);
+}
+
+function openInvoiceDrawer(invoice = null, fromJob = null) {
+  editingInvoiceId = invoice ? invoice.id : null;
+  invoiceForm.reset();
+  populateInvoiceCustomerSelect();
+  populateInvoiceJobSelect();
+  invoiceLineItemRowsEl.innerHTML = '';
+
+  if (invoice) {
+    invoiceDrawerTitle.textContent = 'Edit invoice';
+    invoiceDrawerIdTag.textContent = `I-${invoice.number}`;
+    currentInvoiceNumber = invoice.number;
+    invoiceDeleteBtn.hidden = false;
+    const customer = customers.find((c) => c.id === invoice.customer_id);
+    invoiceEmailBtn.hidden = !(customer && customer.email);
+    invoicePaymentLinkBtn.hidden = false;
+    invoicePaymentLinkBtn.textContent = invoice.payment_link_url ? 'Regenerate payment link' : 'Create payment link';
+    if (invoice.payment_link_url) {
+      invoicePaymentLinkDisplay.value = invoice.payment_link_url;
+      invoicePaymentLinkWrap.hidden = false;
+    } else {
+      invoicePaymentLinkWrap.hidden = true;
+    }
+    invoiceForm.elements.customer_id.value = invoice.customer_id;
+    invoiceForm.elements.job_id.value = invoice.job_id || '';
+    invoiceForm.elements.title.value = invoice.title || '';
+    invoiceForm.elements.due_date.value = invoice.due_date || '';
+    invoiceForm.elements.status.value = invoice.status || 'unpaid';
+    invoiceForm.elements.tax_rate.value = invoice.tax_rate || 0;
+    invoiceForm.elements.notes.value = invoice.notes || '';
+    (invoice.items && invoice.items.length ? invoice.items : [{}]).forEach(addInvoiceLineItemRow);
+  } else {
+    invoiceDrawerTitle.textContent = 'New invoice';
+    invoiceDrawerIdTag.textContent = 'NEW';
+    invoiceDeleteBtn.hidden = true;
+    invoiceEmailBtn.hidden = true;
+    invoicePaymentLinkBtn.hidden = true;
+    invoicePaymentLinkWrap.hidden = true;
+    currentInvoiceNumber = null;
+    invoiceForm.elements.tax_rate.value = defaultTaxRate;
+    if (fromJob) {
+      invoiceForm.elements.customer_id.value = fromJob.customer_id;
+      invoiceForm.elements.job_id.value = fromJob.id;
+      invoiceForm.elements.title.value = fromJob.title;
+      addInvoiceLineItemRow({ description: fromJob.title, quantity: 1, unit_price: 0 });
+    } else {
+      addInvoiceLineItemRow();
+    }
+  }
+
+  updateInvoiceTotal();
+  invoiceOverlay.hidden = false;
+  invoiceDrawer.hidden = false;
+}
+
+function closeInvoiceDrawer() {
+  invoiceOverlay.hidden = true;
+  invoiceDrawer.hidden = true;
+  editingInvoiceId = null;
+}
+
+function buildInvoiceDataFromForm() {
+  const data = Object.fromEntries(new FormData(invoiceForm).entries());
+  data.items = collectLineItemsFrom(invoiceLineItemRowsEl);
+  return data;
+}
+
+async function saveCurrentInvoice() {
+  const data = buildInvoiceDataFromForm();
+  if (!data.title.trim() || !data.customer_id) return false;
+
+  if (editingInvoiceId) {
+    await window.api.invoices.update(editingInvoiceId, data);
+  } else {
+    const created = await window.api.invoices.create(data);
+    editingInvoiceId = created.id;
+  }
+  return true;
+}
+
+invoiceForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const saved = await saveCurrentInvoice();
+  if (!saved) return;
+
+  closeInvoiceDrawer();
+  await loadInvoices();
+});
+
+invoiceDeleteBtn.addEventListener('click', async () => {
+  if (!editingInvoiceId) return;
+  const confirmed = confirm('Delete this invoice? This cannot be undone.');
+  if (!confirmed) return;
+
+  await window.api.invoices.delete(editingInvoiceId);
+  closeInvoiceDrawer();
+  await loadInvoices();
+});
+
+invoicePaymentLinkBtn.addEventListener('click', async () => {
+  if (!editingInvoiceId) return;
+  invoicePaymentLinkBtn.disabled = true;
+  invoicePaymentLinkBtn.textContent = 'Saving…';
+  await saveCurrentInvoice();
+  invoicePaymentLinkBtn.textContent = 'Creating…';
+  const result = await window.api.payments.createLinkForInvoice(editingInvoiceId);
+  invoicePaymentLinkBtn.disabled = false;
+  if (result.ok) {
+    invoicePaymentLinkDisplay.value = result.invoice.payment_link_url;
+    invoicePaymentLinkWrap.hidden = false;
+    invoicePaymentLinkBtn.textContent = 'Regenerate payment link';
+    await loadInvoices();
+  } else {
+    invoicePaymentLinkBtn.textContent = 'Create payment link';
+    alert(`Couldn't create payment link: ${result.error}`);
+  }
+});
+
+function buildInvoiceCopyText() {
+  const customerId = invoiceForm.elements.customer_id.value;
+  const customer = customers.find((c) => c.id === Number(customerId));
+  const title = invoiceForm.elements.title.value || 'Invoice';
+  const dueDate = invoiceForm.elements.due_date.value;
+  const items = collectLineItemsFrom(invoiceLineItemRowsEl);
+  const subtotal = sumLineItemsFrom(invoiceLineItemRowsEl);
+  const rate = parseFloat(invoiceForm.elements.tax_rate.value) || 0;
+  const tax = subtotal * (rate / 100);
+  const total = subtotal + tax;
+  const idTag = currentInvoiceNumber ? `I-${currentInvoiceNumber}` : 'NEW';
+  const payLink = invoicePaymentLinkWrap.hidden ? null : invoicePaymentLinkDisplay.value;
+
+  const lines = [];
+  lines.push(`EcoHaven Solutions LLC — Invoice ${idTag}`);
+  lines.push(title);
+  if (customer) lines.push(`For: ${customer.name}`);
+  lines.push('');
+  items.forEach((item) => {
+    lines.push(`${item.description || 'Item'} x${item.quantity} — ${formatCurrency(item.quantity * item.unit_price)}`);
+    if (item.notes) lines.push(`  (${item.notes})`);
+  });
+  lines.push('');
+  lines.push(`Subtotal: ${formatCurrency(subtotal)}`);
+  if (rate) lines.push(`Tax (${rate}%): ${formatCurrency(tax)}`);
+  lines.push(`Total: ${formatCurrency(total)}`);
+  if (dueDate) lines.push(`Due: ${dueDate}`);
+  if (payLink) {
+    lines.push('');
+    lines.push(`Pay online: ${payLink}`);
+  }
+  lines.push('');
+  lines.push('Questions? Call/text 509-866-6388 or visit ecohavenpro.com');
+  return lines.join('\n');
+}
+
+document.getElementById('btn-copy-invoice-text').addEventListener('click', async () => {
+  const text = buildInvoiceCopyText();
+  try {
+    await navigator.clipboard.writeText(text);
+    alert('Copied! Paste it into Google Voice (or anywhere) to send.');
+  } catch (err) {
+    prompt('Copy this text manually:', text);
+  }
+});
+
+invoiceEmailBtn.addEventListener('click', async () => {
+  if (!editingInvoiceId) return;
+  invoiceEmailBtn.disabled = true;
+  invoiceEmailBtn.textContent = 'Saving…';
+  await saveCurrentInvoice();
+  invoiceEmailBtn.textContent = 'Sending…';
+  const result = await window.api.email.sendInvoice(editingInvoiceId);
+  invoiceEmailBtn.disabled = false;
+  invoiceEmailBtn.textContent = 'Email to customer';
+  if (result.ok) {
+    alert('Invoice emailed to the customer.');
+    await loadInvoices();
+  } else {
+    alert(`Couldn't send email: ${result.error}`);
+  }
+});
+
+document.getElementById('btn-new-invoice').addEventListener('click', () => {
+  if (customers.length === 0) {
+    alert('Add a customer first, then you can create an invoice for them.');
+    return;
+  }
+  openInvoiceDrawer();
+});
+document.getElementById('btn-close-invoice-drawer').addEventListener('click', closeInvoiceDrawer);
+document.getElementById('btn-cancel-invoice-drawer').addEventListener('click', closeInvoiceDrawer);
+document.getElementById('btn-add-invoice-line-item').addEventListener('click', () => addInvoiceLineItemRow());
+document.getElementById('invoice-tax-rate').addEventListener('input', updateInvoiceTotal);
+invoiceOverlay.addEventListener('click', closeInvoiceDrawer);
+invoiceStatusFilter.addEventListener('change', renderInvoices);
+
+// ===================== Expenses =====================
+
+function receiptUrl(filename) {
+  if (!filename) return null;
+  if (window.api.isElectron) return `http://localhost:4000/receipts/${filename}`;
+  return `${window.location.origin}/receipts/${filename}`;
+}
+
+let expenses = [];
+let editingExpenseId = null;
+let pendingReceiptData = null; // base64 of a newly-chosen photo, if any
+let removeReceiptFlag = false;
+
+const expenseRowsEl = document.getElementById('expense-rows');
+const expenseEmptyEl = document.getElementById('expense-empty-state');
+const expenseCountEl = document.getElementById('expense-count');
+
+const expenseOverlay = document.getElementById('expense-overlay');
+const expenseDrawer = document.getElementById('expense-drawer');
+const expenseForm = document.getElementById('expense-form');
+const expenseDrawerTitle = document.getElementById('expense-drawer-title');
+const expenseDrawerIdTag = document.getElementById('expense-drawer-id-tag');
+const expenseDeleteBtn = document.getElementById('btn-delete-expense');
+const expenseReceiptInput = document.getElementById('expense-receipt-input');
+const expenseReceiptPreviewWrap = document.getElementById('expense-receipt-preview-wrap');
+const expenseReceiptPreview = document.getElementById('expense-receipt-preview');
+
+async function loadExpenses() {
+  expenses = await window.api.expenses.list();
+  renderExpenses();
+}
+
+function renderExpenses() {
+  expenseCountEl.textContent = `${expenses.length} on file`;
+  expenseRowsEl.innerHTML = '';
+
+  if (expenses.length === 0) {
+    expenseEmptyEl.hidden = false;
+    return;
+  }
+  expenseEmptyEl.hidden = true;
+
+  for (const exp of expenses) {
+    const tr = document.createElement('tr');
+    const thumb = exp.receipt_filename
+      ? `<img class="receipt-thumb" src="${receiptUrl(exp.receipt_filename)}" />`
+      : `<div class="receipt-thumb-placeholder">—</div>`;
+    tr.innerHTML = `
+      <td>${thumb}</td>
+      <td>${exp.expense_date}</td>
+      <td class="cell-name">${escapeHtml(exp.vendor)}</td>
+      <td>${escapeHtml(exp.category)}</td>
+      <td>${formatCurrency(exp.amount)}</td>
+      <td class="cell-arrow">›</td>
+    `;
+    tr.addEventListener('click', () => openExpenseDrawer(exp));
+    expenseRowsEl.appendChild(tr);
+  }
+}
+
+function resetReceiptPicker() {
+  pendingReceiptData = null;
+  removeReceiptFlag = false;
+  expenseReceiptInput.value = '';
+  expenseReceiptPreviewWrap.hidden = true;
+  expenseReceiptPreview.src = '';
+}
+
+function openExpenseDrawer(expense = null) {
+  editingExpenseId = expense ? expense.id : null;
+  expenseForm.reset();
+  resetReceiptPicker();
+
+  if (expense) {
+    expenseDrawerTitle.textContent = 'Edit expense';
+    expenseDrawerIdTag.textContent = `X-${String(expense.id).padStart(4, '0')}`;
+    expenseDeleteBtn.hidden = false;
+    expenseForm.elements.vendor.value = expense.vendor || '';
+    expenseForm.elements.amount.value = expense.amount || 0;
+    expenseForm.elements.expense_date.value = expense.expense_date || '';
+    expenseForm.elements.category.value = expense.category || 'Other';
+    expenseForm.elements.notes.value = expense.notes || '';
+    if (expense.receipt_filename) {
+      expenseReceiptPreview.src = receiptUrl(expense.receipt_filename);
+      expenseReceiptPreviewWrap.hidden = false;
+    }
+  } else {
+    expenseDrawerTitle.textContent = 'New expense';
+    expenseDrawerIdTag.textContent = 'NEW';
+    expenseDeleteBtn.hidden = true;
+    expenseForm.elements.expense_date.value = dateStr(new Date());
+  }
+
+  expenseOverlay.hidden = false;
+  expenseDrawer.hidden = false;
+}
+
+function closeExpenseDrawer() {
+  expenseOverlay.hidden = true;
+  expenseDrawer.hidden = true;
+  editingExpenseId = null;
+}
+
+expenseReceiptInput.addEventListener('change', () => {
+  const file = expenseReceiptInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    pendingReceiptData = reader.result;
+    removeReceiptFlag = false;
+    expenseReceiptPreview.src = pendingReceiptData;
+    expenseReceiptPreviewWrap.hidden = false;
+  };
+  reader.readAsDataURL(file);
+});
+
+document.getElementById('btn-remove-receipt').addEventListener('click', () => {
+  pendingReceiptData = null;
+  removeReceiptFlag = true;
+  expenseReceiptInput.value = '';
+  expenseReceiptPreviewWrap.hidden = true;
+  expenseReceiptPreview.src = '';
+});
+
+expenseForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(expenseForm).entries());
+  if (!data.vendor.trim() || !data.expense_date) return;
+
+  if (pendingReceiptData) data.receipt_data = pendingReceiptData;
+  if (removeReceiptFlag) data.remove_receipt = true;
+
+  if (editingExpenseId) {
+    await window.api.expenses.update(editingExpenseId, data);
+  } else {
+    await window.api.expenses.create(data);
+  }
+
+  closeExpenseDrawer();
+  await loadExpenses();
+});
+
+expenseDeleteBtn.addEventListener('click', async () => {
+  if (!editingExpenseId) return;
+  const confirmed = confirm('Delete this expense? This also removes its receipt photo and cannot be undone.');
+  if (!confirmed) return;
+
+  await window.api.expenses.delete(editingExpenseId);
+  closeExpenseDrawer();
+  await loadExpenses();
+});
+
+document.getElementById('btn-new-expense').addEventListener('click', () => openExpenseDrawer());
+document.getElementById('btn-close-expense-drawer').addEventListener('click', closeExpenseDrawer);
+document.getElementById('btn-cancel-expense-drawer').addEventListener('click', closeExpenseDrawer);
+expenseOverlay.addEventListener('click', closeExpenseDrawer);
+
+// ===================== Settings =====================
+
+const settingsForm = document.getElementById('settings-form');
+const stripeSettingsForm = document.getElementById('stripe-settings-form');
+let defaultTaxRate = 0;
+
+async function loadSettings() {
+  const settings = await window.api.settings.get();
+  if (settings.gmail_user) settingsForm.elements.gmail_user.value = settings.gmail_user;
+  if (settings.gmail_app_password) settingsForm.elements.gmail_app_password.value = settings.gmail_app_password;
+  if (settings.default_tax_rate) {
+    settingsForm.elements.default_tax_rate.value = settings.default_tax_rate;
+    defaultTaxRate = parseFloat(settings.default_tax_rate) || 0;
+  }
+  if (settings.stripe_secret_key) {
+    stripeSettingsForm.elements.stripe_secret_key.value = settings.stripe_secret_key;
+  }
+  if (settings.google_review_url) {
+    reviewSettingsForm.elements.google_review_url.value = settings.google_review_url;
+  }
+}
+
+settingsForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(settingsForm).entries());
+  await window.api.settings.set('gmail_user', data.gmail_user || '');
+  await window.api.settings.set('gmail_app_password', data.gmail_app_password || '');
+  await window.api.settings.set('default_tax_rate', data.default_tax_rate || '0');
+  defaultTaxRate = parseFloat(data.default_tax_rate) || 0;
+  alert('Settings saved.');
+});
+
+stripeSettingsForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(stripeSettingsForm).entries());
+  await window.api.settings.set('stripe_secret_key', data.stripe_secret_key || '');
+  alert('Stripe key saved.');
+});
+
+const reviewSettingsForm = document.getElementById('review-settings-form');
+reviewSettingsForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(reviewSettingsForm).entries());
+  await window.api.settings.set('google_review_url', data.google_review_url || '');
+  alert('Review link saved.');
+});
+
+// ===================== Reports =====================
+
+const reportYearSelect = document.getElementById('report-year-select');
+const reportRowsEl = document.getElementById('report-rows');
+const reportEmptyEl = document.getElementById('report-empty-state');
+const reportExpenseRowsEl = document.getElementById('report-expense-rows');
+const reportExpenseEmptyEl = document.getElementById('report-expense-empty-state');
+let currentReportRows = [];
+let currentReportExpenses = [];
+
+async function loadReportYears() {
+  const years = await window.api.reports.getAvailableYears();
+  reportYearSelect.innerHTML = years.map((y) => `<option value="${y}">${y}</option>`).join('');
+  if (years.length) await loadReportForYear(years[0]);
+}
+
+async function loadReportForYear(year) {
+  currentReportRows = await window.api.reports.getYearlyInvoiceReport(year);
+  currentReportExpenses = await window.api.expenses.listByYear(year);
+  renderReport();
+}
+
+function renderReport() {
+  const rows = currentReportRows;
+  let invoiced = 0;
+  let collected = 0;
+  let outstanding = 0;
+  let taxCollected = 0;
+
+  reportRowsEl.innerHTML = '';
+
+  if (rows.length === 0) {
+    reportEmptyEl.hidden = false;
+  } else {
+    reportEmptyEl.hidden = true;
+    for (const inv of rows) {
+      const tax = inv.total - inv.subtotal;
+      invoiced += inv.total;
+      if (inv.status === 'paid') {
+        collected += inv.total;
+        taxCollected += tax;
+      } else {
+        outstanding += inv.total;
+      }
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="cell-id">I-${inv.number}</td>
+        <td>${inv.due_date || inv.created_at.slice(0, 10)}</td>
+        <td>${escapeHtml(inv.customer_name)}</td>
+        <td>${formatCurrency(inv.subtotal)}</td>
+        <td>${formatCurrency(tax)}</td>
+        <td>${formatCurrency(inv.total)}</td>
+        <td><span class="badge badge-${inv.status}">${INVOICE_STATUS_LABELS[inv.status] || inv.status}</span></td>
+      `;
+      reportRowsEl.appendChild(tr);
+    }
+  }
+
+  document.getElementById('report-total-invoiced').textContent = formatCurrency(invoiced);
+  document.getElementById('report-total-collected').textContent = formatCurrency(collected);
+  document.getElementById('report-total-outstanding').textContent = formatCurrency(outstanding);
+  document.getElementById('report-total-tax').textContent = formatCurrency(taxCollected);
+
+  let totalExpenses = 0;
+  reportExpenseRowsEl.innerHTML = '';
+  if (currentReportExpenses.length === 0) {
+    reportExpenseEmptyEl.hidden = false;
+  } else {
+    reportExpenseEmptyEl.hidden = true;
+    for (const exp of currentReportExpenses) {
+      totalExpenses += exp.amount;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${exp.expense_date}</td>
+        <td>${escapeHtml(exp.vendor)}</td>
+        <td>${escapeHtml(exp.category)}</td>
+        <td>${formatCurrency(exp.amount)}</td>
+      `;
+      reportExpenseRowsEl.appendChild(tr);
+    }
+  }
+
+  document.getElementById('report-total-expenses').textContent = formatCurrency(totalExpenses);
+  document.getElementById('report-net-income').textContent = formatCurrency(collected - totalExpenses);
+}
+
+reportYearSelect.addEventListener('change', () => loadReportForYear(reportYearSelect.value));
+
+document.getElementById('btn-export-expenses-csv').addEventListener('click', () => {
+  if (currentReportExpenses.length === 0) {
+    alert('No expenses to export for this year.');
+    return;
+  }
+  const header = ['Date', 'Vendor', 'Category', 'Amount', 'Notes'];
+  const lines = currentReportExpenses.map((exp) => [
+    exp.expense_date,
+    exp.vendor.replace(/,/g, ' '),
+    exp.category.replace(/,/g, ' '),
+    exp.amount.toFixed(2),
+    (exp.notes || '').replace(/,/g, ' ').replace(/\n/g, ' '),
+  ]);
+  const csv = [header, ...lines].map((row) => row.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ecohaven-expenses-${reportYearSelect.value}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById('btn-export-report-csv').addEventListener('click', () => {
+  if (currentReportRows.length === 0) {
+    alert('No invoices to export for this year.');
+    return;
+  }
+  const header = ['Invoice', 'Date', 'Customer', 'Subtotal', 'Tax', 'Total', 'Status'];
+  const lines = currentReportRows.map((inv) => [
+    `I-${inv.number}`,
+    inv.due_date || inv.created_at.slice(0, 10),
+    inv.customer_name.replace(/,/g, ' '),
+    inv.subtotal.toFixed(2),
+    (inv.total - inv.subtotal).toFixed(2),
+    inv.total.toFixed(2),
+    inv.status,
+  ]);
+  const csv = [header, ...lines].map((row) => row.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ecohaven-income-${reportYearSelect.value}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// ===================== Route map =====================
+
+let routeMap = null;
+let routeMarkersLayer = null;
+let routeLineLayer = null;
+const geocodeCache = {};
+
+window.initRouteMap = function initRouteMap() {
+  if (routeMap) {
+    setTimeout(() => routeMap.invalidateSize(), 50);
+    return;
+  }
+  routeMap = L.map('route-map').setView([46.6, -119.9], 11); // roughly central WA; recenters once stops load
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19,
+  }).addTo(routeMap);
+  routeMarkersLayer = L.layerGroup().addTo(routeMap);
+
+  const dateInput = document.getElementById('route-date-input');
+  dateInput.value = dateStr(new Date());
+};
+
+async function geocodeAddress(query) {
+  if (!query) return null;
+  if (geocodeCache[query]) return geocodeCache[query];
+
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
+    const results = await res.json();
+    if (results && results[0]) {
+      const point = { lat: parseFloat(results[0].lat), lon: parseFloat(results[0].lon) };
+      geocodeCache[query] = point;
+      return point;
+    }
+  } catch (err) {
+    // network hiccup -- treat as un-geocodable, skip this stop
+  }
+  return null;
+}
+
+async function loadRoute(dateForRoute) {
+  const statusEl = document.getElementById('route-status-text');
+  const listEl = document.getElementById('route-list');
+  listEl.innerHTML = '';
+  routeMarkersLayer.clearLayers();
+  if (routeLineLayer) {
+    routeMap.removeLayer(routeLineLayer);
+    routeLineLayer = null;
+  }
+
+  const dayJobs = jobs
+    .filter((j) => j.scheduled_date === dateForRoute && j.status !== 'cancelled')
+    .sort((a, b) => (a.scheduled_time || '').localeCompare(b.scheduled_time || ''));
+
+  if (dayJobs.length === 0) {
+    statusEl.textContent = 'No jobs scheduled that day.';
+    return;
+  }
+
+  statusEl.textContent = `Looking up ${dayJobs.length} address(es)...`;
+
+  const stops = [];
+  const failedNames = [];
+  for (const job of dayJobs) {
+    const customer = customers.find((c) => c.id === job.customer_id);
+    if (!customer) continue;
+
+    // Try the full address first, then fall back to looser combinations --
+    // a typo'd street number shouldn't mean the stop vanishes entirely.
+    const attempts = [
+      [customer.address, customer.city, customer.state, customer.zip],
+      [customer.city, customer.state, customer.zip],
+      [customer.city, customer.state],
+    ].map((parts) => parts.filter(Boolean).join(', ')).filter(Boolean);
+
+    if (attempts.length === 0) {
+      failedNames.push(`${customer.name} (no address on file)`);
+      continue;
+    }
+
+    let point = null;
+    for (const attempt of attempts) {
+      point = await geocodeAddress(attempt);
+      await new Promise((resolve) => setTimeout(resolve, 350)); // be polite to the free service
+      if (point) break;
+    }
+
+    if (point) {
+      stops.push({ job, customer, point });
+    } else {
+      failedNames.push(customer.name);
+    }
+  }
+
+  if (stops.length === 0) {
+    statusEl.textContent = `Could not find map locations for: ${failedNames.join(', ')}. Double-check their addresses in Customers.`;
+    return;
+  }
+
+  statusEl.textContent =
+    failedNames.length > 0
+      ? `${stops.length} of ${dayJobs.length} stop(s) mapped. Couldn't locate: ${failedNames.join(', ')}.`
+      : `${stops.length} of ${dayJobs.length} stop(s) mapped, in visit order.`;
+
+  const latLngs = stops.map((s) => [s.point.lat, s.point.lon]);
+
+  stops.forEach((stop, index) => {
+    const marker = L.marker([stop.point.lat, stop.point.lon]).addTo(routeMarkersLayer);
+    marker.bindPopup(`<b>${index + 1}. ${escapeHtml(stop.job.title)}</b><br>${escapeHtml(stop.customer.name)}`);
+
+    const row = document.createElement('div');
+    row.className = 'route-stop';
+    row.innerHTML = `
+      <span class="route-stop-number">${index + 1}</span>
+      <div class="route-stop-details">
+        <div class="route-stop-title">${escapeHtml(stop.job.title)} — ${escapeHtml(stop.customer.name)}</div>
+        <div class="route-stop-sub">${formatTimeRange(stop.job.scheduled_time, stop.job.scheduled_time_end) || 'No time set'} · ${escapeHtml(stop.customer.address || '')}</div>
+      </div>
+    `;
+    row.addEventListener('click', () => {
+      routeMap.setView([stop.point.lat, stop.point.lon], 15);
+      marker.openPopup();
+    });
+    listEl.appendChild(row);
+  });
+
+  routeLineLayer = L.polyline(latLngs, { color: '#6E7A50', weight: 3, dashArray: '6 6' }).addTo(routeMap);
+  routeMap.fitBounds(L.latLngBounds(latLngs), { padding: [30, 30] });
+}
+
+document.getElementById('btn-load-route').addEventListener('click', () => {
+  const dateInput = document.getElementById('route-date-input');
+  loadRoute(dateInput.value || dateStr(new Date()));
+});
+
+// ===================== Init =====================
+
+(async function init() {
+  await loadCustomers();
+  await loadJobs();
+  await loadQuotes();
+  await loadInvoices();
+  await loadExpenses();
+  await loadSettings();
+  await loadReportYears();
+
+  if (window.api.app && window.api.app.getPhoneAccessUrl) {
+    const url = await window.api.app.getPhoneAccessUrl();
+    if (url) {
+      const el = document.getElementById('phone-access-url');
+      el.textContent = `Phone: ${url}`;
+      el.hidden = false;
+    }
+  }
+
+  if (window.api.app && window.api.app.getCalendarUrl) {
+    const calUrl = await window.api.app.getCalendarUrl();
+    if (calUrl) {
+      document.getElementById('calendar-url-display').value = calUrl;
+    }
+  }
+
+  if (!window.api.isElectron && window.api.auth) {
+    const signOutWrap = document.getElementById('sign-out-wrap');
+    signOutWrap.hidden = false;
+    document.getElementById('btn-sign-out').addEventListener('click', (e) => {
+      e.preventDefault();
+      window.api.auth.logout();
+    });
+  }
+
+  if (window.initRouteMap) window.initRouteMap();
+})();
