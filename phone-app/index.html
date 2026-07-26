@@ -992,6 +992,16 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script>
+    // Temporary debugging aid: shows ANY JavaScript error as a popup, so we
+    // can see what's failing without needing browser dev tools open.
+    window.addEventListener('error', (e) => {
+      alert('JS ERROR: ' + e.message + '\n' + (e.filename || '') + ':' + (e.lineno || ''));
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      alert('UNHANDLED PROMISE ERROR: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
+    });
+  </script>
   <script src="supabase-api.js"></script>
   <script src="app.js"></script>
 </body>
