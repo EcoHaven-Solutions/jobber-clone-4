@@ -1995,8 +1995,22 @@ window.initRouteMap = function initRouteMap() {
   routeMarkersLayer = L.layerGroup().addTo(routeMap);
 
   const dateInput = document.getElementById('route-date-input');
-  dateInput.value = dateStr(new Date());
+  const today = dateStr(new Date());
+  const nextDateWithJobs = findNextDateWithJobs(today);
+  dateInput.value = nextDateWithJobs || today;
+  loadRoute(dateInput.value);
 };
+
+// Finds the earliest scheduled date on or after startDate that has at
+// least one non-cancelled job -- so the route map opens showing something
+// useful instead of an empty day by default.
+function findNextDateWithJobs(startDate) {
+  const upcoming = jobs
+    .filter((j) => j.scheduled_date && j.scheduled_date >= startDate && j.status !== 'cancelled')
+    .map((j) => j.scheduled_date)
+    .sort();
+  return upcoming[0] || null;
+}
 
 async function geocodeAddress(query) {
   if (!query) return null;
@@ -2075,10 +2089,13 @@ async function loadRoute(dateForRoute) {
     return;
   }
 
+  const dayNote = dateForRoute !== dateStr(new Date()) ? `No jobs today — showing ${dateForRoute}. ` : '';
+
   statusEl.textContent =
-    failedNames.length > 0
+    dayNote +
+    (failedNames.length > 0
       ? `${stops.length} of ${dayJobs.length} stop(s) mapped. Couldn't locate: ${failedNames.join(', ')}.`
-      : `${stops.length} of ${dayJobs.length} stop(s) mapped, in visit order.`;
+      : `${stops.length} of ${dayJobs.length} stop(s) mapped, in visit order.`);
 
   const latLngs = stops.map((s) => [s.point.lat, s.point.lon]);
 
