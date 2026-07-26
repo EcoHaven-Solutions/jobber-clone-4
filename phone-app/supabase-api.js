@@ -150,10 +150,10 @@ window.api = {
   },
 
   jobs: {
-    list: async () => unwrap(await sb.from('jobs').select('*, customers(name, phone)').order('scheduled_date', { nullsFirst: false })).then(mapJobRows),
-    listByCustomer: async (customerId) => unwrap(await sb.from('jobs').select('*, customers(name, phone)').eq('customer_id', customerId)).then(mapJobRows),
-    create: async (job) => unwrap(await sb.from('jobs').insert(cleanJob(job)).select('*, customers(name, phone)').single()).then((r) => mapJobRows([r])[0]),
-    update: async (id, updates) => unwrap(await sb.from('jobs').update(cleanJob(updates)).eq('id', id).select('*, customers(name, phone)').single()).then((r) => mapJobRows([r])[0]),
+    list: async () => mapJobRows(unwrap(await sb.from('jobs').select('*, customers(name, phone)').order('scheduled_date', { nullsFirst: false }))),
+    listByCustomer: async (customerId) => mapJobRows(unwrap(await sb.from('jobs').select('*, customers(name, phone)').eq('customer_id', customerId))),
+    create: async (job) => mapJobRows([unwrap(await sb.from('jobs').insert(cleanJob(job)).select('*, customers(name, phone)').single())])[0],
+    update: async (id, updates) => mapJobRows([unwrap(await sb.from('jobs').update(cleanJob(updates)).eq('id', id).select('*, customers(name, phone)').single())])[0],
     delete: async (id) => { await sb.from('jobs').delete().eq('id', id); return { id }; },
     bulkCreate: async (customerIds, template) => {
       const rows = customerIds.map((customer_id) => ({ ...template, customer_id }));
