@@ -116,14 +116,17 @@ function cleanJob(j) {
 }
 
 function cleanQuoteOrInvoice(o) {
-  return {
+  const cleaned = {
     ...o,
     customer_id: toIntOrNull(o.customer_id),
-    job_id: toIntOrNull(o.job_id),
     tax_rate: toNumOrDefault(o.tax_rate, 0),
     notes: toNullableText(o.notes),
-    due_date: toNullableText(o.due_date),
   };
+  // due_date only exists on invoices, not quotes -- and job_id should never
+  // get silently overwritten to null just because a form didn't include it.
+  if ('due_date' in o) cleaned.due_date = toNullableText(o.due_date);
+  if ('job_id' in o) cleaned.job_id = toIntOrNull(o.job_id);
+  return cleaned;
 }
 
 function cleanExpense(e) {
