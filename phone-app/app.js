@@ -1819,26 +1819,17 @@ expenseOverlay.addEventListener('click', closeExpenseDrawer);
 // ===================== Settings =====================
 
 const settingsForm = document.getElementById('settings-form');
-const stripeSettingsForm = document.getElementById('stripe-settings-form');
 let defaultTaxRate = 0;
 
 async function loadSettings() {
   const settings = await window.api.settings.get();
-  if (settings.gmail_user) settingsForm.elements.gmail_user.value = settings.gmail_user;
-  if (settings.gmail_app_password) settingsForm.elements.gmail_app_password.value = settings.gmail_app_password;
   if (settings.default_tax_rate) {
     settingsForm.elements.default_tax_rate.value = settings.default_tax_rate;
     defaultTaxRate = parseFloat(settings.default_tax_rate) || 0;
   }
-  if (settings.stripe_secret_key) {
-    stripeSettingsForm.elements.stripe_secret_key.value = settings.stripe_secret_key;
-  }
   if (settings.google_review_url) {
     reviewSettingsForm.elements.google_review_url.value = settings.google_review_url;
   }
-  if (settings.twilio_account_sid) twilioSettingsForm.elements.twilio_account_sid.value = settings.twilio_account_sid;
-  if (settings.twilio_auth_token) twilioSettingsForm.elements.twilio_auth_token.value = settings.twilio_auth_token;
-  if (settings.twilio_phone_number) twilioSettingsForm.elements.twilio_phone_number.value = settings.twilio_phone_number;
   if (settings.mapbox_access_token) {
     mapboxSettingsForm.elements.mapbox_access_token.value = settings.mapbox_access_token;
     mapboxAccessToken = settings.mapbox_access_token;
@@ -1848,18 +1839,9 @@ async function loadSettings() {
 settingsForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const data = Object.fromEntries(new FormData(settingsForm).entries());
-  await window.api.settings.set('gmail_user', data.gmail_user || '');
-  await window.api.settings.set('gmail_app_password', data.gmail_app_password || '');
   await window.api.settings.set('default_tax_rate', data.default_tax_rate || '0');
   defaultTaxRate = parseFloat(data.default_tax_rate) || 0;
   alert('Settings saved.');
-});
-
-stripeSettingsForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const data = Object.fromEntries(new FormData(stripeSettingsForm).entries());
-  await window.api.settings.set('stripe_secret_key', data.stripe_secret_key || '');
-  alert('Stripe key saved.');
 });
 
 const reviewSettingsForm = document.getElementById('review-settings-form');
@@ -1868,16 +1850,6 @@ reviewSettingsForm.addEventListener('submit', async (e) => {
   const data = Object.fromEntries(new FormData(reviewSettingsForm).entries());
   await window.api.settings.set('google_review_url', data.google_review_url || '');
   alert('Review link saved.');
-});
-
-const twilioSettingsForm = document.getElementById('twilio-settings-form');
-twilioSettingsForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const data = Object.fromEntries(new FormData(twilioSettingsForm).entries());
-  await window.api.settings.set('twilio_account_sid', data.twilio_account_sid || '');
-  await window.api.settings.set('twilio_auth_token', data.twilio_auth_token || '');
-  await window.api.settings.set('twilio_phone_number', data.twilio_phone_number || '');
-  alert('Twilio settings saved.');
 });
 
 const mapboxSettingsForm = document.getElementById('mapbox-settings-form');

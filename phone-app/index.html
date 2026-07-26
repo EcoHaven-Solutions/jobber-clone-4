@@ -414,24 +414,9 @@
         <div class="table-wrap settings-card">
           <form id="settings-form" class="drawer-body" style="padding:24px;">
             <p class="empty-sub" style="margin-top:0;">
-              Emails for estimates and invoices are sent through
-              <strong>your own Gmail account</strong>. You'll need a
-              Gmail <strong>App Password</strong> (not your regular
-              password) — go to
-              <code>myaccount.google.com/apppasswords</code> (requires
-              2-Step Verification turned on for your Google account),
-              create one named "EcoHaven App," and paste the 16-character
-              code below.
-            </p>
-            <label>Gmail address
-              <input type="email" name="gmail_user" placeholder="you@gmail.com" />
-            </label>
-            <label>Gmail app password
-              <input type="password" name="gmail_app_password" placeholder="xxxx xxxx xxxx xxxx" autocomplete="off" />
-            </label>
-            <p class="empty-sub">
-              Emails will be sent from this Gmail address. Gmail allows
-              up to ~500 emails per day, which is plenty for normal use.
+              Emails, texts, and Stripe payment links are configured
+              separately now — in your Supabase project under
+              <strong>Edge Functions → Manage secrets</strong>, not here.
             </p>
             <label>Default tax rate (%)
               <input type="number" name="default_tax_rate" min="0" step="0.01" placeholder="0" />
@@ -471,30 +456,6 @@
         </div>
 
         <div class="table-wrap settings-card" style="margin-top:20px;">
-          <form id="stripe-settings-form" class="drawer-body" style="padding:24px;">
-            <p class="empty-sub" style="margin-top:0;">
-              Accept card payments on invoices through <strong>Stripe</strong>.
-              Create a free account at stripe.com, then go to
-              Developers → API keys and copy your <strong>secret key</strong>.
-            </p>
-            <label>Stripe secret key
-              <input type="password" name="stripe_secret_key" placeholder="sk_live_xxxxxxxxxxxx" autocomplete="off" />
-            </label>
-            <p class="empty-sub">
-              Stripe charges its standard processing fee (~2.9% + 30¢) per
-              payment — nothing extra is added by this app. Money goes
-              straight to your own Stripe account.
-            </p>
-            <div class="drawer-actions" style="border-top:none;">
-              <div></div>
-              <div class="drawer-actions-right">
-                <button type="submit" class="btn btn-primary">Save Stripe key</button>
-              </div>
-            </div>
-          </form>
-        </div>
-
-        <div class="table-wrap settings-card" style="margin-top:20px;">
           <form id="review-settings-form" class="drawer-body" style="padding:24px;">
             <p class="empty-sub" style="margin-top:0;">
               Used by the <strong>"Request review"</strong> button on
@@ -510,36 +471,6 @@
               <div></div>
               <div class="drawer-actions-right">
                 <button type="submit" class="btn btn-primary">Save review link</button>
-              </div>
-            </div>
-          </form>
-        </div>
-
-        <div class="table-wrap settings-card" style="margin-top:20px;">
-          <form id="twilio-settings-form" class="drawer-body" style="padding:24px;">
-            <p class="empty-sub" style="margin-top:0;">
-              Lets you <strong>text estimates</strong> to customers via
-              Twilio. Create a free trial account at twilio.com, buy a
-              phone number (~$1-2/month), then copy your Account SID and
-              Auth Token from the Twilio console dashboard.
-            </p>
-            <label>Twilio Account SID
-              <input type="text" name="twilio_account_sid" placeholder="ACxxxxxxxxxxxxxxxx" autocomplete="off" />
-            </label>
-            <label>Twilio Auth Token
-              <input type="password" name="twilio_auth_token" placeholder="xxxxxxxxxxxxxxxx" autocomplete="off" />
-            </label>
-            <label>Twilio phone number
-              <input type="text" name="twilio_phone_number" placeholder="+15095551234" />
-            </label>
-            <p class="empty-sub">
-              Texts cost about a penny each through Twilio — nothing extra
-              is added by this app.
-            </p>
-            <div class="drawer-actions" style="border-top:none;">
-              <div></div>
-              <div class="drawer-actions-right">
-                <button type="submit" class="btn btn-primary">Save Twilio settings</button>
               </div>
             </div>
           </form>
