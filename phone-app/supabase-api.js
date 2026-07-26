@@ -134,6 +134,32 @@ function cleanExpense(e) {
   };
 }
 
+// Uploads a base64 data URL (from a file input) to Supabase Storage, and
+// returns the public URL to store/display. Used for job photos and expense
+// receipts alike.
+async function uploadToStorage(base64DataUrl, folder) {
+  const match = /^data:(.+);base64,(.+)$/.exec(base64DataUrl || '');
+  if (!match) throw new Error('Invalid image data.');
+  const [, mimeType, base64] = match;
+  const ext = mimeType.split('/')[1] || 'jpg';
+  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const { error } = await sb.storage.from('attachments').upload(path, bytes, { contentType: mimeType });
+  if (error) throw new Error(error.message);
+
+  return sb.storage.from('attachments').getPublicUrl(path).data.publicUrl;
+}
+
+async function deleteFromStorage(url) {
+  if (!url) return;
+  const marker = '/attachments/';
+  const idx = url.indexOf(marker);
+  if (idx === -1) return;
+  const path = url.slice(idx + marker.length);
+  await sb.storage.from('attachments').remove([path]);
+}
+
 window.api = {
   isElectron: false,
 
@@ -215,12 +241,19 @@ window.api = {
     },
   },
 
-  // Photo storage isn't wired up in the phone version yet (would need
-  // Supabase Storage) -- these are safe no-ops so the buttons don't crash.
   jobPhotos: {
-    list: async () => [],
-    add: async () => { throw new Error('Photo uploads from the phone app aren\'t set up yet.'); },
-    delete: async () => [],
+    list: async (jobId) => unwrap(await sb.from('job_photos').select('*').eq('job_id', jobId).order('created_at')),
+    add: async (jobId, type, base64Data) => {
+      const url = await uploadToStorage(base64Data, `jobs/${jobId}`);
+      await sb.from('job_photos').insert({ job_id: jobId, type: type || 'before', filename: url });
+      return unwrap(await sb.from('job_photos').select('*').eq('job_id', jobId).order('created_at'));
+    },
+    delete: async (id, jobId) => {
+      const row = unwrap(await sb.from('job_photos').select('*').eq('id', id).single());
+      await deleteFromStorage(row.filename);
+      await sb.from('job_photos').delete().eq('id', id);
+      return unwrap(await sb.from('job_photos').select('*').eq('job_id', jobId).order('created_at'));
+    },
   },
 
   quotes: {
@@ -291,9 +324,28 @@ window.api = {
   expenses: {
     list: async () => unwrap(await sb.from('expenses').select('*').order('expense_date', { ascending: false })),
     listByYear: async (year) => unwrap(await sb.from('expenses').select('*').gte('expense_date', `${year}-01-01`).lte('expense_date', `${year}-12-31`)),
-    create: async (expense) => unwrap(await sb.from('expenses').insert(cleanExpense(stripReceiptData(expense))).select().single()),
-    update: async (id, updates) => unwrap(await sb.from('expenses').update(cleanExpense(stripReceiptData(updates))).eq('id', id).select().single()),
-    delete: async (id) => { await sb.from('expenses').delete().eq('id', id); return { id }; },
+    create: async (expense) => {
+      const receipt_filename = expense.receipt_data ? await uploadToStorage(expense.receipt_data, 'expenses') : null;
+      return unwrap(await sb.from('expenses').insert({ ...cleanExpense(stripReceiptData(expense)), receipt_filename }).select().single());
+    },
+    update: async (id, updates) => {
+      const existing = unwrap(await sb.from('expenses').select('*').eq('id', id).single());
+      let receipt_filename = existing.receipt_filename;
+      if (updates.receipt_data) {
+        await deleteFromStorage(existing.receipt_filename);
+        receipt_filename = await uploadToStorage(updates.receipt_data, 'expenses');
+      } else if (updates.remove_receipt) {
+        await deleteFromStorage(existing.receipt_filename);
+        receipt_filename = null;
+      }
+      return unwrap(await sb.from('expenses').update({ ...cleanExpense(stripReceiptData(updates)), receipt_filename }).eq('id', id).select().single());
+    },
+    delete: async (id) => {
+      const existing = unwrap(await sb.from('expenses').select('*').eq('id', id).single());
+      await deleteFromStorage(existing.receipt_filename);
+      await sb.from('expenses').delete().eq('id', id);
+      return { id };
+    },
   },
 
   reports: {

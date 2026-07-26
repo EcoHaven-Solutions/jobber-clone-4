@@ -1625,6 +1625,7 @@ invoiceStatusFilter.addEventListener('change', renderInvoices);
 
 function receiptUrl(filename) {
   if (!filename) return null;
+  if (/^https?:\/\//.test(filename)) return filename; // already a full Supabase Storage URL
   if (window.api.isElectron) return `http://localhost:4000/receipts/${filename}`;
   return `${window.location.origin}/receipts/${filename}`;
 }
