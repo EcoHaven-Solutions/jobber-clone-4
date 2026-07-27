@@ -178,6 +178,7 @@
             <p class="subtitle" id="customer-count">0 on file</p>
           </div>
           <div style="display:flex; gap:8px;">
+            <button class="btn btn-ghost" id="btn-send-announcement">Send announcement</button>
             <button class="btn btn-ghost" id="btn-import-csv">Import CSV/Excel</button>
             <button class="btn btn-primary" id="btn-new-customer">+ New customer</button>
           </div>
@@ -1540,6 +1541,46 @@
         <div class="drawer-actions-right">
           <button type="button" class="btn btn-ghost" id="btn-cancel-batch-drawer">Cancel</button>
           <button type="submit" class="btn btn-primary">Create jobs</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Send Announcement (BCC'd group email) -->
+  <div class="overlay" id="announcement-overlay" hidden></div>
+  <div class="drawer drawer-wide" id="announcement-drawer" hidden>
+    <div class="drawer-header">
+      <h2>Send announcement</h2>
+      <button class="icon-btn" id="btn-close-announcement-drawer" aria-label="Close">&times;</button>
+    </div>
+    <form id="announcement-form" class="drawer-body">
+      <p class="empty-sub" style="margin-top:0;">
+        Sends one email with everyone BCC'd — no customer ever sees anyone
+        else's email address. Customers marked "exclude from mass
+        communications" are automatically skipped, even if selected below.
+      </p>
+
+      <label>Subject *
+        <input type="text" name="subject" placeholder="e.g. Spring startup season is here!" required />
+      </label>
+      <label>Message *
+        <textarea name="message" rows="6" placeholder="Let your customers know it's time to schedule -- e.g. 'Spring is here! Reply to this email or call/text 509-866-6388 to get your sprinkler system turned back on.'" required></textarea>
+      </label>
+
+      <div class="drawer-section-label">Recipients</div>
+      <div class="toolbar" style="margin-bottom:8px;">
+        <input type="text" id="announcement-search" placeholder="Search customers…" style="flex:1;" />
+        <button type="button" class="btn btn-ghost btn-small" id="btn-announcement-select-all">Select all</button>
+        <button type="button" class="btn btn-ghost btn-small" id="btn-announcement-select-none">Select none</button>
+      </div>
+      <div id="announcement-customer-list" class="batch-customer-list" style="width:100%; max-height:280px;"></div>
+      <p class="empty-sub" id="announcement-recipient-count">0 recipients selected</p>
+
+      <div class="drawer-actions">
+        <div></div>
+        <div class="drawer-actions-right">
+          <button type="button" class="btn btn-ghost" id="btn-cancel-announcement-drawer">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-send-announcement-submit">Send announcement</button>
         </div>
       </div>
     </form>

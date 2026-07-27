@@ -515,6 +515,7 @@ window.api = {
     sendInvoice: (id) => invokeFunction('send-notifications', { type: 'invoice', id }),
     sendJobReminder: (id) => invokeFunction('send-notifications', { type: 'job-reminder', id }),
     sendReviewRequest: (id) => invokeFunction('send-notifications', { type: 'review-request', id }),
+    sendAnnouncement: (subject, message, customerIds) => invokeFunction('send-announcement', { subject, heading: subject, message, customerIds }),
   },
 
   sms: {

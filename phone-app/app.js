@@ -2261,6 +2261,112 @@ document.getElementById('btn-close-mileage-drawer').addEventListener('click', cl
 document.getElementById('btn-cancel-mileage-drawer').addEventListener('click', closeMileageDrawer);
 mileageOverlay.addEventListener('click', closeMileageDrawer);
 
+// ===================== Send Announcement =====================
+
+const selectedAnnouncementCustomerIds = new Set();
+
+function openAnnouncementDrawer() {
+  document.getElementById('announcement-form').reset();
+  selectedAnnouncementCustomerIds.clear();
+  document.getElementById('announcement-search').value = '';
+  renderAnnouncementCustomerList();
+  document.getElementById('announcement-overlay').hidden = false;
+  document.getElementById('announcement-drawer').hidden = false;
+}
+
+function closeAnnouncementDrawer() {
+  document.getElementById('announcement-overlay').hidden = true;
+  document.getElementById('announcement-drawer').hidden = true;
+}
+
+function renderAnnouncementCustomerList() {
+  const wrap = document.getElementById('announcement-customer-list');
+  const query = document.getElementById('announcement-search').value.trim().toLowerCase();
+
+  // Only customers with an email who haven't opted out are even eligible.
+  const eligible = customers.filter((c) => c.email && !c.exclude_from_mass_comms);
+  const filtered = query ? eligible.filter((c) => c.name.toLowerCase().includes(query)) : eligible;
+
+  if (filtered.length === 0) {
+    wrap.innerHTML = '<p class="empty-sub" style="margin:0;">No eligible customers found (need an email on file, and not opted out of mass communications).</p>';
+    updateAnnouncementRecipientCount();
+    return;
+  }
+
+  wrap.innerHTML = filtered
+    .map(
+      (c) => `
+      <label class="batch-customer-row">
+        <input type="checkbox" class="announcement-customer-checkbox" value="${c.id}" ${selectedAnnouncementCustomerIds.has(c.id) ? 'checked' : ''} />
+        ${escapeHtml(c.name)}
+      </label>`
+    )
+    .join('');
+
+  wrap.querySelectorAll('.announcement-customer-checkbox').forEach((cb) => {
+    cb.addEventListener('change', (e) => {
+      const id = Number(e.target.value);
+      if (e.target.checked) selectedAnnouncementCustomerIds.add(id);
+      else selectedAnnouncementCustomerIds.delete(id);
+      updateAnnouncementRecipientCount();
+    });
+  });
+
+  updateAnnouncementRecipientCount();
+}
+
+function updateAnnouncementRecipientCount() {
+  document.getElementById('announcement-recipient-count').textContent = `${selectedAnnouncementCustomerIds.size} recipient(s) selected`;
+}
+
+document.getElementById('announcement-search').addEventListener('input', renderAnnouncementCustomerList);
+
+document.getElementById('btn-announcement-select-all').addEventListener('click', () => {
+  document.querySelectorAll('.announcement-customer-checkbox').forEach((cb) => {
+    cb.checked = true;
+    selectedAnnouncementCustomerIds.add(Number(cb.value));
+  });
+  updateAnnouncementRecipientCount();
+});
+
+document.getElementById('btn-announcement-select-none').addEventListener('click', () => {
+  document.querySelectorAll('.announcement-customer-checkbox').forEach((cb) => (cb.checked = false));
+  selectedAnnouncementCustomerIds.clear();
+  updateAnnouncementRecipientCount();
+});
+
+document.getElementById('announcement-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(e.target).entries());
+
+  if (selectedAnnouncementCustomerIds.size === 0) {
+    alert('Select at least one recipient first.');
+    return;
+  }
+  if (!confirm(`Send this to ${selectedAnnouncementCustomerIds.size} customer(s), BCC'd? This can't be undone.`)) return;
+
+  const btn = document.getElementById('btn-send-announcement-submit');
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+
+  const result = await window.api.email.sendAnnouncement(data.subject, data.message, Array.from(selectedAnnouncementCustomerIds));
+
+  btn.disabled = false;
+  btn.textContent = 'Send announcement';
+
+  if (result.ok) {
+    alert(`Sent to ${result.sentCount} recipient(s).`);
+    closeAnnouncementDrawer();
+  } else {
+    alert(`Couldn't send: ${result.error}`);
+  }
+});
+
+document.getElementById('btn-send-announcement').addEventListener('click', openAnnouncementDrawer);
+document.getElementById('btn-close-announcement-drawer').addEventListener('click', closeAnnouncementDrawer);
+document.getElementById('btn-cancel-announcement-drawer').addEventListener('click', closeAnnouncementDrawer);
+document.getElementById('announcement-overlay').addEventListener('click', closeAnnouncementDrawer);
+
 // ===================== Leads =====================
 
 let leads = [];
