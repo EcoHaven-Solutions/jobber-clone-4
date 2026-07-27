@@ -178,12 +178,14 @@
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
           </select>
+          <button class="btn btn-danger" id="btn-delete-selected-jobs" hidden>Delete selected</button>
         </div>
 
         <div id="job-list-wrap" class="table-wrap">
           <table class="ticket-table" id="job-table">
             <thead>
               <tr>
+                <th style="width:32px;"><input type="checkbox" id="job-select-all" style="width:auto;" /></th>
                 <th>ID</th>
                 <th>Date</th>
                 <th>Job</th>
@@ -219,12 +221,14 @@
             <option value="approved">Approved</option>
             <option value="declined">Declined</option>
           </select>
+          <button class="btn btn-danger" id="btn-delete-selected-quotes" hidden>Delete selected</button>
         </div>
 
         <div class="table-wrap">
           <table class="ticket-table" id="quote-table">
             <thead>
               <tr>
+                <th style="width:32px;"><input type="checkbox" id="quote-select-all" style="width:auto;" /></th>
                 <th>ID</th>
                 <th>Customer</th>
                 <th>Title</th>
@@ -258,12 +262,14 @@
             <option value="unpaid">Unpaid</option>
             <option value="paid">Paid</option>
           </select>
+          <button class="btn btn-danger" id="btn-delete-selected-invoices" hidden>Delete selected</button>
         </div>
 
         <div class="table-wrap">
           <table class="ticket-table" id="invoice-table">
             <thead>
               <tr>
+                <th style="width:32px;"><input type="checkbox" id="invoice-select-all" style="width:auto;" /></th>
                 <th>ID</th>
                 <th>Customer</th>
                 <th>Title</th>

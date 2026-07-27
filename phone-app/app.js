@@ -599,6 +599,7 @@ function renderJobs() {
   for (const j of filtered) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
+      <td onclick="event.stopPropagation()"><input type="checkbox" class="job-select-checkbox" value="${j.id}" style="width:auto;" ${selectedJobIds.has(j.id) ? 'checked' : ''} /></td>
       <td class="cell-id">J-${String(j.id).padStart(4, '0')}</td>
       <td>${formatDate(j.scheduled_date, j.scheduled_time, j.scheduled_time_end)}</td>
       <td class="cell-name">${escapeHtml(j.title)}</td>
@@ -607,9 +608,57 @@ function renderJobs() {
       <td class="cell-arrow">›</td>
     `;
     tr.addEventListener('click', () => openJobDrawer(j));
+    tr.querySelector('.job-select-checkbox').addEventListener('change', (e) => {
+      if (e.target.checked) selectedJobIds.add(j.id);
+      else selectedJobIds.delete(j.id);
+      updateDeleteSelectedButton('job', selectedJobIds);
+    });
     jobRowsEl.appendChild(tr);
   }
 }
+
+const selectedJobIds = new Set();
+
+// Shared by Jobs/Estimates/Invoices "Delete selected" buttons.
+function updateDeleteSelectedButton(kind, selectedSet) {
+  const btn = document.getElementById(`btn-delete-selected-${kind}s`);
+  if (selectedSet.size > 0) {
+    btn.hidden = false;
+    btn.textContent = `Delete selected (${selectedSet.size})`;
+  } else {
+    btn.hidden = true;
+  }
+  const selectAll = document.getElementById(`${kind}-select-all`);
+  const total = document.querySelectorAll(`.${kind}-select-checkbox`).length;
+  selectAll.checked = selectedSet.size > 0 && selectedSet.size === total;
+}
+
+document.getElementById('job-select-all').addEventListener('change', (e) => {
+  document.querySelectorAll('.job-select-checkbox').forEach((cb) => {
+    cb.checked = e.target.checked;
+    const id = Number(cb.value);
+    if (e.target.checked) selectedJobIds.add(id);
+    else selectedJobIds.delete(id);
+  });
+  updateDeleteSelectedButton('job', selectedJobIds);
+});
+
+document.getElementById('btn-delete-selected-jobs').addEventListener('click', async () => {
+  const count = selectedJobIds.size;
+  if (!confirm(`Delete ${count} job(s)? This can't be undone.`)) return;
+
+  const btn = document.getElementById('btn-delete-selected-jobs');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+
+  for (const id of selectedJobIds) {
+    await window.api.jobs.delete(id);
+  }
+  selectedJobIds.clear();
+  btn.disabled = false;
+
+  await loadJobs();
+});
 
 async function renderJobPhotoGallery(jobId) {
   jobPhotoGallery.innerHTML = '';
@@ -1112,6 +1161,7 @@ function renderQuotes() {
   for (const q of filtered) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
+      <td onclick="event.stopPropagation()"><input type="checkbox" class="quote-select-checkbox" value="${q.id}" style="width:auto;" ${selectedQuoteIds.has(q.id) ? 'checked' : ''} /></td>
       <td class="cell-id">E-${q.number}</td>
       <td>${escapeHtml(q.customer_name)}</td>
       <td class="cell-name">${escapeHtml(q.title)}</td>
@@ -1123,9 +1173,43 @@ function renderQuotes() {
       const full = await window.api.quotes.get(q.id);
       openQuoteDrawer(full);
     });
+    tr.querySelector('.quote-select-checkbox').addEventListener('change', (e) => {
+      if (e.target.checked) selectedQuoteIds.add(q.id);
+      else selectedQuoteIds.delete(q.id);
+      updateDeleteSelectedButton('quote', selectedQuoteIds);
+    });
     quoteRowsEl.appendChild(tr);
   }
 }
+
+const selectedQuoteIds = new Set();
+
+document.getElementById('quote-select-all').addEventListener('change', (e) => {
+  document.querySelectorAll('.quote-select-checkbox').forEach((cb) => {
+    cb.checked = e.target.checked;
+    const id = Number(cb.value);
+    if (e.target.checked) selectedQuoteIds.add(id);
+    else selectedQuoteIds.delete(id);
+  });
+  updateDeleteSelectedButton('quote', selectedQuoteIds);
+});
+
+document.getElementById('btn-delete-selected-quotes').addEventListener('click', async () => {
+  const count = selectedQuoteIds.size;
+  if (!confirm(`Delete ${count} estimate(s)? This can't be undone.`)) return;
+
+  const btn = document.getElementById('btn-delete-selected-quotes');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+
+  for (const id of selectedQuoteIds) {
+    await window.api.quotes.delete(id);
+  }
+  selectedQuoteIds.clear();
+  btn.disabled = false;
+
+  await loadQuotes();
+});
 
 function createLineItemRow(item, onChange) {
   lineItemCounter += 1;
@@ -1435,6 +1519,7 @@ function renderInvoices() {
   for (const inv of filtered) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
+      <td onclick="event.stopPropagation()"><input type="checkbox" class="invoice-select-checkbox" value="${inv.id}" style="width:auto;" ${selectedInvoiceIds.has(inv.id) ? 'checked' : ''} /></td>
       <td class="cell-id">I-${inv.number}</td>
       <td>${escapeHtml(inv.customer_name)}</td>
       <td class="cell-name">${escapeHtml(inv.title)}</td>
@@ -1447,9 +1532,43 @@ function renderInvoices() {
       const full = await window.api.invoices.get(inv.id);
       openInvoiceDrawer(full);
     });
+    tr.querySelector('.invoice-select-checkbox').addEventListener('change', (e) => {
+      if (e.target.checked) selectedInvoiceIds.add(inv.id);
+      else selectedInvoiceIds.delete(inv.id);
+      updateDeleteSelectedButton('invoice', selectedInvoiceIds);
+    });
     invoiceRowsEl.appendChild(tr);
   }
 }
+
+const selectedInvoiceIds = new Set();
+
+document.getElementById('invoice-select-all').addEventListener('change', (e) => {
+  document.querySelectorAll('.invoice-select-checkbox').forEach((cb) => {
+    cb.checked = e.target.checked;
+    const id = Number(cb.value);
+    if (e.target.checked) selectedInvoiceIds.add(id);
+    else selectedInvoiceIds.delete(id);
+  });
+  updateDeleteSelectedButton('invoice', selectedInvoiceIds);
+});
+
+document.getElementById('btn-delete-selected-invoices').addEventListener('click', async () => {
+  const count = selectedInvoiceIds.size;
+  if (!confirm(`Delete ${count} invoice(s)? This can't be undone.`)) return;
+
+  const btn = document.getElementById('btn-delete-selected-invoices');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+
+  for (const id of selectedInvoiceIds) {
+    await window.api.invoices.delete(id);
+  }
+  selectedInvoiceIds.clear();
+  btn.disabled = false;
+
+  await loadInvoices();
+});
 
 function addInvoiceLineItemRow(item = {}) {
   invoiceLineItemRowsEl.appendChild(createLineItemRow(item, updateInvoiceTotal));
