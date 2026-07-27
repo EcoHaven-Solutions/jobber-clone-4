@@ -1,20 +1,21 @@
 :root {
-  --paper: #F7F6F1;
-  --surface: #FFFFFF;
-  --ink: #23261F;
-  --ink-soft: #6B7263;
-  --line: #E3E1D5;
+  --paper: #1A1C18;
+  --surface: #23261F;
+  --ink: #EAEAE4;
+  --ink-soft: #A9AC9E;
+  --line: #383B32;
 
-  --sidebar-bg: #16160F;
+  --sidebar-bg: #121309;
   --sidebar-text: #EDEBE0;
   --sidebar-text-dim: #9A9C8C;
 
   --olive: #6E7A50;
   --olive-dark: #57603F;
-  --olive-soft: #EAEDE0;
-  --water: #4A90C2;
-  --danger: #A8452A;
-  --danger-soft: #F5E7E1;
+  --olive-light: #A8B88A;
+  --olive-soft: #333A26;
+  --water: #4F9FD6;
+  --danger: #D9694A;
+  --danger-soft: #4A2E24;
 
   --font-display: 'Space Grotesk', system-ui, sans-serif;
   --font-body: 'IBM Plex Sans', system-ui, sans-serif;
@@ -379,7 +380,7 @@ body {
 }
 
 .week-day.is-today .week-day-header {
-  color: var(--olive-dark);
+  color: var(--olive-light);
   font-weight: 600;
 }
 
@@ -402,7 +403,7 @@ body {
 
 .week-job-card .wjc-time {
   font-family: var(--font-mono);
-  color: var(--olive-dark);
+  color: var(--olive-light);
   font-size: 10.5px;
 }
 
@@ -437,16 +438,16 @@ body {
   border-radius: 999px;
 }
 
-.badge-scheduled { background: #E5EEF4; color: var(--water); }
-.badge-in_progress { background: var(--olive-soft); color: var(--olive-dark); }
-.badge-completed { background: #E3EEE0; color: #3E6B36; }
-.badge-cancelled { background: #EFEFEA; color: var(--ink-soft); }
+.badge-scheduled { background: var(--water); color: #fff; }
+.badge-in_progress { background: var(--olive); color: #fff; }
+.badge-completed { background: #3E7A34; color: #fff; }
+.badge-cancelled { background: #55584A; color: #EAEAE4; }
 
 /* ---- Drawer (create/edit form) ---- */
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(22,22,15,0.4);
+  background: rgba(0,0,0,0.6);
   z-index: 1000;
 }
 
@@ -460,7 +461,8 @@ body {
   max-width: 92vw;
   background: var(--surface);
   z-index: 1001;
-  box-shadow: -8px 0 24px rgba(0,0,0,0.15);
+  border-left: 1px solid var(--line);
+  box-shadow: -8px 0 32px rgba(0,0,0,0.5);
   display: flex;
   flex-direction: column;
 }
@@ -799,7 +801,7 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"] {
   flex: none !important;
   border: 1.5px solid var(--line) !important;
   border-radius: 4px !important;
-  background: #fff !important;
+  background: var(--paper) !important;
   position: relative !important;
   cursor: pointer !important;
 }
@@ -852,7 +854,7 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
 .route-stop-number {
   font-family: var(--font-mono);
   font-weight: 600;
-  color: var(--olive-dark);
+  color: var(--olive-light);
   min-width: 20px;
 }
 
@@ -877,7 +879,7 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
   z-index: 30;
   max-height: 220px;
   overflow-y: auto;
@@ -898,14 +900,14 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
   background: var(--olive-soft);
 }
 
-.badge-draft { background: #EFEFEA; color: var(--ink-soft); }
-.badge-sent { background: #E5EEF4; color: var(--water); }
-.badge-approved { background: #E3EEE0; color: #3E6B36; }
-.badge-declined { background: var(--danger-soft); color: var(--danger); }
+.badge-draft { background: #55584A; color: #EAEAE4; }
+.badge-sent { background: var(--water); color: #fff; }
+.badge-approved { background: #3E7A34; color: #fff; }
+.badge-declined { background: var(--danger); color: #fff; }
 
-.badge-unpaid { background: #F5EDE1; color: #8A5A2A; }
-.badge-paid { background: #E3EEE0; color: #3E6B36; }
-.badge-needs-schedule { background: #F7E9C6; color: #8A6D1D; }
+.badge-unpaid { background: #A5701E; color: #fff; }
+.badge-paid { background: #3E7A34; color: #fff; }
+.badge-needs-schedule { background: #A5871E; color: #fff; }
 
 .text-muted {
   color: var(--ink-soft);
@@ -922,8 +924,8 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #FBF3DC;
-  border: 1px solid #E9D8A0;
+  background: #2C2A1E;
+  border: 1px solid #4A4530;
   border-left: 4px solid #C9922E;
   border-radius: 8px;
   padding: 9px 14px;
@@ -933,10 +935,11 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
 
 .unscheduled-job-row .ujr-title {
   font-weight: 500;
+  color: var(--ink);
 }
 
 .unscheduled-job-row .ujr-customer {
-  color: #8A6D1D;
+  color: #D9B25C;
   font-size: 12px;
 }
 
