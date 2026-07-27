@@ -762,9 +762,9 @@ function renderJobEmployeeCheckboxes(selectedIds) {
   wrap.innerHTML = activeEmployees
     .map(
       (e) => `
-      <label class="batch-customer-row">
-        <input type="checkbox" class="job-employee-checkbox" value="${e.id}" ${selectedIds.includes(e.id) ? 'checked' : ''} />
-        ${escapeHtml(e.name)}
+      <label style="display:flex; flex-direction:row; align-items:center; gap:8px; font-size:14px; padding:8px 10px; margin:0; white-space:nowrap;">
+        <input type="checkbox" class="job-employee-checkbox" value="${e.id}" ${selectedIds.includes(e.id) ? 'checked' : ''} style="width:18px; height:18px; min-width:18px; flex:none; margin:0;" />
+        <span>${escapeHtml(e.name)}</span>
       </label>`
     )
     .join('');
