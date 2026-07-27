@@ -9,12 +9,12 @@
   --sidebar-text: #FFFFFF;
   --sidebar-text-dim: #C9DEE8;
 
-  --olive: #6E7A50;
-  --olive-dark: #57603F;
-  --olive-light: #A8B88A;
-  --olive-soft: #333A26;
-  --water: #4F9FD6;
-  --water-dark: #3D82B3;
+  --olive: #5FBF3E;
+  --olive-dark: #4A9A30;
+  --olive-light: #8FDB74;
+  --olive-soft: #23361A;
+  --water: #3E7C98;
+  --water-dark: #2F6178;
   --accent-green: #5FBF3E;
   --danger: #D9694A;
   --danger-soft: #4A2E24;
@@ -194,19 +194,14 @@ body {
   gap: 10px;
 }
 
-#search-input,
-#job-status-filter,
-#quote-status-filter,
-#invoice-status-filter,
-#lead-status-filter,
-#service-window-select {
+#search-input {
   padding: 10px 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
   font-family: var(--font-body);
   font-size: 14px;
   color: var(--ink);
-  background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0) 45%), var(--surface);
+  background: var(--surface);
 }
 
 #job-status-filter,
@@ -214,8 +209,15 @@ body {
 #invoice-status-filter,
 #lead-status-filter,
 #service-window-select {
-  cursor: pointer;
+  padding: 10px 14px;
+  border: 1px solid var(--olive-dark);
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 14px;
   font-weight: 600;
+  color: #fff;
+  background: var(--olive);
+  cursor: pointer;
 }
 
 #search-input {
@@ -433,7 +435,7 @@ body {
 
 .week-job-card {
   border-left: 3px solid var(--olive);
-  background: rgba(110,122,80,0.35);
+  background: rgba(95,191,62,0.25);
   border-radius: 5px;
   padding: 6px 8px;
   cursor: pointer;
@@ -480,7 +482,7 @@ body {
 
 .badge-scheduled { background: var(--water); color: #fff; }
 .badge-in_progress { background: var(--olive); color: #fff; }
-.badge-completed { background: #3E7A34; color: #fff; }
+.badge-completed { background: var(--olive-dark); color: #fff; }
 .badge-cancelled { background: #55584A; color: #EAEAE4; }
 
 /* ---- Drawer (create/edit form) ---- */
@@ -572,6 +574,13 @@ body {
   border-radius: 7px;
   resize: vertical;
   background: var(--paper);
+}
+
+.drawer-body input:focus,
+.drawer-body textarea:focus,
+.drawer-body select:focus {
+  outline: none;
+  border-color: var(--olive);
 }
 
 /* Shiny gloss on every dropdown in the app, not just the toolbar filters */
@@ -944,16 +953,16 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
 }
 
 .address-suggestion-item:hover {
-  background: rgba(110,122,80,0.35);
+  background: rgba(95,191,62,0.25);
 }
 
 .badge-draft { background: #55584A; color: #EAEAE4; }
 .badge-sent { background: var(--water); color: #fff; }
-.badge-approved { background: #3E7A34; color: #fff; }
+.badge-approved { background: var(--olive-dark); color: #fff; }
 .badge-declined { background: var(--danger); color: #fff; }
 
 .badge-unpaid { background: #A5701E; color: #fff; }
-.badge-paid { background: #3E7A34; color: #fff; }
+.badge-paid { background: var(--olive-dark); color: #fff; }
 .badge-needs-schedule { background: #A5871E; color: #fff; }
 
 .text-muted {
