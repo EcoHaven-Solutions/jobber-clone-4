@@ -347,6 +347,7 @@
                 <th>Date</th>
                 <th>Miles</th>
                 <th>Purpose</th>
+                <th>Employee</th>
                 <th>Job</th>
                 <th></th>
               </tr>
@@ -479,6 +480,7 @@
                 <th>Date</th>
                 <th>Miles</th>
                 <th>Purpose</th>
+                <th>Employee</th>
                 <th>Deduction</th>
               </tr>
             </thead>
@@ -1386,6 +1388,11 @@
       </div>
       <label>Purpose
         <input type="text" name="purpose" placeholder="e.g. Supply run to Home Depot" />
+      </label>
+      <label>Employee
+        <select name="employee_id">
+          <option value="">— Unassigned —</option>
+        </select>
       </label>
       <label>Related job (optional)
         <select name="job_id">

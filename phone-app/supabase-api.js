@@ -155,6 +155,7 @@ function cleanMileage(m) {
     miles: toNumOrDefault(m.miles, 0),
     purpose: toNullableText(m.purpose),
     job_id: 'job_id' in m ? toIntOrNull(m.job_id) : undefined,
+    employee_id: 'employee_id' in m ? toIntOrNull(m.employee_id) : undefined,
   };
 }
 

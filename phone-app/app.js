@@ -1985,6 +1985,19 @@ function populateMileageJobSelect() {
   select.value = current;
 }
 
+function populateMileageEmployeeSelect() {
+  const select = mileageForm.elements.employee_id;
+  const current = select.value;
+  select.innerHTML = '<option value="">— Unassigned —</option>';
+  for (const e of employees.filter((e) => e.active)) {
+    const opt = document.createElement('option');
+    opt.value = e.id;
+    opt.textContent = e.name;
+    select.appendChild(opt);
+  }
+  select.value = current;
+}
+
 function renderMileage() {
   mileageCountEl.textContent = `${mileageTrips.length} trips logged`;
   mileageRowsEl.innerHTML = '';
@@ -1997,12 +2010,14 @@ function renderMileage() {
 
   for (const trip of mileageTrips) {
     const job = trip.job_id ? jobs.find((j) => j.id === trip.job_id) : null;
+    const employee = trip.employee_id ? employees.find((e) => e.id === trip.employee_id) : null;
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td onclick="event.stopPropagation()"><input type="checkbox" class="mileage-select-checkbox" value="${trip.id}" style="width:auto;" ${selectedMileageIds.has(trip.id) ? 'checked' : ''} /></td>
       <td>${trip.trip_date}</td>
       <td>${trip.miles}</td>
       <td class="cell-name">${escapeHtml(trip.purpose || '—')}</td>
+      <td>${employee ? escapeHtml(employee.name) : '—'}</td>
       <td>${job ? escapeHtml(job.title) : '—'}</td>
       <td class="cell-arrow">›</td>
     `;
@@ -2047,6 +2062,7 @@ function openMileageDrawer(trip = null) {
   editingMileageId = trip ? trip.id : null;
   mileageForm.reset();
   populateMileageJobSelect();
+  populateMileageEmployeeSelect();
 
   if (trip) {
     mileageDrawerTitle.textContent = 'Edit trip';
@@ -2056,6 +2072,7 @@ function openMileageDrawer(trip = null) {
     mileageForm.elements.miles.value = trip.miles || 0;
     mileageForm.elements.purpose.value = trip.purpose || '';
     mileageForm.elements.job_id.value = trip.job_id || '';
+    mileageForm.elements.employee_id.value = trip.employee_id || '';
   } else {
     mileageDrawerTitle.textContent = 'Log trip';
     mileageDrawerIdTag.textContent = 'NEW';
@@ -2580,11 +2597,13 @@ function renderReport() {
   } else {
     mileageEmptyEl.hidden = true;
     for (const trip of currentReportMileage) {
+      const employee = trip.employee_id ? employees.find((e) => e.id === trip.employee_id) : null;
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${trip.trip_date}</td>
         <td>${trip.miles}</td>
         <td>${escapeHtml(trip.purpose || '—')}</td>
+        <td>${employee ? escapeHtml(employee.name) : '—'}</td>
         <td>${formatCurrency(trip.miles * mileageRate)}</td>
       `;
       mileageRowsEl.appendChild(tr);
@@ -2697,9 +2716,10 @@ document.getElementById('btn-export-report-csv').addEventListener('click', () =>
   lines.push('');
 
   lines.push('=== MILEAGE LOG ===');
-  lines.push(['Date', 'Miles', 'Purpose', `Deduction (@ $${mileageRate}/mi)`].join(','));
+  lines.push(['Date', 'Miles', 'Purpose', 'Employee', `Deduction (@ $${mileageRate}/mi)`].join(','));
   for (const trip of currentReportMileage) {
-    lines.push([trip.trip_date, trip.miles, (trip.purpose || '').replace(/,/g, ' '), (trip.miles * mileageRate).toFixed(2)].join(','));
+    const employee = trip.employee_id ? employees.find((e) => e.id === trip.employee_id) : null;
+    lines.push([trip.trip_date, trip.miles, (trip.purpose || '').replace(/,/g, ' '), employee ? employee.name.replace(/,/g, ' ') : '', (trip.miles * mileageRate).toFixed(2)].join(','));
   }
   lines.push('');
 
