@@ -762,12 +762,15 @@ body {
 
 .batch-customer-list {
   max-height: 220px;
+  width: fit-content;
+  max-width: 100%;
   overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 12px;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 6px;
 }
 
