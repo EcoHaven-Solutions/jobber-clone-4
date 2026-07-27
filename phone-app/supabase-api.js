@@ -149,6 +149,15 @@ function cleanExpense(e) {
   };
 }
 
+function cleanMileage(m) {
+  return {
+    ...m,
+    miles: toNumOrDefault(m.miles, 0),
+    purpose: toNullableText(m.purpose),
+    job_id: 'job_id' in m ? toIntOrNull(m.job_id) : undefined,
+  };
+}
+
 // Uploads a base64 data URL (from a file input) to Supabase Storage, and
 // returns the public URL to store/display. Used for job photos and expense
 // receipts alike.
@@ -361,6 +370,14 @@ window.api = {
       await sb.from('expenses').delete().eq('id', id);
       return { id };
     },
+  },
+
+  mileage: {
+    list: async () => unwrap(await sb.from('mileage_log').select('*').order('trip_date', { ascending: false })),
+    listByYear: async (year) => unwrap(await sb.from('mileage_log').select('*').gte('trip_date', `${year}-01-01`).lte('trip_date', `${year}-12-31`)),
+    create: async (trip) => unwrap(await sb.from('mileage_log').insert(cleanMileage(trip)).select().single()),
+    update: async (id, updates) => unwrap(await sb.from('mileage_log').update(cleanMileage(updates)).eq('id', id).select().single()),
+    delete: async (id) => { await sb.from('mileage_log').delete().eq('id', id); return { id }; },
   },
 
   reports: {

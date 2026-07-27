@@ -1923,16 +1923,174 @@ document.getElementById('btn-close-expense-drawer').addEventListener('click', cl
 document.getElementById('btn-cancel-expense-drawer').addEventListener('click', closeExpenseDrawer);
 expenseOverlay.addEventListener('click', closeExpenseDrawer);
 
+// ===================== Mileage =====================
+
+let mileageTrips = [];
+let editingMileageId = null;
+const selectedMileageIds = new Set();
+
+const mileageRowsEl = document.getElementById('mileage-rows');
+const mileageEmptyEl = document.getElementById('mileage-empty-state');
+const mileageCountEl = document.getElementById('mileage-count');
+
+const mileageOverlay = document.getElementById('mileage-overlay');
+const mileageDrawer = document.getElementById('mileage-drawer');
+const mileageForm = document.getElementById('mileage-form');
+const mileageDrawerTitle = document.getElementById('mileage-drawer-title');
+const mileageDrawerIdTag = document.getElementById('mileage-drawer-id-tag');
+const mileageDeleteBtn = document.getElementById('btn-delete-mileage');
+
+async function loadMileage() {
+  mileageTrips = await window.api.mileage.list();
+  renderMileage();
+  populateMileageJobSelect();
+}
+
+function populateMileageJobSelect() {
+  const select = mileageForm.elements.job_id;
+  const current = select.value;
+  select.innerHTML = '<option value="">— None —</option>';
+  for (const j of jobs) {
+    const opt = document.createElement('option');
+    opt.value = j.id;
+    opt.textContent = `${j.title} — ${j.customer_name}`;
+    select.appendChild(opt);
+  }
+  select.value = current;
+}
+
+function renderMileage() {
+  mileageCountEl.textContent = `${mileageTrips.length} trips logged`;
+  mileageRowsEl.innerHTML = '';
+
+  if (mileageTrips.length === 0) {
+    mileageEmptyEl.hidden = false;
+    return;
+  }
+  mileageEmptyEl.hidden = true;
+
+  for (const trip of mileageTrips) {
+    const job = trip.job_id ? jobs.find((j) => j.id === trip.job_id) : null;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td onclick="event.stopPropagation()"><input type="checkbox" class="mileage-select-checkbox" value="${trip.id}" style="width:auto;" ${selectedMileageIds.has(trip.id) ? 'checked' : ''} /></td>
+      <td>${trip.trip_date}</td>
+      <td>${trip.miles}</td>
+      <td class="cell-name">${escapeHtml(trip.purpose || '—')}</td>
+      <td>${job ? escapeHtml(job.title) : '—'}</td>
+      <td class="cell-arrow">›</td>
+    `;
+    tr.addEventListener('click', () => openMileageDrawer(trip));
+    tr.querySelector('.mileage-select-checkbox').addEventListener('change', (e) => {
+      if (e.target.checked) selectedMileageIds.add(trip.id);
+      else selectedMileageIds.delete(trip.id);
+      updateDeleteSelectedButton('mileage', selectedMileageIds);
+    });
+    mileageRowsEl.appendChild(tr);
+  }
+}
+
+document.getElementById('mileage-select-all').addEventListener('change', (e) => {
+  document.querySelectorAll('.mileage-select-checkbox').forEach((cb) => {
+    cb.checked = e.target.checked;
+    const id = Number(cb.value);
+    if (e.target.checked) selectedMileageIds.add(id);
+    else selectedMileageIds.delete(id);
+  });
+  updateDeleteSelectedButton('mileage', selectedMileageIds);
+});
+
+document.getElementById('btn-delete-selected-mileage').addEventListener('click', async () => {
+  const count = selectedMileageIds.size;
+  if (!confirm(`Delete ${count} trip(s)? This can't be undone.`)) return;
+
+  const btn = document.getElementById('btn-delete-selected-mileage');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+
+  for (const id of selectedMileageIds) {
+    await window.api.mileage.delete(id);
+  }
+  selectedMileageIds.clear();
+  btn.disabled = false;
+
+  await loadMileage();
+});
+
+function openMileageDrawer(trip = null) {
+  editingMileageId = trip ? trip.id : null;
+  mileageForm.reset();
+  populateMileageJobSelect();
+
+  if (trip) {
+    mileageDrawerTitle.textContent = 'Edit trip';
+    mileageDrawerIdTag.textContent = `M-${String(trip.id).padStart(4, '0')}`;
+    mileageDeleteBtn.hidden = false;
+    mileageForm.elements.trip_date.value = trip.trip_date || '';
+    mileageForm.elements.miles.value = trip.miles || 0;
+    mileageForm.elements.purpose.value = trip.purpose || '';
+    mileageForm.elements.job_id.value = trip.job_id || '';
+  } else {
+    mileageDrawerTitle.textContent = 'Log trip';
+    mileageDrawerIdTag.textContent = 'NEW';
+    mileageDeleteBtn.hidden = true;
+    mileageForm.elements.trip_date.value = dateStr(new Date());
+  }
+
+  mileageOverlay.hidden = false;
+  mileageDrawer.hidden = false;
+}
+
+function closeMileageDrawer() {
+  mileageOverlay.hidden = true;
+  mileageDrawer.hidden = true;
+  editingMileageId = null;
+}
+
+mileageForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(mileageForm).entries());
+  if (!data.trip_date || !data.miles) return;
+
+  if (editingMileageId) {
+    await window.api.mileage.update(editingMileageId, data);
+  } else {
+    await window.api.mileage.create(data);
+  }
+
+  closeMileageDrawer();
+  await loadMileage();
+});
+
+mileageDeleteBtn.addEventListener('click', async () => {
+  if (!editingMileageId) return;
+  if (!confirm('Delete this trip? This cannot be undone.')) return;
+
+  await window.api.mileage.delete(editingMileageId);
+  closeMileageDrawer();
+  await loadMileage();
+});
+
+document.getElementById('btn-new-mileage').addEventListener('click', () => openMileageDrawer());
+document.getElementById('btn-close-mileage-drawer').addEventListener('click', closeMileageDrawer);
+document.getElementById('btn-cancel-mileage-drawer').addEventListener('click', closeMileageDrawer);
+mileageOverlay.addEventListener('click', closeMileageDrawer);
+
 // ===================== Settings =====================
 
 const settingsForm = document.getElementById('settings-form');
 let defaultTaxRate = 0;
+let mileageRate = 0.70;
 
 async function loadSettings() {
   const settings = await window.api.settings.get();
   if (settings.default_tax_rate) {
     settingsForm.elements.default_tax_rate.value = settings.default_tax_rate;
     defaultTaxRate = parseFloat(settings.default_tax_rate) || 0;
+  }
+  if (settings.mileage_rate) {
+    settingsForm.elements.mileage_rate.value = settings.mileage_rate;
+    mileageRate = parseFloat(settings.mileage_rate) || 0;
   }
   if (settings.google_review_url) {
     reviewSettingsForm.elements.google_review_url.value = settings.google_review_url;
@@ -1947,7 +2105,9 @@ settingsForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const data = Object.fromEntries(new FormData(settingsForm).entries());
   await window.api.settings.set('default_tax_rate', data.default_tax_rate || '0');
+  await window.api.settings.set('mileage_rate', data.mileage_rate || '0.70');
   defaultTaxRate = parseFloat(data.default_tax_rate) || 0;
+  mileageRate = parseFloat(data.mileage_rate) || 0.70;
   alert('Settings saved.');
 });
 
@@ -2009,6 +2169,7 @@ const reportExpenseRowsEl = document.getElementById('report-expense-rows');
 const reportExpenseEmptyEl = document.getElementById('report-expense-empty-state');
 let currentReportRows = [];
 let currentReportExpenses = [];
+let currentReportMileage = [];
 
 async function loadReportYears() {
   const years = await window.api.reports.getAvailableYears();
@@ -2019,6 +2180,7 @@ async function loadReportYears() {
 async function loadReportForYear(year) {
   currentReportRows = await window.api.reports.getYearlyInvoiceReport(year);
   currentReportExpenses = await window.api.expenses.listByYear(year);
+  currentReportMileage = await window.api.mileage.listByYear(year);
   renderReport();
 }
 
@@ -2029,6 +2191,18 @@ function renderReport() {
   let outstanding = 0;
   let taxCollected = 0;
 
+  // Quarter buckets, keyed by which quarter the invoice's date falls in.
+  const quarters = [
+    { label: 'Q1 (Jan–Mar)', invoiced: 0, collected: 0, expenses: 0 },
+    { label: 'Q2 (Apr–Jun)', invoiced: 0, collected: 0, expenses: 0 },
+    { label: 'Q3 (Jul–Sep)', invoiced: 0, collected: 0, expenses: 0 },
+    { label: 'Q4 (Oct–Dec)', invoiced: 0, collected: 0, expenses: 0 },
+  ];
+  function quarterOf(dateStr) {
+    const month = parseInt((dateStr || '').slice(5, 7), 10);
+    return Math.min(3, Math.floor((month - 1) / 3));
+  }
+
   reportRowsEl.innerHTML = '';
 
   if (rows.length === 0) {
@@ -2037,10 +2211,15 @@ function renderReport() {
     reportEmptyEl.hidden = true;
     for (const inv of rows) {
       const tax = inv.total - inv.subtotal;
+      const dateForQuarter = inv.due_date || inv.created_at.slice(0, 10);
+      const q = quarters[quarterOf(dateForQuarter)];
+
       invoiced += inv.total;
+      q.invoiced += inv.total;
       if (inv.status === 'paid') {
         collected += inv.total;
         taxCollected += tax;
+        q.collected += inv.total;
       } else {
         outstanding += inv.total;
       }
@@ -2048,7 +2227,7 @@ function renderReport() {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="cell-id">I-${inv.number}</td>
-        <td>${inv.due_date || inv.created_at.slice(0, 10)}</td>
+        <td>${dateForQuarter}</td>
         <td>${escapeHtml(inv.customer_name)}</td>
         <td>${formatCurrency(inv.subtotal)}</td>
         <td>${formatCurrency(tax)}</td>
@@ -2064,7 +2243,10 @@ function renderReport() {
   document.getElementById('report-total-outstanding').textContent = formatCurrency(outstanding);
   document.getElementById('report-total-tax').textContent = formatCurrency(taxCollected);
 
+  // ---- Expenses: total, category breakdown, and 1099 tracking ----
   let totalExpenses = 0;
+  const categoryTotals = {};
+  const contractorTotals = {};
   reportExpenseRowsEl.innerHTML = '';
   if (currentReportExpenses.length === 0) {
     reportExpenseEmptyEl.hidden = false;
@@ -2072,6 +2254,14 @@ function renderReport() {
     reportExpenseEmptyEl.hidden = true;
     for (const exp of currentReportExpenses) {
       totalExpenses += exp.amount;
+      categoryTotals[exp.category] = (categoryTotals[exp.category] || 0) + exp.amount;
+      const q = quarters[quarterOf(exp.expense_date)];
+      q.expenses += exp.amount;
+
+      if (exp.category === 'Subcontractors') {
+        contractorTotals[exp.vendor] = (contractorTotals[exp.vendor] || 0) + exp.amount;
+      }
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${exp.expense_date}</td>
@@ -2084,7 +2274,71 @@ function renderReport() {
   }
 
   document.getElementById('report-total-expenses').textContent = formatCurrency(totalExpenses);
-  document.getElementById('report-net-income').textContent = formatCurrency(collected - totalExpenses);
+
+  // ---- Mileage: log + deduction total ----
+  const totalMiles = currentReportMileage.reduce((s, t) => s + t.miles, 0);
+  const mileageDeduction = totalMiles * mileageRate;
+  document.getElementById('report-mileage-deduction').textContent = formatCurrency(mileageDeduction);
+  document.getElementById('report-net-income').textContent = formatCurrency(collected - totalExpenses - mileageDeduction);
+
+  const mileageRowsEl = document.getElementById('report-mileage-rows');
+  const mileageEmptyEl = document.getElementById('report-mileage-empty-state');
+  mileageRowsEl.innerHTML = '';
+  if (currentReportMileage.length === 0) {
+    mileageEmptyEl.hidden = false;
+  } else {
+    mileageEmptyEl.hidden = true;
+    for (const trip of currentReportMileage) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${trip.trip_date}</td>
+        <td>${trip.miles}</td>
+        <td>${escapeHtml(trip.purpose || '—')}</td>
+        <td>${formatCurrency(trip.miles * mileageRate)}</td>
+      `;
+      mileageRowsEl.appendChild(tr);
+    }
+  }
+
+  // ---- Quarterly summary table ----
+  const quarterlyRowsEl = document.getElementById('report-quarterly-rows');
+  quarterlyRowsEl.innerHTML = quarters
+    .map(
+      (q) => `<tr>
+        <td>${q.label}</td>
+        <td>${formatCurrency(q.invoiced)}</td>
+        <td>${formatCurrency(q.collected)}</td>
+        <td>${formatCurrency(q.expenses)}</td>
+      </tr>`
+    )
+    .join('');
+
+  // ---- Expenses by category table ----
+  const categoryRowsEl = document.getElementById('report-category-rows');
+  const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
+  categoryRowsEl.innerHTML = sortedCategories
+    .map(([category, total]) => `<tr><td>${escapeHtml(category)}</td><td>${formatCurrency(total)}</td></tr>`)
+    .join('');
+
+  // ---- 1099 tracking table (subcontractors paid, flagging the $600 threshold) ----
+  const table1099RowsEl = document.getElementById('report-1099-rows');
+  const empty1099El = document.getElementById('report-1099-empty-state');
+  const contractorEntries = Object.entries(contractorTotals).sort((a, b) => b[1] - a[1]);
+  if (contractorEntries.length === 0) {
+    empty1099El.hidden = false;
+    table1099RowsEl.innerHTML = '';
+  } else {
+    empty1099El.hidden = true;
+    table1099RowsEl.innerHTML = contractorEntries
+      .map(
+        ([vendor, total]) => `<tr>
+          <td>${escapeHtml(vendor)}</td>
+          <td>${formatCurrency(total)}</td>
+          <td>${total >= 600 ? '<span class="badge badge-unpaid">Yes — file 1099</span>' : 'No (under $600)'}</td>
+        </tr>`
+      )
+      .join('');
+  }
 }
 
 reportYearSelect.addEventListener('change', () => loadReportForYear(reportYearSelect.value));
@@ -2113,26 +2367,69 @@ document.getElementById('btn-export-expenses-csv').addEventListener('click', () 
 });
 
 document.getElementById('btn-export-report-csv').addEventListener('click', () => {
-  if (currentReportRows.length === 0) {
-    alert('No invoices to export for this year.');
-    return;
+  const year = reportYearSelect.value;
+  const lines = [];
+
+  lines.push(`EcoHaven Solutions LLC — Tax Summary for ${year}`);
+  lines.push('');
+
+  lines.push('=== INCOME (Invoices) ===');
+  lines.push(['Invoice', 'Date', 'Customer', 'Subtotal', 'Tax', 'Total', 'Status'].join(','));
+  for (const inv of currentReportRows) {
+    lines.push(
+      [
+        `I-${inv.number}`,
+        inv.due_date || inv.created_at.slice(0, 10),
+        inv.customer_name.replace(/,/g, ' '),
+        inv.subtotal.toFixed(2),
+        (inv.total - inv.subtotal).toFixed(2),
+        inv.total.toFixed(2),
+        inv.status,
+      ].join(',')
+    );
   }
-  const header = ['Invoice', 'Date', 'Customer', 'Subtotal', 'Tax', 'Total', 'Status'];
-  const lines = currentReportRows.map((inv) => [
-    `I-${inv.number}`,
-    inv.due_date || inv.created_at.slice(0, 10),
-    inv.customer_name.replace(/,/g, ' '),
-    inv.subtotal.toFixed(2),
-    (inv.total - inv.subtotal).toFixed(2),
-    inv.total.toFixed(2),
-    inv.status,
-  ]);
-  const csv = [header, ...lines].map((row) => row.join(',')).join('\n');
+  lines.push('');
+
+  lines.push('=== EXPENSES ===');
+  lines.push(['Date', 'Vendor', 'Category', 'Amount', 'Notes'].join(','));
+  for (const exp of currentReportExpenses) {
+    lines.push(
+      [
+        exp.expense_date,
+        exp.vendor.replace(/,/g, ' '),
+        exp.category.replace(/,/g, ' '),
+        exp.amount.toFixed(2),
+        (exp.notes || '').replace(/,/g, ' ').replace(/\n/g, ' '),
+      ].join(',')
+    );
+  }
+  lines.push('');
+
+  lines.push('=== MILEAGE LOG ===');
+  lines.push(['Date', 'Miles', 'Purpose', `Deduction (@ $${mileageRate}/mi)`].join(','));
+  for (const trip of currentReportMileage) {
+    lines.push([trip.trip_date, trip.miles, (trip.purpose || '').replace(/,/g, ' '), (trip.miles * mileageRate).toFixed(2)].join(','));
+  }
+  lines.push('');
+
+  const totalExpenses = currentReportExpenses.reduce((s, e) => s + e.amount, 0);
+  const totalMiles = currentReportMileage.reduce((s, t) => s + t.miles, 0);
+  const mileageDeduction = totalMiles * mileageRate;
+  const collected = currentReportRows.filter((i) => i.status === 'paid').reduce((s, i) => s + i.total, 0);
+
+  lines.push('=== SUMMARY ===');
+  lines.push(`Total invoiced,${currentReportRows.reduce((s, i) => s + i.total, 0).toFixed(2)}`);
+  lines.push(`Total collected,${collected.toFixed(2)}`);
+  lines.push(`Total expenses,${totalExpenses.toFixed(2)}`);
+  lines.push(`Total mileage deduction,${mileageDeduction.toFixed(2)}`);
+  lines.push(`Net income,${(collected - totalExpenses - mileageDeduction).toFixed(2)}`);
+
+  const csv = lines.join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `ecohaven-income-${reportYearSelect.value}.csv`;
+  a.download = `ecohaven-tax-summary-${year}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 });
@@ -2309,6 +2606,7 @@ document.getElementById('btn-load-route').addEventListener('click', () => {
   await loadQuotes();
   await loadInvoices();
   await loadExpenses();
+  await loadMileage();
   await loadSettings();
   await loadReportYears();
 
