@@ -3,24 +3,28 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Request a Quote — EcoHaven Solutions LLC</title>
+  <title>Request an Estimate — EcoHaven Solutions LLC</title>
   <style>
     body {
       margin: 0;
       font-family: Helvetica, Arial, sans-serif;
-      background: #F4F3EC;
-      color: #23261F;
+      background: #1A1C18;
+      color: #EAEAE4;
       display: flex;
       justify-content: center;
       padding: 40px 16px;
+      min-height: 100vh;
+      box-sizing: border-box;
     }
     .card {
       max-width: 440px;
       width: 100%;
-      background: #fff;
+      background: #23261F;
       border-radius: 14px;
       overflow: hidden;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+      border: 1px solid #33362E;
+      align-self: flex-start;
     }
     .header {
       background: #4F5C36;
@@ -44,7 +48,7 @@
     label {
       display: block;
       font-size: 13px;
-      color: #5B6152;
+      color: #A9AC9E;
       margin-bottom: 4px;
       margin-top: 14px;
     }
@@ -52,22 +56,28 @@
     input, textarea {
       width: 100%;
       padding: 11px 12px;
-      border: 1px solid #ccc;
+      border: 1px solid #40433A;
       border-radius: 8px;
       box-sizing: border-box;
       font-size: 15px;
       font-family: inherit;
+      background: #1A1C18;
+      color: #EAEAE4;
+    }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #4F9FD6;
     }
     button {
       width: 100%;
       margin-top: 22px;
       padding: 14px;
-      background: #4F5C36;
-      color: #fff;
+      background: #4F9FD6;
+      color: #12181C;
       border: none;
       border-radius: 8px;
       font-size: 16px;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
     }
     button:disabled { opacity: 0.6; }
@@ -76,10 +86,10 @@
       text-align: center;
       padding: 16px;
       font-size: 12px;
-      color: #5B6152;
-      background: #EFEEE7;
+      color: #A9AC9E;
+      background: #1E211B;
     }
-    .footer a { color: #4F5C36; }
+    .footer a { color: #4F9FD6; }
   </style>
 </head>
 <body>
@@ -105,7 +115,7 @@
         <!-- Honeypot field: hidden from real visitors, catches simple bots -->
         <input type="text" id="f-website" style="position:absolute; left:-9999px;" tabindex="-1" autocomplete="off" />
 
-        <button type="submit" id="submit-btn">Request a Quote</button>
+        <button type="submit" id="submit-btn">Request an Estimate</button>
         <div id="form-message"></div>
       </form>
     </div>
@@ -137,18 +147,18 @@
 
         if (data.ok) {
           document.getElementById('form-wrap').innerHTML =
-            '<p style="text-align:center; color:#4F5C36; font-size:16px; padding:20px 0;">Thanks! We\'ll be in touch soon.</p>';
+            '<p style="text-align:center; color:#4F9FD6; font-size:16px; padding:20px 0;">Thanks! We\'ll be in touch soon.</p>';
         } else {
-          msg.style.color = '#A8452A';
+          msg.style.color = '#E08A6B';
           msg.textContent = data.error || 'Something went wrong. Please call/text 509-866-6388 instead.';
           btn.disabled = false;
-          btn.textContent = 'Request a Quote';
+          btn.textContent = 'Request an Estimate';
         }
       } catch (err) {
-        msg.style.color = '#A8452A';
+        msg.style.color = '#E08A6B';
         msg.textContent = 'Something went wrong. Please call/text 509-866-6388 instead.';
         btn.disabled = false;
-        btn.textContent = 'Request a Quote';
+        btn.textContent = 'Request an Estimate';
       }
     });
   </script>
