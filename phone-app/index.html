@@ -1247,6 +1247,21 @@
         <textarea name="description" rows="4"></textarea>
       </label>
 
+      <div class="line-items">
+        <div class="line-items-header">
+          <span>Line items (optional)</span>
+          <div style="display:flex; gap:6px;">
+            <button type="button" class="btn btn-ghost btn-small" id="btn-quick-add-job-item">Quick add</button>
+            <button type="button" class="btn btn-ghost btn-small" id="btn-add-job-line-item">+ Add item</button>
+          </div>
+        </div>
+        <div id="job-line-item-rows"></div>
+        <div class="totals-block">
+          <div class="totals-row totals-row-grand"><span>Subtotal</span><span id="job-subtotal-display">$0.00</span></div>
+        </div>
+        <p class="empty-sub">These carry over automatically when you create an invoice from this job.</p>
+      </div>
+
       <div class="drawer-section-label">Photos</div>
       <div class="field-row">
         <select id="job-photo-type">

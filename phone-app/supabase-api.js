@@ -255,8 +255,22 @@ window.api = {
   jobs: {
     list: async () => mapJobRows(unwrap(await sb.from('jobs').select('*, customers(name, phone)').order('scheduled_date', { nullsFirst: false }))),
     listByCustomer: async (customerId) => mapJobRows(unwrap(await sb.from('jobs').select('*, customers(name, phone)').eq('customer_id', customerId))),
-    create: async (job) => mapJobRows([unwrap(await sb.from('jobs').insert(cleanJob(job)).select('*, customers(name, phone)').single())])[0],
-    update: async (id, updates) => mapJobRows([unwrap(await sb.from('jobs').update(cleanJob(updates)).eq('id', id).select('*, customers(name, phone)').single())])[0],
+    create: async (job) => {
+      const created = mapJobRows([unwrap(await sb.from('jobs').insert(cleanJob(stripItems(job))).select('*, customers(name, phone)').single())])[0];
+      if (job.items) await saveItems('job_items', 'job_id', created.id, job.items);
+      return created;
+    },
+    update: async (id, updates) => {
+      const updated = mapJobRows([unwrap(await sb.from('jobs').update(cleanJob(stripItems(updates))).eq('id', id).select('*, customers(name, phone)').single())])[0];
+      if (updates.items) await saveItems('job_items', 'job_id', id, updates.items);
+      return updated;
+    },
+    getItems: async (jobId) => unwrap(await sb.from('job_items').select('*').eq('job_id', jobId).order('sort_order')),
+    get: async (id) => {
+      const row = mapJobRows([unwrap(await sb.from('jobs').select('*, customers(name, phone)').eq('id', id).single())])[0];
+      row.items = unwrap(await sb.from('job_items').select('*').eq('job_id', id).order('sort_order'));
+      return row;
+    },
     delete: async (id) => { await sb.from('jobs').delete().eq('id', id); return { id }; },
     saveSignature: async (jobId, dataUrl) => {
       const url = await uploadToStorage(dataUrl, `signatures/${jobId}`);
@@ -330,15 +344,13 @@ window.api = {
     delete: async (id) => { await sb.from('quotes').delete().eq('id', id); return { id }; },
     convertToJob: async (id, jobDetails) => {
       const quote = await window.api.quotes.get(id);
-      const itemLines = quote.items.map((i) => `${i.quantity} x ${i.description} @ $${Number(i.unit_price).toFixed(2)}`).join('\n');
-      const description = [quote.notes, itemLines].filter(Boolean).join('\n\n');
       const job = unwrap(
         await sb
           .from('jobs')
           .insert({
             customer_id: quote.customer_id,
             title: quote.title,
-            description,
+            description: quote.notes || null,
             status: 'scheduled',
             scheduled_date: jobDetails?.scheduled_date || null,
             scheduled_time: jobDetails?.scheduled_time || null,
@@ -346,6 +358,7 @@ window.api = {
           .select()
           .single()
       );
+      if (quote.items?.length) await saveItems('job_items', 'job_id', job.id, quote.items);
       await sb.from('quotes').update({ status: 'approved', job_id: job.id }).eq('id', id);
       return job;
     },

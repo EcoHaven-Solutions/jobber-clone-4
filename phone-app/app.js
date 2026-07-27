@@ -668,13 +668,26 @@ async function renderJobPhotoGallery(jobId) {
   }
 }
 
+const jobLineItemRowsEl = document.getElementById('job-line-item-rows');
+
+function addJobLineItemRow(item = {}) {
+  jobLineItemRowsEl.appendChild(createLineItemRow(item, updateJobTotal));
+}
+
+function updateJobTotal() {
+  const subtotal = sumLineItemsFrom(jobLineItemRowsEl);
+  document.getElementById('job-subtotal-display').textContent = formatCurrency(subtotal);
+}
+
 async function openJobDrawer(job = null) {
   editingJobId = job ? job.id : null;
   jobForm.reset();
   populateJobCustomerSelect();
   jobPhotoGallery.innerHTML = '';
+  jobLineItemRowsEl.innerHTML = '';
 
   if (job) {
+    const fullJob = await window.api.jobs.get(job.id);
     jobDrawerTitle.textContent = 'Edit job';
     jobDrawerIdTag.textContent = `J-${String(job.id).padStart(4, '0')}`;
     jobDeleteBtn.hidden = false;
@@ -690,6 +703,8 @@ async function openJobDrawer(job = null) {
     jobForm.elements.status.value = job.status || 'scheduled';
     jobForm.elements.repeat_interval.value = job.repeat_interval || 'none';
     jobForm.elements.description.value = job.description || '';
+    (fullJob.items && fullJob.items.length ? fullJob.items : [{}]).forEach(addJobLineItemRow);
+    updateJobTotal();
     renderJobPhotoGallery(job.id);
     const assignedIds = await window.api.jobEmployees.listForJob(job.id);
     renderJobEmployeeCheckboxes(assignedIds);
@@ -704,6 +719,8 @@ async function openJobDrawer(job = null) {
     jobNextOccurrenceBtn.hidden = true;
     jobSendReminderBtn.hidden = true;
     jobRequestReviewBtn.hidden = true;
+    addJobLineItemRow();
+    updateJobTotal();
     renderJobEmployeeCheckboxes([]);
     document.getElementById('job-profitability-wrap').hidden = true;
     document.getElementById('job-signature-preview-wrap').hidden = true;
@@ -764,6 +781,8 @@ jobForm.addEventListener('submit', async (e) => {
   const data = Object.fromEntries(new FormData(jobForm).entries());
   if (!data.title.trim() || !data.customer_id) return;
 
+  data.items = collectLineItemsFrom(jobLineItemRowsEl);
+
   let jobId = editingJobId;
   if (editingJobId) {
     await window.api.jobs.update(editingJobId, data);
@@ -798,11 +817,12 @@ document.getElementById('btn-new-job').addEventListener('click', () => {
 });
 document.getElementById('btn-close-job-drawer').addEventListener('click', closeJobDrawer);
 document.getElementById('btn-cancel-job-drawer').addEventListener('click', closeJobDrawer);
-jobCreateInvoiceBtn.addEventListener('click', () => {
+jobCreateInvoiceBtn.addEventListener('click', async () => {
   const job = jobs.find((j) => j.id === editingJobId);
   if (!job) return;
+  const fullJob = await window.api.jobs.get(job.id);
   closeJobDrawer();
-  openInvoiceDrawer(null, job);
+  openInvoiceDrawer(null, fullJob);
 });
 
 function buildJobCopyText() {
@@ -1539,6 +1559,31 @@ function populateInvoiceJobSelect() {
   if (current) invoiceJobSelect.value = current;
 }
 
+invoiceJobSelect.addEventListener('change', async () => {
+  // Only auto-fill for a brand-new invoice, and only if nothing's been
+  // typed in yet -- never overwrite something the user already entered.
+  if (editingInvoiceId || !invoiceJobSelect.value) return;
+
+  const job = jobs.find((j) => j.id === Number(invoiceJobSelect.value));
+  if (!job) return;
+
+  if (!invoiceForm.elements.title.value.trim()) {
+    invoiceForm.elements.title.value = job.title;
+  }
+
+  const existingItems = collectLineItemsFrom(invoiceLineItemRowsEl);
+  if (existingItems.length === 0) {
+    const fullJob = await window.api.jobs.get(job.id);
+    invoiceLineItemRowsEl.innerHTML = '';
+    if (fullJob.items && fullJob.items.length) {
+      fullJob.items.forEach(addInvoiceLineItemRow);
+    } else {
+      addInvoiceLineItemRow({ description: job.title, quantity: 1, unit_price: 0 });
+    }
+    updateInvoiceTotal();
+  }
+});
+
 async function loadInvoices() {
   invoices = await window.api.invoices.list();
   renderInvoices();
@@ -1682,7 +1727,11 @@ function openInvoiceDrawer(invoice = null, fromJob = null) {
       invoiceForm.elements.customer_id.value = fromJob.customer_id;
       invoiceForm.elements.job_id.value = fromJob.id;
       invoiceForm.elements.title.value = fromJob.title;
-      addInvoiceLineItemRow({ description: fromJob.title, quantity: 1, unit_price: 0 });
+      if (fromJob.items && fromJob.items.length) {
+        fromJob.items.forEach(addInvoiceLineItemRow);
+      } else {
+        addInvoiceLineItemRow({ description: fromJob.title, quantity: 1, unit_price: 0 });
+      }
     } else {
       addInvoiceLineItemRow();
     }
@@ -1829,6 +1878,7 @@ document.getElementById('btn-new-invoice').addEventListener('click', () => {
 document.getElementById('btn-close-invoice-drawer').addEventListener('click', closeInvoiceDrawer);
 document.getElementById('btn-cancel-invoice-drawer').addEventListener('click', closeInvoiceDrawer);
 document.getElementById('btn-add-invoice-line-item').addEventListener('click', () => addInvoiceLineItemRow());
+document.getElementById('btn-add-job-line-item').addEventListener('click', () => addJobLineItemRow());
 document.getElementById('invoice-tax-rate').addEventListener('input', updateInvoiceTotal);
 invoiceOverlay.addEventListener('click', closeInvoiceDrawer);
 invoiceStatusFilter.addEventListener('change', renderInvoices);
@@ -2769,6 +2819,9 @@ function openQuickAddPicker(target) {
         if (quickAddTarget === 'quote') {
           addLineItemRow(item);
           updateQuoteTotal();
+        } else if (quickAddTarget === 'job') {
+          addJobLineItemRow(item);
+          updateJobTotal();
         } else {
           addInvoiceLineItemRow(item);
           updateInvoiceTotal();
@@ -2789,6 +2842,7 @@ function closeQuickAddPicker() {
 
 document.getElementById('btn-quick-add-quote-item').addEventListener('click', () => openQuickAddPicker('quote'));
 document.getElementById('btn-quick-add-invoice-item').addEventListener('click', () => openQuickAddPicker('invoice'));
+document.getElementById('btn-quick-add-job-item').addEventListener('click', () => openQuickAddPicker('job'));
 document.getElementById('btn-close-quick-add').addEventListener('click', closeQuickAddPicker);
 document.getElementById('quick-add-overlay').addEventListener('click', closeQuickAddPicker);
 
