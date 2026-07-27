@@ -158,6 +158,15 @@ function cleanMileage(m) {
   };
 }
 
+function cleanEmployee(e) {
+  return {
+    ...e,
+    phone: toNullableText(e.phone),
+    email: toNullableText(e.email),
+    active: toBoolInt(e.active),
+  };
+}
+
 // Uploads a base64 data URL (from a file input) to Supabase Storage, and
 // returns the public URL to store/display. Used for job photos and expense
 // receipts alike.
@@ -378,6 +387,43 @@ window.api = {
     create: async (trip) => unwrap(await sb.from('mileage_log').insert(cleanMileage(trip)).select().single()),
     update: async (id, updates) => unwrap(await sb.from('mileage_log').update(cleanMileage(updates)).eq('id', id).select().single()),
     delete: async (id) => { await sb.from('mileage_log').delete().eq('id', id); return { id }; },
+  },
+
+  employees: {
+    list: async () => unwrap(await sb.from('employees').select('*').order('name')),
+    create: async (e) => unwrap(await sb.from('employees').insert(cleanEmployee(e)).select().single()),
+    update: async (id, updates) => unwrap(await sb.from('employees').update(cleanEmployee(updates)).eq('id', id).select().single()),
+    delete: async (id) => { await sb.from('employees').delete().eq('id', id); return { id }; },
+  },
+
+  timeEntries: {
+    list: async () => {
+      const rows = unwrap(await sb.from('time_entries').select('*, employees(name)').order('work_date', { ascending: false }));
+      return rows.map((r) => {
+        r.employee_name = r.employees ? r.employees.name : '';
+        delete r.employees;
+        return r;
+      });
+    },
+    getToday: async (employeeId, workDate) => {
+      const rows = unwrap(await sb.from('time_entries').select('*').eq('employee_id', employeeId).eq('work_date', workDate));
+      return rows[0] || null;
+    },
+    clockIn: async (employeeId, workDate) =>
+      unwrap(await sb.from('time_entries').insert({ employee_id: employeeId, work_date: workDate, clock_in: new Date().toISOString() }).select().single()),
+    startLunch: async (id) => unwrap(await sb.from('time_entries').update({ lunch_start: new Date().toISOString() }).eq('id', id).select().single()),
+    endLunch: async (id) => unwrap(await sb.from('time_entries').update({ lunch_end: new Date().toISOString() }).eq('id', id).select().single()),
+    clockOut: async (id) => unwrap(await sb.from('time_entries').update({ clock_out: new Date().toISOString() }).eq('id', id).select().single()),
+  },
+
+  jobEmployees: {
+    listForJob: async (jobId) => unwrap(await sb.from('job_employees').select('employee_id').eq('job_id', jobId)).map((r) => r.employee_id),
+    setForJob: async (jobId, employeeIds) => {
+      await sb.from('job_employees').delete().eq('job_id', jobId);
+      if (employeeIds.length) {
+        await sb.from('job_employees').insert(employeeIds.map((employee_id) => ({ job_id: jobId, employee_id })));
+      }
+    },
   },
 
   reports: {

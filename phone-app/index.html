@@ -61,8 +61,14 @@
         <button class="nav-item" data-view="reports">
           <span class="nav-tag">08</span> Reports
         </button>
+        <button class="nav-item" data-view="employees">
+          <span class="nav-tag">09</span> Employees
+        </button>
+        <button class="nav-item" data-view="timeclock">
+          <span class="nav-tag">10</span> Time Clock
+        </button>
         <button class="nav-item" data-view="settings">
-          <span class="nav-tag">09</span> Settings
+          <span class="nav-tag">11</span> Settings
         </button>
       </nav>
       <div class="sidebar-footer">
@@ -531,6 +537,91 @@
         </div>
       </section>
 
+      <!-- ===== Employees view ===== -->
+      <section class="view" id="view-employees" hidden>
+        <header class="content-header">
+          <div>
+            <h1>Employees</h1>
+            <p class="subtitle" id="employee-count">0 on file</p>
+          </div>
+          <button class="btn btn-primary" id="btn-new-employee">+ New employee</button>
+        </header>
+
+        <div class="toolbar">
+          <button class="btn btn-danger" id="btn-delete-selected-employees" hidden>Delete selected</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="ticket-table" id="employee-table">
+            <thead>
+              <tr>
+                <th style="width:32px;"><input type="checkbox" id="employee-select-all" style="width:auto;" /></th>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="employee-rows"></tbody>
+          </table>
+          <div class="empty-state" id="employee-empty-state" hidden>
+            <p>No employees added yet.</p>
+            <p class="empty-sub">Add your team here so they show up in the Time Clock and can be assigned to jobs.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Time Clock view ===== -->
+      <section class="view" id="view-timeclock" hidden>
+        <header class="content-header">
+          <div>
+            <h1>Time Clock</h1>
+            <p class="subtitle">Clock in/out, with lunch</p>
+          </div>
+        </header>
+
+        <div class="table-wrap settings-card">
+          <div class="drawer-body" style="padding:24px;">
+            <label>Who are you?
+              <select id="timeclock-employee-select"></select>
+            </label>
+            <div id="timeclock-status" style="margin:16px 0; font-size:14px; color:var(--ink-soft);"></div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="btn btn-primary" id="btn-clock-in">Clock in</button>
+              <button class="btn btn-ghost" id="btn-start-lunch" hidden>Start lunch</button>
+              <button class="btn btn-ghost" id="btn-end-lunch" hidden>End lunch</button>
+              <button class="btn btn-danger" id="btn-clock-out" hidden>Clock out</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="content-header" style="margin-top:28px;">
+          <div>
+            <h1 style="font-size:18px;">Team timesheet</h1>
+            <p class="subtitle">Everyone's recent entries</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="ticket-table" id="timesheet-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Employee</th>
+                <th>Clock in</th>
+                <th>Lunch</th>
+                <th>Clock out</th>
+                <th>Hours</th>
+              </tr>
+            </thead>
+            <tbody id="timesheet-rows"></tbody>
+          </table>
+          <div class="empty-state" id="timesheet-empty-state" hidden>
+            <p>No time entries yet.</p>
+          </div>
+        </div>
+      </section>
+
       <!-- ===== Settings view ===== -->
       <section class="view" id="view-settings" hidden>
         <header class="content-header">
@@ -987,6 +1078,10 @@
         </select>
       </label>
       <p class="empty-sub">Leave blank for an exact time (e.g. 2:00 PM). Fill in to show a window instead (e.g. 2:00–4:00 PM).</p>
+
+      <div class="drawer-section-label">Assigned employees</div>
+      <div id="job-employee-list" class="batch-customer-list"></div>
+
       <label>Status
         <select name="status">
           <option value="scheduled">Scheduled</option>
@@ -1239,6 +1334,41 @@
         <div class="drawer-actions-right">
           <button type="button" class="btn btn-ghost" id="btn-cancel-batch-drawer">Cancel</button>
           <button type="submit" class="btn btn-primary">Create jobs</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- Slide-over form for creating / editing an employee -->
+  <div class="overlay" id="employee-overlay" hidden></div>
+  <div class="drawer" id="employee-drawer" hidden>
+    <div class="drawer-header">
+      <span class="drawer-tag" id="employee-drawer-id-tag">NEW</span>
+      <h2 id="employee-drawer-title">New employee</h2>
+      <button class="icon-btn" id="btn-close-employee-drawer" aria-label="Close">&times;</button>
+    </div>
+    <form id="employee-form" class="drawer-body">
+      <label>Name *
+        <input type="text" name="name" required />
+      </label>
+      <div class="field-row">
+        <label>Phone
+          <input type="tel" name="phone" />
+        </label>
+        <label>Email
+          <input type="email" name="email" />
+        </label>
+      </div>
+      <label style="flex-direction:row; align-items:center; gap:8px;">
+        <input type="checkbox" name="active" style="width:auto;" checked />
+        Active
+      </label>
+
+      <div class="drawer-actions">
+        <button type="button" class="btn btn-danger" id="btn-delete-employee" hidden>Delete</button>
+        <div class="drawer-actions-right">
+          <button type="button" class="btn btn-ghost" id="btn-cancel-employee-drawer">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save employee</button>
         </div>
       </div>
     </form>

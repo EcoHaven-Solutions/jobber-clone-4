@@ -668,7 +668,7 @@ async function renderJobPhotoGallery(jobId) {
   }
 }
 
-function openJobDrawer(job = null) {
+async function openJobDrawer(job = null) {
   editingJobId = job ? job.id : null;
   jobForm.reset();
   populateJobCustomerSelect();
@@ -691,6 +691,8 @@ function openJobDrawer(job = null) {
     jobForm.elements.repeat_interval.value = job.repeat_interval || 'none';
     jobForm.elements.description.value = job.description || '';
     renderJobPhotoGallery(job.id);
+    const assignedIds = await window.api.jobEmployees.listForJob(job.id);
+    renderJobEmployeeCheckboxes(assignedIds);
   } else {
     jobDrawerTitle.textContent = 'New job';
     jobDrawerIdTag.textContent = 'NEW';
@@ -699,10 +701,29 @@ function openJobDrawer(job = null) {
     jobNextOccurrenceBtn.hidden = true;
     jobSendReminderBtn.hidden = true;
     jobRequestReviewBtn.hidden = true;
+    renderJobEmployeeCheckboxes([]);
   }
 
   jobOverlay.hidden = false;
   jobDrawer.hidden = false;
+}
+
+function renderJobEmployeeCheckboxes(selectedIds) {
+  const wrap = document.getElementById('job-employee-list');
+  const activeEmployees = employees.filter((e) => e.active);
+  if (activeEmployees.length === 0) {
+    wrap.innerHTML = '<p class="empty-sub" style="margin:0;">No employees added yet.</p>';
+    return;
+  }
+  wrap.innerHTML = activeEmployees
+    .map(
+      (e) => `
+      <label class="batch-customer-row">
+        <input type="checkbox" class="job-employee-checkbox" value="${e.id}" ${selectedIds.includes(e.id) ? 'checked' : ''} />
+        ${escapeHtml(e.name)}
+      </label>`
+    )
+    .join('');
 }
 
 function closeJobDrawer() {
@@ -716,11 +737,16 @@ jobForm.addEventListener('submit', async (e) => {
   const data = Object.fromEntries(new FormData(jobForm).entries());
   if (!data.title.trim() || !data.customer_id) return;
 
+  let jobId = editingJobId;
   if (editingJobId) {
     await window.api.jobs.update(editingJobId, data);
   } else {
-    await window.api.jobs.create(data);
+    const created = await window.api.jobs.create(data);
+    jobId = created.id;
   }
+
+  const assignedEmployeeIds = Array.from(document.querySelectorAll('.job-employee-checkbox:checked')).map((cb) => Number(cb.value));
+  await window.api.jobEmployees.setForJob(jobId, assignedEmployeeIds);
 
   closeJobDrawer();
   await loadJobs();
@@ -2076,6 +2102,271 @@ document.getElementById('btn-close-mileage-drawer').addEventListener('click', cl
 document.getElementById('btn-cancel-mileage-drawer').addEventListener('click', closeMileageDrawer);
 mileageOverlay.addEventListener('click', closeMileageDrawer);
 
+// ===================== Employees =====================
+
+let employees = [];
+let editingEmployeeId = null;
+const selectedEmployeeIds = new Set();
+
+const employeeRowsEl = document.getElementById('employee-rows');
+const employeeEmptyEl = document.getElementById('employee-empty-state');
+const employeeCountEl = document.getElementById('employee-count');
+
+const employeeOverlay = document.getElementById('employee-overlay');
+const employeeDrawer = document.getElementById('employee-drawer');
+const employeeForm = document.getElementById('employee-form');
+const employeeDrawerTitle = document.getElementById('employee-drawer-title');
+const employeeDrawerIdTag = document.getElementById('employee-drawer-id-tag');
+const employeeDeleteBtn = document.getElementById('btn-delete-employee');
+
+async function loadEmployees() {
+  employees = await window.api.employees.list();
+  renderEmployees();
+  populateTimeclockEmployeeSelect();
+}
+
+function renderEmployees() {
+  employeeCountEl.textContent = `${employees.length} on file`;
+  employeeRowsEl.innerHTML = '';
+
+  if (employees.length === 0) {
+    employeeEmptyEl.hidden = false;
+    return;
+  }
+  employeeEmptyEl.hidden = true;
+
+  for (const emp of employees) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td onclick="event.stopPropagation()"><input type="checkbox" class="employee-select-checkbox" value="${emp.id}" style="width:auto;" ${selectedEmployeeIds.has(emp.id) ? 'checked' : ''} /></td>
+      <td class="cell-name">${escapeHtml(emp.name)}</td>
+      <td>${escapeHtml(emp.phone || '—')}</td>
+      <td>${escapeHtml(emp.email || '—')}</td>
+      <td><span class="badge badge-${emp.active ? 'paid' : 'unpaid'}">${emp.active ? 'Active' : 'Inactive'}</span></td>
+      <td class="cell-arrow">›</td>
+    `;
+    tr.addEventListener('click', () => openEmployeeDrawer(emp));
+    tr.querySelector('.employee-select-checkbox').addEventListener('change', (e) => {
+      if (e.target.checked) selectedEmployeeIds.add(emp.id);
+      else selectedEmployeeIds.delete(emp.id);
+      updateDeleteSelectedButton('employee', selectedEmployeeIds);
+    });
+    employeeRowsEl.appendChild(tr);
+  }
+}
+
+document.getElementById('employee-select-all').addEventListener('change', (e) => {
+  document.querySelectorAll('.employee-select-checkbox').forEach((cb) => {
+    cb.checked = e.target.checked;
+    const id = Number(cb.value);
+    if (e.target.checked) selectedEmployeeIds.add(id);
+    else selectedEmployeeIds.delete(id);
+  });
+  updateDeleteSelectedButton('employee', selectedEmployeeIds);
+});
+
+document.getElementById('btn-delete-selected-employees').addEventListener('click', async () => {
+  const count = selectedEmployeeIds.size;
+  if (!confirm(`Delete ${count} employee(s)? This also deletes their time entries. This can't be undone.`)) return;
+
+  const btn = document.getElementById('btn-delete-selected-employees');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+
+  for (const id of selectedEmployeeIds) {
+    await window.api.employees.delete(id);
+  }
+  selectedEmployeeIds.clear();
+  btn.disabled = false;
+
+  await loadEmployees();
+});
+
+function openEmployeeDrawer(emp = null) {
+  editingEmployeeId = emp ? emp.id : null;
+  employeeForm.reset();
+
+  if (emp) {
+    employeeDrawerTitle.textContent = 'Edit employee';
+    employeeDrawerIdTag.textContent = `#${emp.id}`;
+    employeeDeleteBtn.hidden = false;
+    employeeForm.elements.name.value = emp.name || '';
+    employeeForm.elements.phone.value = emp.phone || '';
+    employeeForm.elements.email.value = emp.email || '';
+    employeeForm.elements.active.checked = !!emp.active;
+  } else {
+    employeeDrawerTitle.textContent = 'New employee';
+    employeeDrawerIdTag.textContent = 'NEW';
+    employeeDeleteBtn.hidden = true;
+  }
+
+  employeeOverlay.hidden = false;
+  employeeDrawer.hidden = false;
+}
+
+function closeEmployeeDrawer() {
+  employeeOverlay.hidden = true;
+  employeeDrawer.hidden = true;
+  editingEmployeeId = null;
+}
+
+employeeForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(employeeForm).entries());
+  if (!data.name.trim()) return;
+
+  if (editingEmployeeId) {
+    await window.api.employees.update(editingEmployeeId, data);
+  } else {
+    await window.api.employees.create(data);
+  }
+
+  closeEmployeeDrawer();
+  await loadEmployees();
+});
+
+employeeDeleteBtn.addEventListener('click', async () => {
+  if (!editingEmployeeId) return;
+  if (!confirm('Delete this employee? This also deletes their time entries and cannot be undone.')) return;
+
+  await window.api.employees.delete(editingEmployeeId);
+  closeEmployeeDrawer();
+  await loadEmployees();
+});
+
+document.getElementById('btn-new-employee').addEventListener('click', () => openEmployeeDrawer());
+document.getElementById('btn-close-employee-drawer').addEventListener('click', closeEmployeeDrawer);
+document.getElementById('btn-cancel-employee-drawer').addEventListener('click', closeEmployeeDrawer);
+employeeOverlay.addEventListener('click', closeEmployeeDrawer);
+
+// ===================== Time Clock =====================
+
+let currentTimeEntry = null; // today's entry for whoever is selected in the picker
+
+function populateTimeclockEmployeeSelect() {
+  const select = document.getElementById('timeclock-employee-select');
+  const current = select.value || localStorage.getItem('timeclock_employee_id') || '';
+  select.innerHTML = employees
+    .filter((e) => e.active)
+    .map((e) => `<option value="${e.id}">${escapeHtml(e.name)}</option>`)
+    .join('');
+  if (current) select.value = current;
+  refreshTimeclockStatus();
+}
+
+document.getElementById('timeclock-employee-select').addEventListener('change', (e) => {
+  localStorage.setItem('timeclock_employee_id', e.target.value);
+  refreshTimeclockStatus();
+});
+
+async function refreshTimeclockStatus() {
+  const select = document.getElementById('timeclock-employee-select');
+  const employeeId = Number(select.value);
+  const statusEl = document.getElementById('timeclock-status');
+  const inBtn = document.getElementById('btn-clock-in');
+  const startLunchBtn = document.getElementById('btn-start-lunch');
+  const endLunchBtn = document.getElementById('btn-end-lunch');
+  const outBtn = document.getElementById('btn-clock-out');
+
+  if (!employeeId) {
+    statusEl.textContent = 'Add an employee first.';
+    [inBtn, startLunchBtn, endLunchBtn, outBtn].forEach((b) => (b.hidden = true));
+    return;
+  }
+
+  const today = dateStr(new Date());
+  currentTimeEntry = await window.api.timeEntries.getToday(employeeId, today);
+
+  const fmt = (iso) => (iso ? new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : null);
+
+  if (!currentTimeEntry) {
+    statusEl.textContent = "Not clocked in yet today.";
+    inBtn.hidden = false;
+    startLunchBtn.hidden = true;
+    endLunchBtn.hidden = true;
+    outBtn.hidden = true;
+  } else if (!currentTimeEntry.clock_out) {
+    const parts = [`Clocked in at ${fmt(currentTimeEntry.clock_in)}`];
+    if (currentTimeEntry.lunch_start && !currentTimeEntry.lunch_end) parts.push(`on lunch since ${fmt(currentTimeEntry.lunch_start)}`);
+    else if (currentTimeEntry.lunch_end) parts.push(`lunch ${fmt(currentTimeEntry.lunch_start)}–${fmt(currentTimeEntry.lunch_end)}`);
+    statusEl.textContent = parts.join(', ');
+
+    inBtn.hidden = true;
+    const onLunch = currentTimeEntry.lunch_start && !currentTimeEntry.lunch_end;
+    startLunchBtn.hidden = !!currentTimeEntry.lunch_start;
+    endLunchBtn.hidden = !onLunch;
+    outBtn.hidden = false;
+  } else {
+    statusEl.textContent = `Done for today — clocked out at ${fmt(currentTimeEntry.clock_out)}.`;
+    [inBtn, startLunchBtn, endLunchBtn, outBtn].forEach((b) => (b.hidden = true));
+  }
+}
+
+document.getElementById('btn-clock-in').addEventListener('click', async () => {
+  const employeeId = Number(document.getElementById('timeclock-employee-select').value);
+  if (!employeeId) return;
+  await window.api.timeEntries.clockIn(employeeId, dateStr(new Date()));
+  await refreshTimeclockStatus();
+  await loadTimesheet();
+});
+
+document.getElementById('btn-start-lunch').addEventListener('click', async () => {
+  if (!currentTimeEntry) return;
+  await window.api.timeEntries.startLunch(currentTimeEntry.id);
+  await refreshTimeclockStatus();
+  await loadTimesheet();
+});
+
+document.getElementById('btn-end-lunch').addEventListener('click', async () => {
+  if (!currentTimeEntry) return;
+  await window.api.timeEntries.endLunch(currentTimeEntry.id);
+  await refreshTimeclockStatus();
+  await loadTimesheet();
+});
+
+document.getElementById('btn-clock-out').addEventListener('click', async () => {
+  if (!currentTimeEntry) return;
+  await window.api.timeEntries.clockOut(currentTimeEntry.id);
+  await refreshTimeclockStatus();
+  await loadTimesheet();
+});
+
+async function loadTimesheet() {
+  const entries = await window.api.timeEntries.list();
+  const rowsEl = document.getElementById('timesheet-rows');
+  const emptyEl = document.getElementById('timesheet-empty-state');
+  rowsEl.innerHTML = '';
+
+  if (entries.length === 0) {
+    emptyEl.hidden = false;
+    return;
+  }
+  emptyEl.hidden = true;
+
+  const fmt = (iso) => (iso ? new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '—');
+
+  for (const entry of entries.slice(0, 100)) {
+    let hours = '—';
+    if (entry.clock_in && entry.clock_out) {
+      let ms = new Date(entry.clock_out) - new Date(entry.clock_in);
+      if (entry.lunch_start && entry.lunch_end) ms -= new Date(entry.lunch_end) - new Date(entry.lunch_start);
+      hours = (ms / 3600000).toFixed(2);
+    }
+    const lunch = entry.lunch_start ? `${fmt(entry.lunch_start)}–${fmt(entry.lunch_end)}` : '—';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${entry.work_date}</td>
+      <td>${escapeHtml(entry.employee_name)}</td>
+      <td>${fmt(entry.clock_in)}</td>
+      <td>${lunch}</td>
+      <td>${fmt(entry.clock_out)}</td>
+      <td>${hours}</td>
+    `;
+    rowsEl.appendChild(tr);
+  }
+}
+
 // ===================== Settings =====================
 
 const settingsForm = document.getElementById('settings-form');
@@ -2607,6 +2898,8 @@ document.getElementById('btn-load-route').addEventListener('click', () => {
   await loadInvoices();
   await loadExpenses();
   await loadMileage();
+  await loadEmployees();
+  await loadTimesheet();
   await loadSettings();
   await loadReportYears();
 
