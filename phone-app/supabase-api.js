@@ -146,6 +146,17 @@ function cleanExpense(e) {
     ...e,
     amount: toNumOrDefault(e.amount, 0),
     notes: toNullableText(e.notes),
+    job_id: 'job_id' in e ? toIntOrNull(e.job_id) : undefined,
+  };
+}
+
+function cleanLead(l) {
+  return {
+    ...l,
+    phone: toNullableText(l.phone),
+    email: toNullableText(l.email),
+    source: toNullableText(l.source),
+    notes: toNullableText(l.notes),
   };
 }
 
@@ -395,6 +406,19 @@ window.api = {
     create: async (e) => unwrap(await sb.from('employees').insert(cleanEmployee(e)).select().single()),
     update: async (id, updates) => unwrap(await sb.from('employees').update(cleanEmployee(updates)).eq('id', id).select().single()),
     delete: async (id) => { await sb.from('employees').delete().eq('id', id); return { id }; },
+  },
+
+  leads: {
+    list: async () => unwrap(await sb.from('leads').select('*').order('created_at', { ascending: false })),
+    create: async (l) => unwrap(await sb.from('leads').insert(cleanLead(l)).select().single()),
+    update: async (id, updates) => unwrap(await sb.from('leads').update(cleanLead(updates)).eq('id', id).select().single()),
+    delete: async (id) => { await sb.from('leads').delete().eq('id', id); return { id }; },
+    convertToCustomer: async (id) => {
+      const lead = unwrap(await sb.from('leads').select('*').eq('id', id).single());
+      const customer = unwrap(await sb.from('customers').insert({ name: lead.name, phone: lead.phone, email: lead.email, notes: lead.notes }).select().single());
+      await sb.from('leads').update({ status: 'converted' }).eq('id', id);
+      return customer;
+    },
   },
 
   lineItemTemplates: {

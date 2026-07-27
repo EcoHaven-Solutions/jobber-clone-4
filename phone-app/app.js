@@ -694,6 +694,7 @@ async function openJobDrawer(job = null) {
     const assignedIds = await window.api.jobEmployees.listForJob(job.id);
     renderJobEmployeeCheckboxes(assignedIds);
     document.getElementById('job-template-picker-wrap').hidden = true;
+    renderJobProfitability(job.id);
   } else {
     jobDrawerTitle.textContent = 'New job';
     jobDrawerIdTag.textContent = 'NEW';
@@ -703,12 +704,33 @@ async function openJobDrawer(job = null) {
     jobSendReminderBtn.hidden = true;
     jobRequestReviewBtn.hidden = true;
     renderJobEmployeeCheckboxes([]);
+    document.getElementById('job-profitability-wrap').hidden = true;
     populateJobTemplatePicker();
     document.getElementById('job-template-picker-wrap').hidden = false;
   }
 
   jobOverlay.hidden = false;
   jobDrawer.hidden = false;
+}
+
+function renderJobProfitability(jobId) {
+  const wrap = document.getElementById('job-profitability-wrap');
+  const invoice = invoices.find((i) => i.job_id === jobId);
+
+  if (!invoice) {
+    wrap.hidden = true;
+    return;
+  }
+
+  const jobExpenses = expenses.filter((e) => e.job_id === jobId).reduce((s, e) => s + e.amount, 0);
+  const jobMileage = mileageTrips.filter((t) => t.job_id === jobId).reduce((s, t) => s + t.miles * mileageRate, 0);
+  const costs = jobExpenses + jobMileage;
+  const margin = invoice.total - costs;
+
+  document.getElementById('job-profit-invoiced').textContent = formatCurrency(invoice.total);
+  document.getElementById('job-profit-costs').textContent = formatCurrency(costs);
+  document.getElementById('job-profit-margin').textContent = formatCurrency(margin);
+  wrap.hidden = false;
 }
 
 function renderJobEmployeeCheckboxes(selectedIds) {
@@ -1855,6 +1877,19 @@ function renderExpenses() {
   }
 }
 
+function populateExpenseJobSelect() {
+  const select = document.getElementById('expense-job-select');
+  const current = select.value;
+  select.innerHTML = '<option value="">— None —</option>';
+  for (const j of jobs) {
+    const opt = document.createElement('option');
+    opt.value = j.id;
+    opt.textContent = `${j.title} — ${j.customer_name}`;
+    select.appendChild(opt);
+  }
+  select.value = current;
+}
+
 function resetReceiptPicker() {
   pendingReceiptData = null;
   removeReceiptFlag = false;
@@ -1867,6 +1902,7 @@ function openExpenseDrawer(expense = null) {
   editingExpenseId = expense ? expense.id : null;
   expenseForm.reset();
   resetReceiptPicker();
+  populateExpenseJobSelect();
 
   if (expense) {
     expenseDrawerTitle.textContent = 'Edit expense';
@@ -1876,6 +1912,7 @@ function openExpenseDrawer(expense = null) {
     expenseForm.elements.amount.value = expense.amount || 0;
     expenseForm.elements.expense_date.value = expense.expense_date || '';
     expenseForm.elements.category.value = expense.category || 'Other';
+    expenseForm.elements.job_id.value = expense.job_id || '';
     expenseForm.elements.notes.value = expense.notes || '';
     if (expense.receipt_filename) {
       expenseReceiptPreview.src = receiptUrl(expense.receipt_filename);
@@ -2121,6 +2158,166 @@ document.getElementById('btn-new-mileage').addEventListener('click', () => openM
 document.getElementById('btn-close-mileage-drawer').addEventListener('click', closeMileageDrawer);
 document.getElementById('btn-cancel-mileage-drawer').addEventListener('click', closeMileageDrawer);
 mileageOverlay.addEventListener('click', closeMileageDrawer);
+
+// ===================== Leads =====================
+
+let leads = [];
+let editingLeadId = null;
+const selectedLeadIds = new Set();
+
+const leadRowsEl = document.getElementById('lead-rows');
+const leadEmptyEl = document.getElementById('lead-empty-state');
+const leadCountEl = document.getElementById('lead-count');
+const leadStatusFilter = document.getElementById('lead-status-filter');
+
+const leadOverlay = document.getElementById('lead-overlay');
+const leadDrawer = document.getElementById('lead-drawer');
+const leadForm = document.getElementById('lead-form');
+const leadDrawerTitle = document.getElementById('lead-drawer-title');
+const leadDrawerIdTag = document.getElementById('lead-drawer-id-tag');
+const leadDeleteBtn = document.getElementById('btn-delete-lead');
+const leadConvertBtn = document.getElementById('btn-convert-lead');
+
+async function loadLeads() {
+  leads = await window.api.leads.list();
+  renderLeads();
+}
+
+function renderLeads() {
+  const statusQuery = leadStatusFilter.value;
+  const filtered = statusQuery ? leads.filter((l) => l.status === statusQuery) : leads;
+
+  leadCountEl.textContent = `${leads.length} on file`;
+  leadRowsEl.innerHTML = '';
+
+  if (filtered.length === 0) {
+    leadEmptyEl.hidden = false;
+    return;
+  }
+  leadEmptyEl.hidden = true;
+
+  const LEAD_STATUS_LABELS = { new: 'New', contacted: 'Contacted', converted: 'Converted', lost: 'Lost' };
+
+  for (const lead of filtered) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td onclick="event.stopPropagation()"><input type="checkbox" class="lead-select-checkbox" value="${lead.id}" style="width:auto;" ${selectedLeadIds.has(lead.id) ? 'checked' : ''} /></td>
+      <td class="cell-name">${escapeHtml(lead.name)}</td>
+      <td>${escapeHtml(lead.phone || '—')}</td>
+      <td>${escapeHtml(lead.source || '—')}</td>
+      <td><span class="badge badge-${lead.status === 'converted' ? 'paid' : lead.status === 'lost' ? 'cancelled' : 'unpaid'}">${LEAD_STATUS_LABELS[lead.status] || lead.status}</span></td>
+      <td class="cell-arrow">›</td>
+    `;
+    tr.addEventListener('click', () => openLeadDrawer(lead));
+    tr.querySelector('.lead-select-checkbox').addEventListener('change', (e) => {
+      if (e.target.checked) selectedLeadIds.add(lead.id);
+      else selectedLeadIds.delete(lead.id);
+      updateDeleteSelectedButton('lead', selectedLeadIds);
+    });
+    leadRowsEl.appendChild(tr);
+  }
+}
+
+leadStatusFilter.addEventListener('change', renderLeads);
+
+document.getElementById('lead-select-all').addEventListener('change', (e) => {
+  document.querySelectorAll('.lead-select-checkbox').forEach((cb) => {
+    cb.checked = e.target.checked;
+    const id = Number(cb.value);
+    if (e.target.checked) selectedLeadIds.add(id);
+    else selectedLeadIds.delete(id);
+  });
+  updateDeleteSelectedButton('lead', selectedLeadIds);
+});
+
+document.getElementById('btn-delete-selected-leads').addEventListener('click', async () => {
+  const count = selectedLeadIds.size;
+  if (!confirm(`Delete ${count} lead(s)? This can't be undone.`)) return;
+
+  const btn = document.getElementById('btn-delete-selected-leads');
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+
+  for (const id of selectedLeadIds) {
+    await window.api.leads.delete(id);
+  }
+  selectedLeadIds.clear();
+  btn.disabled = false;
+
+  await loadLeads();
+});
+
+function openLeadDrawer(lead = null) {
+  editingLeadId = lead ? lead.id : null;
+  leadForm.reset();
+
+  if (lead) {
+    leadDrawerTitle.textContent = 'Edit lead';
+    leadDrawerIdTag.textContent = `#${lead.id}`;
+    leadDeleteBtn.hidden = false;
+    leadConvertBtn.hidden = lead.status === 'converted';
+    leadForm.elements.name.value = lead.name || '';
+    leadForm.elements.phone.value = lead.phone || '';
+    leadForm.elements.email.value = lead.email || '';
+    leadForm.elements.source.value = lead.source || '';
+    leadForm.elements.status.value = lead.status || 'new';
+    leadForm.elements.notes.value = lead.notes || '';
+  } else {
+    leadDrawerTitle.textContent = 'New lead';
+    leadDrawerIdTag.textContent = 'NEW';
+    leadDeleteBtn.hidden = true;
+    leadConvertBtn.hidden = true;
+  }
+
+  leadOverlay.hidden = false;
+  leadDrawer.hidden = false;
+}
+
+function closeLeadDrawer() {
+  leadOverlay.hidden = true;
+  leadDrawer.hidden = true;
+  editingLeadId = null;
+}
+
+leadForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(leadForm).entries());
+  if (!data.name.trim()) return;
+
+  if (editingLeadId) {
+    await window.api.leads.update(editingLeadId, data);
+  } else {
+    await window.api.leads.create(data);
+  }
+
+  closeLeadDrawer();
+  await loadLeads();
+});
+
+leadDeleteBtn.addEventListener('click', async () => {
+  if (!editingLeadId) return;
+  if (!confirm('Delete this lead? This cannot be undone.')) return;
+
+  await window.api.leads.delete(editingLeadId);
+  closeLeadDrawer();
+  await loadLeads();
+});
+
+leadConvertBtn.addEventListener('click', async () => {
+  if (!editingLeadId) return;
+  if (!confirm('Convert this lead to a full customer record?')) return;
+
+  await window.api.leads.convertToCustomer(editingLeadId);
+  closeLeadDrawer();
+  await loadLeads();
+  await loadCustomers();
+  alert('Converted! Find them in Customers now.');
+});
+
+document.getElementById('btn-new-lead').addEventListener('click', () => openLeadDrawer());
+document.getElementById('btn-close-lead-drawer').addEventListener('click', closeLeadDrawer);
+document.getElementById('btn-cancel-lead-drawer').addEventListener('click', closeLeadDrawer);
+leadOverlay.addEventListener('click', closeLeadDrawer);
 
 // ===================== Employees =====================
 
@@ -3065,10 +3262,102 @@ document.getElementById('btn-load-route').addEventListener('click', () => {
   loadRoute(dateInput.value || dateStr(new Date()));
 });
 
+// ===================== Reminders =====================
+
+async function loadReminders() {
+  renderBackflowReminders();
+  renderDueForServiceReminders();
+}
+
+function renderBackflowReminders() {
+  const rowsEl = document.getElementById('backflow-rows');
+  const emptyEl = document.getElementById('backflow-empty-state');
+  const today = dateStr(new Date());
+  const cutoff = dateStr(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+
+  const due = customers
+    .filter((c) => c.backflow_due_date && c.backflow_due_date <= cutoff)
+    .sort((a, b) => a.backflow_due_date.localeCompare(b.backflow_due_date));
+
+  rowsEl.innerHTML = '';
+  if (due.length === 0) {
+    emptyEl.hidden = false;
+    return;
+  }
+  emptyEl.hidden = true;
+
+  for (const c of due) {
+    const overdue = c.backflow_due_date < today;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="cell-name">${escapeHtml(c.name)}</td>
+      <td>${c.backflow_due_date}</td>
+      <td><span class="badge badge-${overdue ? 'unpaid' : 'paid'}">${overdue ? 'Overdue' : 'Due soon'}</span></td>
+      <td class="cell-arrow">›</td>
+    `;
+    tr.addEventListener('click', () => {
+      document.querySelector('.nav-item[data-view="customers"]').click();
+      setTimeout(() => openCustomerDrawer(c), 50);
+    });
+    rowsEl.appendChild(tr);
+  }
+}
+
+function renderDueForServiceReminders() {
+  const rowsEl = document.getElementById('due-service-rows');
+  const emptyEl = document.getElementById('due-service-empty-state');
+  const months = Number(document.getElementById('service-window-select').value);
+  document.getElementById('service-window-label').textContent = `${months} months`;
+
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - months);
+  const cutoffStr = dateStr(cutoff);
+
+  // Most recent completed/scheduled job per customer.
+  const lastJobByCustomer = {};
+  for (const job of jobs) {
+    if (!job.scheduled_date) continue;
+    const existing = lastJobByCustomer[job.customer_id];
+    if (!existing || job.scheduled_date > existing) lastJobByCustomer[job.customer_id] = job.scheduled_date;
+  }
+
+  const overdue = customers
+    .filter((c) => {
+      const last = lastJobByCustomer[c.id];
+      return !last || last < cutoffStr;
+    })
+    .sort((a, b) => (lastJobByCustomer[a.id] || '').localeCompare(lastJobByCustomer[b.id] || ''));
+
+  rowsEl.innerHTML = '';
+  if (overdue.length === 0) {
+    emptyEl.hidden = false;
+    return;
+  }
+  emptyEl.hidden = true;
+
+  for (const c of overdue) {
+    const last = lastJobByCustomer[c.id];
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="cell-name">${escapeHtml(c.name)}</td>
+      <td>${last || 'Never'}</td>
+      <td class="cell-arrow">›</td>
+    `;
+    tr.addEventListener('click', () => {
+      document.querySelector('.nav-item[data-view="customers"]').click();
+      setTimeout(() => openCustomerDrawer(c), 50);
+    });
+    rowsEl.appendChild(tr);
+  }
+}
+
+document.getElementById('service-window-select').addEventListener('change', renderDueForServiceReminders);
+
 // ===================== Init =====================
 
 (async function init() {
   await loadCustomers();
+  await loadLeads();
   await loadJobs();
   await loadQuotes();
   await loadInvoices();
@@ -3079,6 +3368,7 @@ document.getElementById('btn-load-route').addEventListener('click', () => {
   await loadTemplates();
   await loadSettings();
   await loadReportYears();
+  await loadReminders();
 
   if (window.api.app && window.api.app.getPhoneAccessUrl) {
     const url = await window.api.app.getPhoneAccessUrl();

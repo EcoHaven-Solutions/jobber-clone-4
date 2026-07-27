@@ -40,32 +40,38 @@
         <button class="nav-item is-active" data-view="schedule">
           <span class="nav-tag">01</span> Schedule
         </button>
+        <button class="nav-item" data-view="leads">
+          <span class="nav-tag">02</span> Leads
+        </button>
         <button class="nav-item" data-view="customers">
-          <span class="nav-tag">02</span> Customers
+          <span class="nav-tag">03</span> Customers
         </button>
         <button class="nav-item" data-view="jobs">
-          <span class="nav-tag">03</span> Jobs
+          <span class="nav-tag">04</span> Jobs
         </button>
         <button class="nav-item" data-view="quotes">
-          <span class="nav-tag">04</span> Estimates
+          <span class="nav-tag">05</span> Estimates
         </button>
         <button class="nav-item" data-view="invoices">
-          <span class="nav-tag">05</span> Invoices
+          <span class="nav-tag">06</span> Invoices
         </button>
         <button class="nav-item" data-view="expenses">
-          <span class="nav-tag">06</span> Expenses
+          <span class="nav-tag">07</span> Expenses
         </button>
         <button class="nav-item" data-view="mileage">
-          <span class="nav-tag">07</span> Mileage
+          <span class="nav-tag">08</span> Mileage
         </button>
         <button class="nav-item" data-view="employees">
-          <span class="nav-tag">08</span> Employees
+          <span class="nav-tag">09</span> Employees
+        </button>
+        <button class="nav-item" data-view="reminders">
+          <span class="nav-tag">10</span> Reminders
         </button>
         <button class="nav-item" data-view="reports">
-          <span class="nav-tag">09</span> Reports
+          <span class="nav-tag">11</span> Reports
         </button>
         <button class="nav-item" data-view="settings">
-          <span class="nav-tag">10</span> Settings
+          <span class="nav-tag">12</span> Settings
         </button>
       </nav>
       <div class="sidebar-footer">
@@ -119,6 +125,48 @@
         <div id="unscheduled-jobs-wrap" hidden style="margin-top:28px;">
           <div class="drawer-section-label" style="border-top:none;padding-top:0;">Needs a date</div>
           <div id="unscheduled-jobs-list" class="unscheduled-jobs-list"></div>
+        </div>
+      </section>
+
+      <!-- ===== Leads view ===== -->
+      <section class="view" id="view-leads" hidden>
+        <header class="content-header">
+          <div>
+            <h1>Leads</h1>
+            <p class="subtitle" id="lead-count">0 on file</p>
+          </div>
+          <button class="btn btn-primary" id="btn-new-lead">+ New lead</button>
+        </header>
+
+        <div class="toolbar">
+          <select id="lead-status-filter">
+            <option value="">All statuses</option>
+            <option value="new">New</option>
+            <option value="contacted">Contacted</option>
+            <option value="converted">Converted</option>
+            <option value="lost">Lost</option>
+          </select>
+          <button class="btn btn-danger" id="btn-delete-selected-leads" hidden>Delete selected</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="ticket-table" id="lead-table">
+            <thead>
+              <tr>
+                <th style="width:32px;"><input type="checkbox" id="lead-select-all" style="width:auto;" /></th>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="lead-rows"></tbody>
+          </table>
+          <div class="empty-state" id="lead-empty-state" hidden>
+            <p>No leads yet.</p>
+            <p class="empty-sub">Log an inquiry here before it becomes a full customer, so nothing falls through the cracks.</p>
+          </div>
         </div>
       </section>
 
@@ -357,6 +405,69 @@
           <div class="empty-state" id="mileage-empty-state" hidden>
             <p>No trips logged yet.</p>
             <p class="empty-sub">Log a trip any time you drive for business — even a quick supply run.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Reminders view ===== -->
+      <section class="view" id="view-reminders" hidden>
+        <header class="content-header">
+          <div>
+            <h1>Reminders</h1>
+            <p class="subtitle">Backflow tests due &amp; customers overdue for service</p>
+          </div>
+        </header>
+
+        <div class="content-header">
+          <div>
+            <h1 style="font-size:18px;">Backflow tests due soon</h1>
+            <p class="subtitle">Due within 30 days, or already overdue</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="ticket-table" id="backflow-table">
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th>Due date</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="backflow-rows"></tbody>
+          </table>
+          <div class="empty-state" id="backflow-empty-state" hidden>
+            <p>Nothing due soon.</p>
+            <p class="empty-sub">Add a backflow test due date on a customer's record to track it here.</p>
+          </div>
+        </div>
+
+        <div class="content-header" style="margin-top:28px;">
+          <div>
+            <h1 style="font-size:18px;">Due for service</h1>
+            <p class="subtitle">Customers with no job in the last <span id="service-window-label">6 months</span></p>
+          </div>
+        </div>
+        <div class="toolbar">
+          <select id="service-window-select">
+            <option value="3">3 months</option>
+            <option value="6" selected>6 months</option>
+            <option value="12">12 months</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table class="ticket-table" id="due-service-table">
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th>Last job</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="due-service-rows"></tbody>
+          </table>
+          <div class="empty-state" id="due-service-empty-state" hidden>
+            <p>No one's overdue right now.</p>
           </div>
         </div>
       </section>
@@ -1146,6 +1257,25 @@
       </div>
       <div id="job-photo-gallery" class="photo-gallery"></div>
 
+      <div id="job-profitability-wrap" hidden>
+        <div class="drawer-section-label">Profitability (before labor cost)</div>
+        <div class="report-summary" style="margin:0;">
+          <div class="report-card">
+            <div class="report-card-label">Invoiced</div>
+            <div class="report-card-value" id="job-profit-invoiced">$0.00</div>
+          </div>
+          <div class="report-card">
+            <div class="report-card-label">Materials + mileage</div>
+            <div class="report-card-value" id="job-profit-costs">$0.00</div>
+          </div>
+          <div class="report-card">
+            <div class="report-card-label">Margin</div>
+            <div class="report-card-value" id="job-profit-margin">$0.00</div>
+          </div>
+        </div>
+        <p class="empty-sub">Doesn't include labor cost/hours, since we don't track hourly pay rates.</p>
+      </div>
+
       <div class="drawer-actions">
         <button type="button" class="btn btn-danger" id="btn-delete-job" hidden>Delete</button>
         <div class="drawer-actions-right">
@@ -1379,6 +1509,52 @@
     </form>
   </div>
 
+  <!-- Slide-over form for creating / editing a lead -->
+  <div class="overlay" id="lead-overlay" hidden></div>
+  <div class="drawer" id="lead-drawer" hidden>
+    <div class="drawer-header">
+      <span class="drawer-tag" id="lead-drawer-id-tag">NEW</span>
+      <h2 id="lead-drawer-title">New lead</h2>
+      <button class="icon-btn" id="btn-close-lead-drawer" aria-label="Close">&times;</button>
+    </div>
+    <form id="lead-form" class="drawer-body">
+      <label>Name *
+        <input type="text" name="name" required />
+      </label>
+      <div class="field-row">
+        <label>Phone
+          <input type="tel" name="phone" />
+        </label>
+        <label>Email
+          <input type="email" name="email" />
+        </label>
+      </div>
+      <label>How'd they find you?
+        <input type="text" name="source" placeholder="e.g. Google, referral from Jane, Facebook ad" />
+      </label>
+      <label>Status
+        <select name="status">
+          <option value="new">New</option>
+          <option value="contacted">Contacted</option>
+          <option value="converted">Converted</option>
+          <option value="lost">Lost</option>
+        </select>
+      </label>
+      <label>Notes
+        <textarea name="notes" rows="3"></textarea>
+      </label>
+
+      <div class="drawer-actions">
+        <button type="button" class="btn btn-danger" id="btn-delete-lead" hidden>Delete</button>
+        <div class="drawer-actions-right">
+          <button type="button" class="btn btn-ghost" id="btn-convert-lead" hidden>Convert to customer</button>
+          <button type="button" class="btn btn-ghost" id="btn-cancel-lead-drawer">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save lead</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
   <!-- Slide-over form for creating / editing an employee -->
   <div class="overlay" id="employee-overlay" hidden></div>
   <div class="drawer" id="employee-drawer" hidden>
@@ -1490,6 +1666,12 @@
           <option>Other</option>
         </select>
       </label>
+      <label>Related job (optional)
+        <select name="job_id" id="expense-job-select">
+          <option value="">— None —</option>
+        </select>
+      </label>
+      <p class="empty-sub" style="margin-top:-8px;">Link this to a job to see it factored into that job's profitability.</p>
       <label>Notes
         <textarea name="notes" rows="2"></textarea>
       </label>
