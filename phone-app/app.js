@@ -825,6 +825,16 @@ jobCreateInvoiceBtn.addEventListener('click', async () => {
   openInvoiceDrawer(null, fullJob);
 });
 
+// Opens the phone's default texting app (Messages, or Google Voice if set
+// as default) with the number and message pre-filled, ready to send --
+// works far more reliably across devices than any Google Voice web link.
+function openTextCompose(phone, text) {
+  const digits = (phone || '').replace(/[^\d+]/g, '');
+  if (digits) {
+    window.open(`sms:${digits}?&body=${encodeURIComponent(text)}`, '_blank');
+  }
+}
+
 function buildJobCopyText() {
   const customerId = jobForm.elements.customer_id.value;
   const customer = customers.find((c) => c.id === Number(customerId));
@@ -858,11 +868,17 @@ function buildJobCopyText() {
 
 document.getElementById('btn-copy-job-text').addEventListener('click', async () => {
   const text = buildJobCopyText();
+  const customerId = jobForm.elements.customer_id.value;
+  const customer = customers.find((c) => c.id === Number(customerId));
   try {
     await navigator.clipboard.writeText(text);
-    alert('Copied! Paste it into Google Voice (or anywhere) to send.');
   } catch (err) {
-    prompt('Copy this text manually:', text);
+    // clipboard failed -- the text is still pre-filled in the texting app below
+  }
+  if (customer && customer.phone) {
+    openTextCompose(customer.phone, text);
+  } else {
+    prompt('No phone number on file. Copy this text manually:', text);
   }
 });
 
@@ -1463,11 +1479,17 @@ function buildQuoteCopyText() {
 
 document.getElementById('btn-copy-quote-text').addEventListener('click', async () => {
   const text = buildQuoteCopyText();
+  const customerId = quoteForm.elements.customer_id.value;
+  const customer = customers.find((c) => c.id === Number(customerId));
   try {
     await navigator.clipboard.writeText(text);
-    alert('Copied! Paste it into Google Voice (or anywhere) to send.');
   } catch (err) {
-    prompt('Copy this text manually:', text);
+    // clipboard failed -- the text is still pre-filled in the texting app below
+  }
+  if (customer && customer.phone) {
+    openTextCompose(customer.phone, text);
+  } else {
+    prompt('No phone number on file. Copy this text manually:', text);
   }
 });
 
@@ -1843,11 +1865,17 @@ function buildInvoiceCopyText() {
 
 document.getElementById('btn-copy-invoice-text').addEventListener('click', async () => {
   const text = buildInvoiceCopyText();
+  const customerId = invoiceForm.elements.customer_id.value;
+  const customer = customers.find((c) => c.id === Number(customerId));
   try {
     await navigator.clipboard.writeText(text);
-    alert('Copied! Paste it into Google Voice (or anywhere) to send.');
   } catch (err) {
-    prompt('Copy this text manually:', text);
+    // clipboard failed -- the text is still pre-filled in the texting app below
+  }
+  if (customer && customer.phone) {
+    openTextCompose(customer.phone, text);
+  } else {
+    prompt('No phone number on file. Copy this text manually:', text);
   }
 });
 
