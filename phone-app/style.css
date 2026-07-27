@@ -785,15 +785,37 @@ label.batch-customer-row.batch-customer-row {
 }
 
 label.batch-customer-row.batch-customer-row input[type="checkbox"] {
-  width: 16px !important;
-  height: 16px !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
   min-height: 0 !important;
   padding: 0 !important;
   margin: 0 !important;
   flex: none !important;
-  border-radius: 3px !important;
-  appearance: auto !important;
-  -webkit-appearance: auto !important;
+  border: 1.5px solid var(--line) !important;
+  border-radius: 4px !important;
+  background: #fff !important;
+  position: relative !important;
+  cursor: pointer !important;
+}
+
+label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked {
+  background: var(--olive) !important;
+  border-color: var(--olive) !important;
+}
+
+label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::after {
+  content: '' !important;
+  position: absolute !important;
+  left: 5px !important;
+  top: 1px !important;
+  width: 5px !important;
+  height: 9px !important;
+  border: solid #fff !important;
+  border-width: 0 2px 2px 0 !important;
+  transform: rotate(45deg) !important;
 }
 
 /* ---- Route map ---- */
