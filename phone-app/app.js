@@ -826,12 +826,19 @@ jobCreateInvoiceBtn.addEventListener('click', async () => {
 });
 
 // Opens the phone's default texting app (Messages, or Google Voice if set
-// as default) with the number and message pre-filled, ready to send --
-// works far more reliably across devices than any Google Voice web link.
+// as default) with the number and message pre-filled, ready to send.
+// On desktop, sms: links don't reliably do anything (Safari has no way to
+// hand them off), so we open Google Voice directly instead -- if it's
+// pinned to the Dock/installed as an app, macOS should route it there.
 function openTextCompose(phone, text) {
   const digits = (phone || '').replace(/[^\d+]/g, '');
-  if (digits) {
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  if (isMobile && digits) {
     window.open(`sms:${digits}?&body=${encodeURIComponent(text)}`, '_blank');
+  } else {
+    window.open('https://voice.google.com/u/0/messages', '_blank');
+    alert("Opened Google Voice. The message is copied -- just paste it (Cmd+V) into a new text.");
   }
 }
 
