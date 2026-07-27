@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Request a Quote — EcoHaven Solutions LLC</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Helvetica, Arial, sans-serif;
+      background: #F4F3EC;
+      color: #23261F;
+      display: flex;
+      justify-content: center;
+      padding: 40px 16px;
+    }
+    .card {
+      max-width: 440px;
+      width: 100%;
+      background: #fff;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    }
+    .header {
+      background: #4F5C36;
+      color: #fff;
+      padding: 28px 24px;
+      text-align: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 20px;
+    }
+    .header p {
+      margin: 6px 0 0;
+      font-size: 12px;
+      color: #D8E0CC;
+      letter-spacing: 0.04em;
+    }
+    .body {
+      padding: 28px 24px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      color: #5B6152;
+      margin-bottom: 4px;
+      margin-top: 14px;
+    }
+    label:first-of-type { margin-top: 0; }
+    input, textarea {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-sizing: border-box;
+      font-size: 15px;
+      font-family: inherit;
+    }
+    button {
+      width: 100%;
+      margin-top: 22px;
+      padding: 14px;
+      background: #4F5C36;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; }
+    #form-message { margin-top: 10px; font-size: 13px; }
+    .footer {
+      text-align: center;
+      padding: 16px;
+      font-size: 12px;
+      color: #5B6152;
+      background: #EFEEE7;
+    }
+    .footer a { color: #4F5C36; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1>EcoHaven Solutions LLC</h1>
+      <p>SPRINKLER INSTALLS &middot; REPAIRS &middot; UPGRADES</p>
+    </div>
+    <div class="body" id="form-wrap">
+      <form id="quote-form">
+        <label>Name *</label>
+        <input type="text" id="f-name" required />
+
+        <label>Phone</label>
+        <input type="tel" id="f-phone" />
+
+        <label>Email</label>
+        <input type="email" id="f-email" />
+
+        <label>What do you need?</label>
+        <textarea id="f-message" rows="3"></textarea>
+
+        <!-- Honeypot field: hidden from real visitors, catches simple bots -->
+        <input type="text" id="f-website" style="position:absolute; left:-9999px;" tabindex="-1" autocomplete="off" />
+
+        <button type="submit" id="submit-btn">Request a Quote</button>
+        <div id="form-message"></div>
+      </form>
+    </div>
+    <div class="footer">509-866-6388 &middot; <a href="https://ecohavenpro.com">ecohavenpro.com</a></div>
+  </div>
+
+  <script>
+    document.getElementById('quote-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var btn = document.getElementById('submit-btn');
+      var msg = document.getElementById('form-message');
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      msg.textContent = '';
+
+      try {
+        var res = await fetch('https://tudyqzbmlfkgcdfjdhej.supabase.co/functions/v1/public-lead-intake', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: document.getElementById('f-name').value,
+            phone: document.getElementById('f-phone').value,
+            email: document.getElementById('f-email').value,
+            message: document.getElementById('f-message').value,
+            website: document.getElementById('f-website').value,
+          }),
+        });
+        var data = await res.json();
+
+        if (data.ok) {
+          document.getElementById('form-wrap').innerHTML =
+            '<p style="text-align:center; color:#4F5C36; font-size:16px; padding:20px 0;">Thanks! We\'ll be in touch soon.</p>';
+        } else {
+          msg.style.color = '#A8452A';
+          msg.textContent = data.error || 'Something went wrong. Please call/text 509-866-6388 instead.';
+          btn.disabled = false;
+          btn.textContent = 'Request a Quote';
+        }
+      } catch (err) {
+        msg.style.color = '#A8452A';
+        msg.textContent = 'Something went wrong. Please call/text 509-866-6388 instead.';
+        btn.disabled = false;
+        btn.textContent = 'Request a Quote';
+      }
+    });
+  </script>
+</body>
+</html>
