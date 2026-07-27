@@ -138,6 +138,7 @@ function cleanQuoteOrInvoice(o) {
   // get silently overwritten to null just because a form didn't include it.
   if ('due_date' in o) cleaned.due_date = toNullableText(o.due_date);
   if ('job_id' in o) cleaned.job_id = toIntOrNull(o.job_id);
+  if ('next_invoice_date' in o) cleaned.next_invoice_date = toNullableText(o.next_invoice_date);
   return cleaned;
 }
 
@@ -257,6 +258,12 @@ window.api = {
     create: async (job) => mapJobRows([unwrap(await sb.from('jobs').insert(cleanJob(job)).select('*, customers(name, phone)').single())])[0],
     update: async (id, updates) => mapJobRows([unwrap(await sb.from('jobs').update(cleanJob(updates)).eq('id', id).select('*, customers(name, phone)').single())])[0],
     delete: async (id) => { await sb.from('jobs').delete().eq('id', id); return { id }; },
+    saveSignature: async (jobId, dataUrl) => {
+      const url = await uploadToStorage(dataUrl, `signatures/${jobId}`);
+      return mapJobRows([
+        unwrap(await sb.from('jobs').update({ signature_url: url, signed_at: new Date().toISOString() }).eq('id', jobId).select('*, customers(name, phone)').single()),
+      ])[0];
+    },
     bulkCreate: async (customerIds, template) => {
       const rows = customerIds.map((customer_id) => ({ ...template, customer_id }));
       return unwrap(await sb.from('jobs').insert(rows).select());

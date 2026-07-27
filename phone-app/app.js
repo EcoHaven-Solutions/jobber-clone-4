@@ -695,6 +695,7 @@ async function openJobDrawer(job = null) {
     renderJobEmployeeCheckboxes(assignedIds);
     document.getElementById('job-template-picker-wrap').hidden = true;
     renderJobProfitability(job.id);
+    renderJobSignaturePreview(job);
   } else {
     jobDrawerTitle.textContent = 'New job';
     jobDrawerIdTag.textContent = 'NEW';
@@ -705,6 +706,7 @@ async function openJobDrawer(job = null) {
     jobRequestReviewBtn.hidden = true;
     renderJobEmployeeCheckboxes([]);
     document.getElementById('job-profitability-wrap').hidden = true;
+    document.getElementById('job-signature-preview-wrap').hidden = true;
     populateJobTemplatePicker();
     document.getElementById('job-template-picker-wrap').hidden = false;
   }
@@ -1622,6 +1624,17 @@ function updateInvoiceTotal() {
   invoiceTotalDisplay.textContent = formatCurrency(subtotal + tax);
 }
 
+function updateRecurringInvoiceFieldsVisibility() {
+  const isRecurring = invoiceForm.elements.recurring_interval.value !== 'none';
+  document.getElementById('invoice-next-date-wrap').hidden = !isRecurring;
+  document.getElementById('invoice-recurring-hint').hidden = !isRecurring;
+  if (isRecurring && !invoiceForm.elements.next_invoice_date.value) {
+    invoiceForm.elements.next_invoice_date.value = dateStr(new Date());
+  }
+}
+
+document.getElementById('invoice-recurring-interval').addEventListener('change', updateRecurringInvoiceFieldsVisibility);
+
 function openInvoiceDrawer(invoice = null, fromJob = null) {
   editingInvoiceId = invoice ? invoice.id : null;
   invoiceForm.reset();
@@ -1651,6 +1664,9 @@ function openInvoiceDrawer(invoice = null, fromJob = null) {
     invoiceForm.elements.status.value = invoice.status || 'unpaid';
     invoiceForm.elements.tax_rate.value = invoice.tax_rate || 0;
     invoiceForm.elements.notes.value = invoice.notes || '';
+    invoiceForm.elements.recurring_interval.value = invoice.recurring_interval || 'none';
+    invoiceForm.elements.next_invoice_date.value = invoice.next_invoice_date || '';
+    updateRecurringInvoiceFieldsVisibility();
     (invoice.items && invoice.items.length ? invoice.items : [{}]).forEach(addInvoiceLineItemRow);
   } else {
     invoiceDrawerTitle.textContent = 'New invoice';
@@ -1661,6 +1677,7 @@ function openInvoiceDrawer(invoice = null, fromJob = null) {
     invoicePaymentLinkWrap.hidden = true;
     currentInvoiceNumber = null;
     invoiceForm.elements.tax_rate.value = defaultTaxRate;
+    updateRecurringInvoiceFieldsVisibility();
     if (fromJob) {
       invoiceForm.elements.customer_id.value = fromJob.customer_id;
       invoiceForm.elements.job_id.value = fromJob.id;
@@ -3352,6 +3369,110 @@ function renderDueForServiceReminders() {
 }
 
 document.getElementById('service-window-select').addEventListener('change', renderDueForServiceReminders);
+
+// ===================== Signature capture =====================
+
+let signatureJobId = null;
+let sigCanvas, sigCtx, sigDrawing = false;
+
+function renderJobSignaturePreview(job) {
+  const wrap = document.getElementById('job-signature-preview-wrap');
+  if (job.signature_url) {
+    document.getElementById('job-signature-preview').src = job.signature_url;
+    document.getElementById('job-signature-meta').textContent = job.signed_at
+      ? `Signed ${new Date(job.signed_at).toLocaleDateString()}`
+      : '';
+    wrap.hidden = false;
+  } else {
+    wrap.hidden = true;
+  }
+}
+
+function setupSignatureCanvas() {
+  sigCanvas = document.getElementById('signature-canvas');
+  const rect = sigCanvas.getBoundingClientRect();
+  sigCanvas.width = rect.width * 2;
+  sigCanvas.height = rect.height * 2;
+  sigCtx = sigCanvas.getContext('2d');
+  sigCtx.scale(2, 2);
+  sigCtx.lineWidth = 2;
+  sigCtx.lineCap = 'round';
+  sigCtx.strokeStyle = '#23261F';
+  sigCtx.fillStyle = '#fff';
+  sigCtx.fillRect(0, 0, rect.width, rect.height);
+
+  function pos(e) {
+    const r = sigCanvas.getBoundingClientRect();
+    const point = e.touches ? e.touches[0] : e;
+    return { x: point.clientX - r.left, y: point.clientY - r.top };
+  }
+  function start(e) {
+    e.preventDefault();
+    sigDrawing = true;
+    const p = pos(e);
+    sigCtx.beginPath();
+    sigCtx.moveTo(p.x, p.y);
+  }
+  function move(e) {
+    if (!sigDrawing) return;
+    e.preventDefault();
+    const p = pos(e);
+    sigCtx.lineTo(p.x, p.y);
+    sigCtx.stroke();
+  }
+  function end() {
+    sigDrawing = false;
+  }
+
+  sigCanvas.onmousedown = start;
+  sigCanvas.onmousemove = move;
+  sigCanvas.onmouseup = end;
+  sigCanvas.onmouseleave = end;
+  sigCanvas.ontouchstart = start;
+  sigCanvas.ontouchmove = move;
+  sigCanvas.ontouchend = end;
+}
+
+document.getElementById('btn-capture-signature').addEventListener('click', () => {
+  if (!editingJobId) {
+    alert('Save the job first, then capture a signature.');
+    return;
+  }
+  signatureJobId = editingJobId;
+  document.getElementById('signature-overlay').hidden = false;
+  document.getElementById('signature-drawer').hidden = false;
+  setTimeout(setupSignatureCanvas, 50); // let the drawer finish rendering first
+});
+
+function closeSignatureDrawer() {
+  document.getElementById('signature-overlay').hidden = true;
+  document.getElementById('signature-drawer').hidden = true;
+}
+
+document.getElementById('btn-close-signature-drawer').addEventListener('click', closeSignatureDrawer);
+document.getElementById('btn-cancel-signature').addEventListener('click', closeSignatureDrawer);
+document.getElementById('signature-overlay').addEventListener('click', closeSignatureDrawer);
+
+document.getElementById('btn-clear-signature').addEventListener('click', () => {
+  const rect = sigCanvas.getBoundingClientRect();
+  sigCtx.fillStyle = '#fff';
+  sigCtx.fillRect(0, 0, rect.width, rect.height);
+});
+
+document.getElementById('btn-save-signature').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-save-signature');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  const dataUrl = sigCanvas.toDataURL('image/png');
+  const updatedJob = await window.api.jobs.saveSignature(signatureJobId, dataUrl);
+
+  btn.disabled = false;
+  btn.textContent = 'Save signature';
+  closeSignatureDrawer();
+  renderJobSignaturePreview(updatedJob);
+  await loadJobs();
+});
 
 // ===================== Init =====================
 

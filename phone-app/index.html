@@ -1257,6 +1257,13 @@
       </div>
       <div id="job-photo-gallery" class="photo-gallery"></div>
 
+      <div class="drawer-section-label">Customer signature</div>
+      <div id="job-signature-preview-wrap" hidden>
+        <img id="job-signature-preview" style="max-width:100%; border:1px solid var(--line); border-radius:8px; background:#fff;" />
+        <p class="empty-sub" id="job-signature-meta"></p>
+      </div>
+      <button type="button" class="btn btn-ghost btn-small" id="btn-capture-signature">Capture signature</button>
+
       <div id="job-profitability-wrap" hidden>
         <div class="drawer-section-label">Profitability (before labor cost)</div>
         <div class="report-summary" style="margin:0;">
@@ -1386,6 +1393,20 @@
       <label>Tax rate (%)
         <input type="number" name="tax_rate" id="invoice-tax-rate" min="0" step="0.01" value="0" />
       </label>
+      <label>Repeat this invoice
+        <select name="recurring_interval" id="invoice-recurring-interval">
+          <option value="none">Does not repeat</option>
+          <option value="monthly">Monthly</option>
+          <option value="quarterly">Quarterly</option>
+          <option value="yearly">Yearly</option>
+        </select>
+      </label>
+      <label id="invoice-next-date-wrap" hidden>Next invoice generates on
+        <input type="date" name="next_invoice_date" id="invoice-next-date" />
+      </label>
+      <p class="empty-sub" id="invoice-recurring-hint" hidden style="margin-top:-8px;">
+        A fresh copy of this invoice (same items) will be created automatically on that date, and going forward on the same schedule.
+      </p>
 
       <div class="line-items">
         <div class="line-items-header">
@@ -1705,6 +1726,26 @@
       alert('UNHANDLED PROMISE ERROR: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
     });
   </script>
+  <!-- Signature capture -->
+  <div class="overlay" id="signature-overlay" hidden></div>
+  <div class="drawer" id="signature-drawer" hidden style="width:min(500px, 96vw);">
+    <div class="drawer-header">
+      <h2>Customer signature</h2>
+      <button class="icon-btn" id="btn-close-signature-drawer" aria-label="Close">&times;</button>
+    </div>
+    <div class="drawer-body">
+      <p class="empty-sub" style="margin-top:0;">Have the customer sign below with their finger or a stylus.</p>
+      <canvas id="signature-canvas" style="width:100%; height:220px; border:1px solid var(--line); border-radius:8px; background:#fff; touch-action:none;"></canvas>
+      <div class="drawer-actions" style="border-top:none;">
+        <button type="button" class="btn btn-ghost" id="btn-clear-signature">Clear</button>
+        <div class="drawer-actions-right">
+          <button type="button" class="btn btn-ghost" id="btn-cancel-signature">Cancel</button>
+          <button type="button" class="btn btn-primary" id="btn-save-signature">Save signature</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Quick Add picker: shared by Estimates and Invoices -->
   <div class="overlay" id="quick-add-overlay" hidden></div>
   <div class="drawer" id="quick-add-drawer" hidden style="width:380px;">
