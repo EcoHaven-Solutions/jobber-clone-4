@@ -693,6 +693,7 @@ async function openJobDrawer(job = null) {
     renderJobPhotoGallery(job.id);
     const assignedIds = await window.api.jobEmployees.listForJob(job.id);
     renderJobEmployeeCheckboxes(assignedIds);
+    document.getElementById('job-template-picker-wrap').hidden = true;
   } else {
     jobDrawerTitle.textContent = 'New job';
     jobDrawerIdTag.textContent = 'NEW';
@@ -702,6 +703,8 @@ async function openJobDrawer(job = null) {
     jobSendReminderBtn.hidden = true;
     jobRequestReviewBtn.hidden = true;
     renderJobEmployeeCheckboxes([]);
+    populateJobTemplatePicker();
+    document.getElementById('job-template-picker-wrap').hidden = false;
   }
 
   jobOverlay.hidden = false;
@@ -2436,6 +2439,159 @@ mapboxSettingsForm.addEventListener('submit', async (e) => {
   alert('Mapbox settings saved.');
 });
 
+// ===================== Saved Items / Job Templates =====================
+
+let lineItemTemplates = [];
+let jobTemplates = [];
+
+async function loadTemplates() {
+  lineItemTemplates = await window.api.lineItemTemplates.list();
+  jobTemplates = await window.api.jobTemplates.list();
+  renderLineItemTemplateList();
+  renderJobTemplateList();
+}
+
+function renderLineItemTemplateList() {
+  const wrap = document.getElementById('line-item-template-list');
+  if (lineItemTemplates.length === 0) {
+    wrap.innerHTML = '<p class="empty-sub" style="margin:0;">No saved items yet.</p>';
+    return;
+  }
+  wrap.innerHTML = lineItemTemplates
+    .map(
+      (t) => `
+      <div class="unscheduled-job-row" style="cursor:default; margin-bottom:6px;">
+        <div>
+          <div class="ujr-title">${escapeHtml(t.description)}</div>
+          <div class="ujr-customer">${formatCurrency(t.unit_price)}</div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-small" data-delete-lit="${t.id}">Delete</button>
+      </div>`
+    )
+    .join('');
+  wrap.querySelectorAll('[data-delete-lit]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await window.api.lineItemTemplates.delete(Number(btn.dataset.deleteLit));
+      await loadTemplates();
+    });
+  });
+}
+
+function renderJobTemplateList() {
+  const wrap = document.getElementById('job-template-list');
+  if (jobTemplates.length === 0) {
+    wrap.innerHTML = '<p class="empty-sub" style="margin:0;">No saved job types yet.</p>';
+    return;
+  }
+  wrap.innerHTML = jobTemplates
+    .map(
+      (t) => `
+      <div class="unscheduled-job-row" style="cursor:default; margin-bottom:6px;">
+        <div>
+          <div class="ujr-title">${escapeHtml(t.title)}</div>
+          <div class="ujr-customer">${escapeHtml(t.description || '')}</div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-small" data-delete-jt="${t.id}">Delete</button>
+      </div>`
+    )
+    .join('');
+  wrap.querySelectorAll('[data-delete-jt]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await window.api.jobTemplates.delete(Number(btn.dataset.deleteJt));
+      await loadTemplates();
+    });
+  });
+}
+
+document.getElementById('line-item-template-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const description = document.getElementById('lit-description').value.trim();
+  const unit_price = document.getElementById('lit-price').value;
+  if (!description) return;
+  await window.api.lineItemTemplates.create({ description, unit_price });
+  e.target.reset();
+  await loadTemplates();
+});
+
+document.getElementById('job-template-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const title = document.getElementById('jt-title').value.trim();
+  const description = document.getElementById('jt-description').value.trim();
+  if (!title) return;
+  await window.api.jobTemplates.create({ title, description });
+  e.target.reset();
+  await loadTemplates();
+});
+
+// ---- Quick Add picker (shared by Estimates and Invoices) ----
+let quickAddTarget = null; // 'quote' or 'invoice'
+
+function openQuickAddPicker(target) {
+  quickAddTarget = target;
+  const listEl = document.getElementById('quick-add-list');
+  const emptyEl = document.getElementById('quick-add-empty');
+
+  if (lineItemTemplates.length === 0) {
+    listEl.innerHTML = '';
+    emptyEl.hidden = false;
+  } else {
+    emptyEl.hidden = true;
+    listEl.innerHTML = lineItemTemplates
+      .map(
+        (t, i) => `
+        <div class="unscheduled-job-row" data-index="${i}">
+          <div>
+            <div class="ujr-title">${escapeHtml(t.description)}</div>
+            <div class="ujr-customer">${formatCurrency(t.unit_price)}</div>
+          </div>
+          <span>›</span>
+        </div>`
+      )
+      .join('');
+    listEl.querySelectorAll('[data-index]').forEach((row) => {
+      row.addEventListener('click', () => {
+        const t = lineItemTemplates[Number(row.dataset.index)];
+        const item = { description: t.description, quantity: 1, unit_price: t.unit_price };
+        if (quickAddTarget === 'quote') {
+          addLineItemRow(item);
+          updateQuoteTotal();
+        } else {
+          addInvoiceLineItemRow(item);
+          updateInvoiceTotal();
+        }
+        closeQuickAddPicker();
+      });
+    });
+  }
+
+  document.getElementById('quick-add-overlay').hidden = false;
+  document.getElementById('quick-add-drawer').hidden = false;
+}
+
+function closeQuickAddPicker() {
+  document.getElementById('quick-add-overlay').hidden = true;
+  document.getElementById('quick-add-drawer').hidden = true;
+}
+
+document.getElementById('btn-quick-add-quote-item').addEventListener('click', () => openQuickAddPicker('quote'));
+document.getElementById('btn-quick-add-invoice-item').addEventListener('click', () => openQuickAddPicker('invoice'));
+document.getElementById('btn-close-quick-add').addEventListener('click', closeQuickAddPicker);
+document.getElementById('quick-add-overlay').addEventListener('click', closeQuickAddPicker);
+
+// ---- Job template picker (New Job only) ----
+function populateJobTemplatePicker() {
+  const select = document.getElementById('job-template-picker');
+  select.innerHTML = '<option value="">— Choose to pre-fill —</option>' +
+    jobTemplates.map((t, i) => `<option value="${i}">${escapeHtml(t.title)}</option>`).join('');
+}
+
+document.getElementById('job-template-picker').addEventListener('change', (e) => {
+  if (e.target.value === '') return;
+  const t = jobTemplates[Number(e.target.value)];
+  jobForm.elements.title.value = t.title;
+  jobForm.elements.description.value = t.description || '';
+});
+
 document.getElementById('btn-download-backup').addEventListener('click', async () => {
   const btn = document.getElementById('btn-download-backup');
   btn.disabled = true;
@@ -2920,6 +3076,7 @@ document.getElementById('btn-load-route').addEventListener('click', () => {
   await loadMileage();
   await loadEmployees();
   await loadTimesheet();
+  await loadTemplates();
   await loadSettings();
   await loadReportYears();
 
