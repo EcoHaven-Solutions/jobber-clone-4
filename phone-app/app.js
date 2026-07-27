@@ -691,7 +691,7 @@ async function openJobDrawer(job = null) {
     jobDrawerTitle.textContent = 'Edit job';
     jobDrawerIdTag.textContent = `J-${String(job.id).padStart(4, '0')}`;
     jobDeleteBtn.hidden = false;
-    jobCreateInvoiceBtn.hidden = job.status !== 'completed';
+    jobCreateInvoiceBtn.hidden = false;
     jobNextOccurrenceBtn.hidden = !job.scheduled_date || job.repeat_interval === 'none';
     jobSendReminderBtn.hidden = false;
     jobRequestReviewBtn.hidden = job.status !== 'completed';
