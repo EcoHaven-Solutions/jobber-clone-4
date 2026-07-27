@@ -107,25 +107,13 @@ function renderCustomers() {
     tr.querySelector('.customer-select-checkbox').addEventListener('change', (e) => {
       if (e.target.checked) selectedCustomerIds.add(c.id);
       else selectedCustomerIds.delete(c.id);
-      updateDeleteSelectedButton();
+      updateDeleteSelectedButton('customer', selectedCustomerIds);
     });
     rowsEl.appendChild(tr);
   }
 }
 
 const selectedCustomerIds = new Set();
-
-function updateDeleteSelectedButton() {
-  const btn = document.getElementById('btn-delete-selected-customers');
-  if (selectedCustomerIds.size > 0) {
-    btn.hidden = false;
-    btn.textContent = `Delete selected (${selectedCustomerIds.size})`;
-  } else {
-    btn.hidden = true;
-  }
-  document.getElementById('customer-select-all').checked =
-    selectedCustomerIds.size > 0 && selectedCustomerIds.size === document.querySelectorAll('.customer-select-checkbox').length;
-}
 
 document.getElementById('customer-select-all').addEventListener('change', (e) => {
   document.querySelectorAll('.customer-select-checkbox').forEach((cb) => {
@@ -134,7 +122,7 @@ document.getElementById('customer-select-all').addEventListener('change', (e) =>
     if (e.target.checked) selectedCustomerIds.add(id);
     else selectedCustomerIds.delete(id);
   });
-  updateDeleteSelectedButton();
+  updateDeleteSelectedButton('customer', selectedCustomerIds);
 });
 
 document.getElementById('btn-delete-selected-customers').addEventListener('click', async () => {
