@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Request an Estimate — EcoHaven Solutions LLC</title>
   <style>
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: Helvetica, Arial, sans-serif;
@@ -14,55 +15,58 @@
       justify-content: center;
       padding: 40px 16px;
       min-height: 100vh;
-      box-sizing: border-box;
     }
     .card {
-      max-width: 440px;
+      max-width: 460px;
       width: 100%;
       background: #23261F;
-      border-radius: 14px;
+      border-radius: 16px;
       overflow: hidden;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
       border: 1px solid #33362E;
       align-self: flex-start;
     }
     .header {
-      background: #4F5C36;
+      background: linear-gradient(160deg, #3E7C98, #326479);
       color: #fff;
-      padding: 28px 24px;
+      padding: 32px 24px;
       text-align: center;
     }
     .header h1 {
       margin: 0;
-      font-size: 20px;
+      font-size: 21px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
     }
     .header p {
       margin: 6px 0 0;
-      font-size: 12px;
-      color: #D8E0CC;
-      letter-spacing: 0.04em;
+      font-size: 11px;
+      color: #D6E9F1;
+      letter-spacing: 0.08em;
+      font-weight: 600;
     }
     .body {
-      padding: 28px 24px;
+      padding: 28px 26px;
     }
     label {
       display: block;
       font-size: 13px;
+      font-weight: 600;
       color: #A9AC9E;
-      margin-bottom: 4px;
-      margin-top: 14px;
+      margin-bottom: 5px;
+      margin-top: 16px;
     }
     label:first-of-type { margin-top: 0; }
     input, textarea {
       width: 100%;
-      padding: 11px 12px;
+      padding: 11px 13px;
       border: 1px solid #40433A;
-      border-radius: 8px;
-      box-sizing: border-box;
+      border-radius: 9px;
       font-size: 15px;
       font-family: inherit;
       background: #1A1C18;
       color: #EAEAE4;
+      transition: border-color 0.15s ease;
     }
     input:focus, textarea:focus {
       outline: none;
@@ -70,53 +74,78 @@
     }
     button {
       width: 100%;
-      margin-top: 22px;
-      padding: 14px;
-      background: #4F9FD6;
-      color: #12181C;
+      margin-top: 24px;
+      padding: 15px;
+      background: linear-gradient(160deg, #4F9FD6, #3D82B3);
+      color: #fff;
       border: none;
-      border-radius: 8px;
+      border-radius: 9px;
       font-size: 16px;
       font-weight: 700;
       cursor: pointer;
+      box-shadow: 0 4px 14px rgba(79,159,214,0.35);
+      transition: transform 0.1s ease;
     }
-    button:disabled { opacity: 0.6; }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: 0.6; transform: none; }
     #form-message { margin-top: 10px; font-size: 13px; }
     .footer {
       text-align: center;
-      padding: 16px;
+      padding: 18px;
       font-size: 12px;
       color: #A9AC9E;
       background: #1E211B;
+      border-top: 1px solid #33362E;
     }
-    .footer a { color: #4F9FD6; }
+    .footer a { color: #4F9FD6; text-decoration: none; }
     #services-list {
-      max-height: 220px;
+      max-height: 280px;
       overflow-y: auto;
       border: 1px solid #40433A;
-      border-radius: 8px;
-      padding: 8px 10px;
+      border-radius: 10px;
+      padding: 6px 10px;
       margin-top: 6px;
+      background: #1E211B;
     }
-    .service-row { display: flex; align-items: center; gap: 10px; padding: 7px 2px; font-size: 14px; }
+    .service-item {
+      padding: 10px 2px;
+      border-bottom: 1px solid #2C2F27;
+    }
+    .service-item:last-child { border-bottom: none; }
+    .service-row { display: flex; align-items: center; gap: 10px; font-size: 14.5px; }
     .service-row-check { display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer; }
+    .service-row-check input[type="checkbox"] { width: 17px; height: 17px; margin: 0; flex: none; accent-color: #5FBF3E; cursor: pointer; }
     .service-qty {
-      width: 52px;
-      padding: 4px 6px;
+      width: 54px;
+      padding: 5px 6px;
       border: 1px solid #40433A;
-      border-radius: 5px;
+      border-radius: 6px;
       background: #1A1C18;
       color: #EAEAE4;
       font-size: 13px;
       text-align: center;
     }
-    .service-row-check input[type="checkbox"] { width: auto; margin: 0; flex: none; }
-    .service-price { margin-left: auto; color: #8FDB74; font-weight: 700; }
+    .service-price { margin-left: auto; color: #8FDB74; font-weight: 700; font-size: 13.5px; white-space: nowrap; }
+    .service-detail {
+      width: 100%;
+      margin-top: 8px;
+      padding: 7px 10px;
+      font-size: 13px;
+      border: 1px solid #33362E;
+      border-radius: 6px;
+      background: #23261F;
+      color: #EAEAE4;
+      display: none;
+    }
     #services-total {
-      margin-top: 10px;
-      font-size: 15px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #40433A;
+      font-size: 16px;
       font-weight: 700;
       text-align: right;
+      display: none;
+      color: #fff;
     }
   </style>
 </head>
@@ -139,10 +168,10 @@
 
         <label id="services-label" style="display:none;">Select what you need (optional — get an instant estimate)</label>
         <div id="services-list" style="display:none;"></div>
-        <div id="services-total" style="display:none;"></div>
+        <div id="services-total"></div>
 
         <label>Anything else to add?</label>
-        <textarea id="f-message" rows="3"></textarea>
+        <textarea id="f-message" rows="3" placeholder="Any other details about your project…"></textarea>
 
         <!-- Honeypot field: hidden from real visitors, catches simple bots -->
         <input type="text" id="f-website" style="position:absolute; left:-9999px;" tabindex="-1" autocomplete="off" />
@@ -156,8 +185,12 @@
 
   <script>
     var SUPABASE_FN_URL = 'https://tudyqzbmlfkgcdfjdhej.supabase.co/functions/v1/public-lead-intake';
-    var selectedServices = {}; // { serviceId: quantity }
+    var selectedServices = {}; // { serviceId: { quantity, detail } }
     var allServices = [];
+
+    function money(n) {
+      return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
 
     // Load the preset services list on page load (if any are set up in Settings).
     fetch(SUPABASE_FN_URL, { method: 'GET' })
@@ -169,12 +202,15 @@
         listEl.innerHTML = allServices
           .map(function (s) {
             var priceLabel = (s.unit_price_max && s.unit_price_max > s.unit_price)
-              ? '$' + Number(s.unit_price).toFixed(2) + '–$' + Number(s.unit_price_max).toFixed(2)
-              : '$' + Number(s.unit_price).toFixed(2);
-            return '<div class="service-row">' +
+              ? money(s.unit_price) + '–' + money(s.unit_price_max)
+              : money(s.unit_price);
+            return '<div class="service-item">' +
+              '<div class="service-row">' +
               '<label class="service-row-check"><input type="checkbox" class="service-checkbox" value="' + s.id + '" />' +
               s.description + '<span class="service-price">' + priceLabel + '</span></label>' +
               '<input type="number" class="service-qty" data-id="' + s.id + '" value="1" min="0.01" step="any" disabled />' +
+              '</div>' +
+              '<input type="text" class="service-detail" data-id="' + s.id + '" placeholder="Add details — e.g. which zone, how many heads, approx. sq ft…" />' +
               '</div>';
           })
           .join('');
@@ -185,11 +221,14 @@
           cb.addEventListener('change', function () {
             var id = Number(cb.value);
             var qtyInput = listEl.querySelector('.service-qty[data-id="' + id + '"]');
+            var detailInput = listEl.querySelector('.service-detail[data-id="' + id + '"]');
             if (cb.checked) {
               qtyInput.disabled = false;
-              selectedServices[id] = Number(qtyInput.value) || 1;
+              detailInput.style.display = 'block';
+              selectedServices[id] = { quantity: Number(qtyInput.value) || 1, detail: detailInput.value };
             } else {
               qtyInput.disabled = true;
+              detailInput.style.display = 'none';
               delete selectedServices[id];
             }
             updateTotal();
@@ -199,10 +238,17 @@
         listEl.querySelectorAll('.service-qty').forEach(function (input) {
           input.addEventListener('input', function () {
             var id = Number(input.dataset.id);
-            if (selectedServices[id] !== undefined) {
-              selectedServices[id] = Number(input.value) || 1;
+            if (selectedServices[id]) {
+              selectedServices[id].quantity = Number(input.value) || 1;
               updateTotal();
             }
+          });
+        });
+
+        listEl.querySelectorAll('.service-detail').forEach(function (input) {
+          input.addEventListener('input', function () {
+            var id = Number(input.dataset.id);
+            if (selectedServices[id]) selectedServices[id].detail = input.value;
           });
         });
       })
@@ -220,13 +266,13 @@
       ids.forEach(function (id) {
         var s = allServices.find(function (x) { return x.id === Number(id); });
         if (!s) return;
-        var qty = selectedServices[id];
+        var qty = selectedServices[id].quantity;
         totalMin += Number(s.unit_price) * qty;
         totalMax += Number(s.unit_price_max || s.unit_price) * qty;
       });
       totalEl.textContent = totalMax > totalMin
-        ? 'Estimated total: $' + totalMin.toFixed(2) + '–$' + totalMax.toFixed(2)
-        : 'Estimated total: $' + totalMin.toFixed(2);
+        ? 'Estimated total: ' + money(totalMin) + '–' + money(totalMax)
+        : 'Estimated total: ' + money(totalMin);
       totalEl.style.display = 'block';
     }
 
@@ -240,7 +286,7 @@
 
       try {
         var selectedList = Object.keys(selectedServices).map(function (id) {
-          return { id: Number(id), quantity: selectedServices[id] };
+          return { id: Number(id), quantity: selectedServices[id].quantity, detail: selectedServices[id].detail };
         });
         var res = await fetch(SUPABASE_FN_URL, {
           method: 'POST',
