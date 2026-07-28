@@ -1226,7 +1226,7 @@ async function loadQuotes() {
 }
 
 function formatCurrency(amount) {
-  return `$${Number(amount || 0).toFixed(2)}`;
+  return `$${Number(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function renderQuotes() {
@@ -2880,7 +2880,7 @@ function renderLineItemTemplateList() {
       <div class="unscheduled-job-row" style="cursor:default; margin-bottom:6px;">
         <div>
           <div class="ujr-title">${escapeHtml(t.description)}</div>
-          <div class="ujr-customer">${formatPriceOrRange(t)}</div>
+          <div class="ujr-customer">${formatPriceOrRange(t)}${t.notes ? ' — ' + escapeHtml(t.notes) : ''}</div>
         </div>
         <button type="button" class="btn btn-ghost btn-small" data-delete-lit="${t.id}">Delete</button>
       </div>`
@@ -2925,8 +2925,9 @@ document.getElementById('line-item-template-form').addEventListener('submit', as
   const description = document.getElementById('lit-description').value.trim();
   const unit_price = document.getElementById('lit-price').value;
   const unit_price_max = document.getElementById('lit-price-max').value;
+  const notes = document.getElementById('lit-notes').value.trim();
   if (!description) return;
-  await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max });
+  await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max, notes });
   e.target.reset();
   await loadTemplates();
 });
