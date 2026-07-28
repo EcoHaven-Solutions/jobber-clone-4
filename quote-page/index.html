@@ -90,6 +90,34 @@
       background: #1E211B;
     }
     .footer a { color: #4F9FD6; }
+    #services-list {
+      max-height: 220px;
+      overflow-y: auto;
+      border: 1px solid #40433A;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-top: 6px;
+    }
+    .service-row { display: flex; align-items: center; gap: 10px; padding: 7px 2px; font-size: 14px; }
+    .service-row-check { display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer; }
+    .service-qty {
+      width: 52px;
+      padding: 4px 6px;
+      border: 1px solid #40433A;
+      border-radius: 5px;
+      background: #1A1C18;
+      color: #EAEAE4;
+      font-size: 13px;
+      text-align: center;
+    }
+    .service-row-check input[type="checkbox"] { width: auto; margin: 0; flex: none; }
+    .service-price { margin-left: auto; color: #8FDB74; font-weight: 700; }
+    #services-total {
+      margin-top: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      text-align: right;
+    }
   </style>
 </head>
 <body>
@@ -109,7 +137,11 @@
         <label>Email</label>
         <input type="email" id="f-email" />
 
-        <label>What do you need?</label>
+        <label id="services-label" style="display:none;">Select what you need (optional — get an instant estimate)</label>
+        <div id="services-list" style="display:none;"></div>
+        <div id="services-total" style="display:none;"></div>
+
+        <label>Anything else to add?</label>
         <textarea id="f-message" rows="3"></textarea>
 
         <!-- Honeypot field: hidden from real visitors, catches simple bots -->
@@ -123,6 +155,81 @@
   </div>
 
   <script>
+    var SUPABASE_FN_URL = 'https://tudyqzbmlfkgcdfjdhej.supabase.co/functions/v1/public-lead-intake';
+    var selectedServices = {}; // { serviceId: quantity }
+    var allServices = [];
+
+    // Load the preset services list on page load (if any are set up in Settings).
+    fetch(SUPABASE_FN_URL, { method: 'GET' })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (!data.ok || !data.services || data.services.length === 0) return;
+        allServices = data.services;
+        var listEl = document.getElementById('services-list');
+        listEl.innerHTML = allServices
+          .map(function (s) {
+            var priceLabel = (s.unit_price_max && s.unit_price_max > s.unit_price)
+              ? '$' + Number(s.unit_price).toFixed(2) + '–$' + Number(s.unit_price_max).toFixed(2)
+              : '$' + Number(s.unit_price).toFixed(2);
+            return '<div class="service-row">' +
+              '<label class="service-row-check"><input type="checkbox" class="service-checkbox" value="' + s.id + '" />' +
+              s.description + '<span class="service-price">' + priceLabel + '</span></label>' +
+              '<input type="number" class="service-qty" data-id="' + s.id + '" value="1" min="0.01" step="any" disabled />' +
+              '</div>';
+          })
+          .join('');
+        document.getElementById('services-label').style.display = 'block';
+        listEl.style.display = 'block';
+
+        listEl.querySelectorAll('.service-checkbox').forEach(function (cb) {
+          cb.addEventListener('change', function () {
+            var id = Number(cb.value);
+            var qtyInput = listEl.querySelector('.service-qty[data-id="' + id + '"]');
+            if (cb.checked) {
+              qtyInput.disabled = false;
+              selectedServices[id] = Number(qtyInput.value) || 1;
+            } else {
+              qtyInput.disabled = true;
+              delete selectedServices[id];
+            }
+            updateTotal();
+          });
+        });
+
+        listEl.querySelectorAll('.service-qty').forEach(function (input) {
+          input.addEventListener('input', function () {
+            var id = Number(input.dataset.id);
+            if (selectedServices[id] !== undefined) {
+              selectedServices[id] = Number(input.value) || 1;
+              updateTotal();
+            }
+          });
+        });
+      })
+      .catch(function () { /* fine to fail quietly -- form still works without presets */ });
+
+    function updateTotal() {
+      var totalEl = document.getElementById('services-total');
+      var ids = Object.keys(selectedServices);
+      if (ids.length === 0) {
+        totalEl.style.display = 'none';
+        return;
+      }
+      var totalMin = 0;
+      var totalMax = 0;
+      ids.forEach(function (id) {
+        var s = allServices.find(function (x) { return x.id === Number(id); });
+        if (!s) return;
+        var qty = selectedServices[id];
+        totalMin += Number(s.unit_price) * qty;
+        totalMax += Number(s.unit_price_max || s.unit_price) * qty;
+      });
+      totalEl.textContent = totalMax > totalMin
+        ? 'Estimated total: $' + totalMin.toFixed(2) + '–$' + totalMax.toFixed(2)
+        : 'Estimated total: $' + totalMin.toFixed(2);
+      totalEl.style.display = 'block';
+    }
+
     document.getElementById('quote-form').addEventListener('submit', async function (e) {
       e.preventDefault();
       var btn = document.getElementById('submit-btn');
@@ -132,7 +239,10 @@
       msg.textContent = '';
 
       try {
-        var res = await fetch('https://tudyqzbmlfkgcdfjdhej.supabase.co/functions/v1/public-lead-intake', {
+        var selectedList = Object.keys(selectedServices).map(function (id) {
+          return { id: Number(id), quantity: selectedServices[id] };
+        });
+        var res = await fetch(SUPABASE_FN_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -141,13 +251,17 @@
             email: document.getElementById('f-email').value,
             message: document.getElementById('f-message').value,
             website: document.getElementById('f-website').value,
+            selectedServices: selectedList,
           }),
         });
         var data = await res.json();
 
         if (data.ok) {
+          var confirmMsg = selectedList.length
+            ? "Thanks! Check your email for your preliminary estimate — we'll follow up soon."
+            : "Thanks! We'll be in touch soon.";
           document.getElementById('form-wrap').innerHTML =
-            '<p style="text-align:center; color:#4F9FD6; font-size:16px; padding:20px 0;">Thanks! We\'ll be in touch soon.</p>';
+            '<p style="text-align:center; color:#4F9FD6; font-size:16px; padding:20px 0;">' + confirmMsg + '</p>';
         } else {
           msg.style.color = '#E08A6B';
           msg.textContent = data.error || 'Something went wrong. Please call/text 509-866-6388 instead.';
