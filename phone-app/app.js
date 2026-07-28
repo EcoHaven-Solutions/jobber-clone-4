@@ -708,7 +708,6 @@ async function openJobDrawer(job = null) {
     renderJobPhotoGallery(job.id);
     const assignedIds = await window.api.jobEmployees.listForJob(job.id);
     renderJobEmployeeCheckboxes(assignedIds);
-    document.getElementById('job-template-picker-wrap').hidden = true;
     renderJobProfitability(job.id);
     renderJobSignaturePreview(job);
   } else {
@@ -724,8 +723,6 @@ async function openJobDrawer(job = null) {
     renderJobEmployeeCheckboxes([]);
     document.getElementById('job-profitability-wrap').hidden = true;
     document.getElementById('job-signature-preview-wrap').hidden = true;
-    populateJobTemplatePicker();
-    document.getElementById('job-template-picker-wrap').hidden = false;
   }
 
   jobOverlay.hidden = false;
@@ -2849,16 +2846,13 @@ mapboxSettingsForm.addEventListener('submit', async (e) => {
   alert('Mapbox settings saved.');
 });
 
-// ===================== Saved Items / Job Templates =====================
+// ===================== Saved Line Items =====================
 
 let lineItemTemplates = [];
-let jobTemplates = [];
 
 async function loadTemplates() {
   lineItemTemplates = await window.api.lineItemTemplates.list();
-  jobTemplates = await window.api.jobTemplates.list();
   renderLineItemTemplateList();
-  renderJobTemplateList();
 }
 
 function formatPriceOrRange(t) {
@@ -2894,32 +2888,6 @@ function renderLineItemTemplateList() {
   });
 }
 
-function renderJobTemplateList() {
-  const wrap = document.getElementById('job-template-list');
-  if (jobTemplates.length === 0) {
-    wrap.innerHTML = '<p class="empty-sub" style="margin:0;">No saved job types yet.</p>';
-    return;
-  }
-  wrap.innerHTML = jobTemplates
-    .map(
-      (t) => `
-      <div class="unscheduled-job-row" style="cursor:default; margin-bottom:6px;">
-        <div>
-          <div class="ujr-title">${escapeHtml(t.title)}</div>
-          <div class="ujr-customer">${escapeHtml(t.description || '')}</div>
-        </div>
-        <button type="button" class="btn btn-ghost btn-small" data-delete-jt="${t.id}">Delete</button>
-      </div>`
-    )
-    .join('');
-  wrap.querySelectorAll('[data-delete-jt]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      await window.api.jobTemplates.delete(Number(btn.dataset.deleteJt));
-      await loadTemplates();
-    });
-  });
-}
-
 document.getElementById('line-item-template-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const description = document.getElementById('lit-description').value.trim();
@@ -2928,16 +2896,6 @@ document.getElementById('line-item-template-form').addEventListener('submit', as
   const notes = document.getElementById('lit-notes').value.trim();
   if (!description) return;
   await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max, notes });
-  e.target.reset();
-  await loadTemplates();
-});
-
-document.getElementById('job-template-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const title = document.getElementById('jt-title').value.trim();
-  const description = document.getElementById('jt-description').value.trim();
-  if (!title) return;
-  await window.api.jobTemplates.create({ title, description });
   e.target.reset();
   await loadTemplates();
 });
@@ -3000,20 +2958,6 @@ document.getElementById('btn-quick-add-invoice-item').addEventListener('click', 
 document.getElementById('btn-quick-add-job-item').addEventListener('click', () => openQuickAddPicker('job'));
 document.getElementById('btn-close-quick-add').addEventListener('click', closeQuickAddPicker);
 document.getElementById('quick-add-overlay').addEventListener('click', closeQuickAddPicker);
-
-// ---- Job template picker (New Job only) ----
-function populateJobTemplatePicker() {
-  const select = document.getElementById('job-template-picker');
-  select.innerHTML = '<option value="">— Choose to pre-fill —</option>' +
-    jobTemplates.map((t, i) => `<option value="${i}">${escapeHtml(t.title)}</option>`).join('');
-}
-
-document.getElementById('job-template-picker').addEventListener('change', (e) => {
-  if (e.target.value === '') return;
-  const t = jobTemplates[Number(e.target.value)];
-  jobForm.elements.title.value = t.title;
-  jobForm.elements.description.value = t.description || '';
-});
 
 document.getElementById('btn-download-backup').addEventListener('click', async () => {
   const btn = document.getElementById('btn-download-backup');

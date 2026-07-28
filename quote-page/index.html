@@ -126,17 +126,6 @@
       text-align: center;
     }
     .service-price { margin-left: auto; color: #8FDB74; font-weight: 700; font-size: 13.5px; white-space: nowrap; }
-    .service-detail {
-      width: 100%;
-      margin-top: 8px;
-      padding: 7px 10px;
-      font-size: 13px;
-      border: 1px solid #33362E;
-      border-radius: 6px;
-      background: #23261F;
-      color: #EAEAE4;
-      display: none;
-    }
     #services-total {
       margin-top: 12px;
       padding-top: 12px;
@@ -185,7 +174,7 @@
 
   <script>
     var SUPABASE_FN_URL = 'https://tudyqzbmlfkgcdfjdhej.supabase.co/functions/v1/public-lead-intake';
-    var selectedServices = {}; // { serviceId: { quantity, detail } }
+    var selectedServices = {}; // { serviceId: quantity }
     var allServices = [];
 
     function money(n) {
@@ -210,7 +199,6 @@
               s.description + '<span class="service-price">' + priceLabel + '</span></label>' +
               '<input type="number" class="service-qty" data-id="' + s.id + '" value="1" min="0.01" step="any" disabled />' +
               '</div>' +
-              '<input type="text" class="service-detail" data-id="' + s.id + '" placeholder="Add details — e.g. which zone, how many heads, approx. sq ft…" />' +
               '</div>';
           })
           .join('');
@@ -221,14 +209,11 @@
           cb.addEventListener('change', function () {
             var id = Number(cb.value);
             var qtyInput = listEl.querySelector('.service-qty[data-id="' + id + '"]');
-            var detailInput = listEl.querySelector('.service-detail[data-id="' + id + '"]');
             if (cb.checked) {
               qtyInput.disabled = false;
-              detailInput.style.display = 'block';
-              selectedServices[id] = { quantity: Number(qtyInput.value) || 1, detail: detailInput.value };
+              selectedServices[id] = Number(qtyInput.value) || 1;
             } else {
               qtyInput.disabled = true;
-              detailInput.style.display = 'none';
               delete selectedServices[id];
             }
             updateTotal();
@@ -238,17 +223,10 @@
         listEl.querySelectorAll('.service-qty').forEach(function (input) {
           input.addEventListener('input', function () {
             var id = Number(input.dataset.id);
-            if (selectedServices[id]) {
-              selectedServices[id].quantity = Number(input.value) || 1;
+            if (selectedServices[id] !== undefined) {
+              selectedServices[id] = Number(input.value) || 1;
               updateTotal();
             }
-          });
-        });
-
-        listEl.querySelectorAll('.service-detail').forEach(function (input) {
-          input.addEventListener('input', function () {
-            var id = Number(input.dataset.id);
-            if (selectedServices[id]) selectedServices[id].detail = input.value;
           });
         });
       })
@@ -266,7 +244,7 @@
       ids.forEach(function (id) {
         var s = allServices.find(function (x) { return x.id === Number(id); });
         if (!s) return;
-        var qty = selectedServices[id].quantity;
+        var qty = selectedServices[id];
         totalMin += Number(s.unit_price) * qty;
         totalMax += Number(s.unit_price_max || s.unit_price) * qty;
       });
@@ -286,7 +264,7 @@
 
       try {
         var selectedList = Object.keys(selectedServices).map(function (id) {
-          return { id: Number(id), quantity: selectedServices[id].quantity, detail: selectedServices[id].detail };
+          return { id: Number(id), quantity: selectedServices[id] };
         });
         var res = await fetch(SUPABASE_FN_URL, {
           method: 'POST',

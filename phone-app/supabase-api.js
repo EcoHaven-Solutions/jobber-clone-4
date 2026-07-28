@@ -447,12 +447,6 @@ window.api = {
     delete: async (id) => { await sb.from('line_item_templates').delete().eq('id', id); return { id }; },
   },
 
-  jobTemplates: {
-    list: async () => unwrap(await sb.from('job_templates').select('*').order('title')),
-    create: async (t) => unwrap(await sb.from('job_templates').insert({ title: t.title, description: toNullableText(t.description) }).select().single()),
-    delete: async (id) => { await sb.from('job_templates').delete().eq('id', id); return { id }; },
-  },
-
   timeEntries: {
     list: async () => {
       const rows = unwrap(await sb.from('time_entries').select('*, employees(name)').order('work_date', { ascending: false }));

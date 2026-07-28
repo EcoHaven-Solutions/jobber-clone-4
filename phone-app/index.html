@@ -866,22 +866,6 @@
         <div class="table-wrap settings-card" style="margin-top:20px;">
           <div class="drawer-body" style="padding:24px;">
             <p class="empty-sub" style="margin-top:0;">
-              <strong>Saved job types</strong> — for jobs you do often
-              (like "Spring Startup"), pick one when creating a new job to
-              pre-fill the title and notes.
-            </p>
-            <form id="job-template-form">
-              <input type="text" id="jt-title" placeholder="Job title" required />
-              <textarea id="jt-description" placeholder="Default notes (optional)" rows="2" style="margin-top:8px;"></textarea>
-              <button type="submit" class="btn btn-ghost btn-small" style="margin-top:8px;">+ Add saved job type</button>
-            </form>
-            <div id="job-template-list" style="margin-top:14px;"></div>
-          </div>
-        </div>
-
-        <div class="table-wrap settings-card" style="margin-top:20px;">
-          <div class="drawer-body" style="padding:24px;">
-            <p class="empty-sub" style="margin-top:0;">
               Downloads a complete copy of all your data (customers, jobs,
               estimates, invoices, expenses) as a single file, saved to
               this device. Good habit: do this every so often and keep the
@@ -1022,11 +1006,6 @@
       </label>
       <label>Job title *
         <input type="text" name="title" placeholder="e.g. Sprinkler system repair" required />
-      </label>
-      <label id="job-template-picker-wrap" hidden>Use a saved job type (optional)
-        <select id="job-template-picker">
-          <option value="">— Choose to pre-fill —</option>
-        </select>
       </label>
       <div class="field-row">
         <label>Date
