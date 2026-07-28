@@ -1374,7 +1374,7 @@ function openQuoteDrawer(quote = null) {
     quoteConvertBtn.hidden = !!quote.job_id;
     const customer = customers.find((c) => c.id === quote.customer_id);
     quoteEmailBtn.hidden = !(customer && customer.email);
-    quoteTextBtn.hidden = !(customer && customer.phone);
+    quoteTextBtn.hidden = !(customer && customer.phone && twilioEnabled);
     quoteForm.elements.customer_id.value = quote.customer_id;
     quoteForm.elements.title.value = quote.title || '';
     quoteForm.elements.status.value = quote.status || 'draft';
@@ -2797,6 +2797,7 @@ async function loadTimesheet() {
 const settingsForm = document.getElementById('settings-form');
 let defaultTaxRate = 0;
 let mileageRate = 0.70;
+let twilioEnabled = false;
 
 async function loadSettings() {
   const settings = await window.api.settings.get();
@@ -2808,6 +2809,8 @@ async function loadSettings() {
     settingsForm.elements.mileage_rate.value = settings.mileage_rate;
     mileageRate = parseFloat(settings.mileage_rate) || 0;
   }
+  twilioEnabled = settings.twilio_enabled === '1' || settings.twilio_enabled === 'on';
+  settingsForm.elements.twilio_enabled.checked = twilioEnabled;
   if (settings.google_review_url) {
     reviewSettingsForm.elements.google_review_url.value = settings.google_review_url;
   }
@@ -2822,6 +2825,8 @@ settingsForm.addEventListener('submit', async (e) => {
   const data = Object.fromEntries(new FormData(settingsForm).entries());
   await window.api.settings.set('default_tax_rate', data.default_tax_rate || '0');
   await window.api.settings.set('mileage_rate', data.mileage_rate || '0.70');
+  await window.api.settings.set('twilio_enabled', data.twilio_enabled ? '1' : '0');
+  twilioEnabled = !!data.twilio_enabled;
   defaultTaxRate = parseFloat(data.default_tax_rate) || 0;
   mileageRate = parseFloat(data.mileage_rate) || 0.70;
   alert('Settings saved.');
