@@ -443,7 +443,7 @@ window.api = {
 
   lineItemTemplates: {
     list: async () => unwrap(await sb.from('line_item_templates').select('*').order('description')),
-    create: async (t) => unwrap(await sb.from('line_item_templates').insert({ description: t.description, unit_price: toNumOrDefault(t.unit_price, 0), notes: toNullableText(t.notes) }).select().single()),
+    create: async (t) => unwrap(await sb.from('line_item_templates').insert({ description: t.description, unit_price: toNumOrDefault(t.unit_price, 0), unit_price_max: t.unit_price_max ? toNumOrDefault(t.unit_price_max, null) : null, notes: toNullableText(t.notes) }).select().single()),
     delete: async (id) => { await sb.from('line_item_templates').delete().eq('id', id); return { id }; },
   },
 

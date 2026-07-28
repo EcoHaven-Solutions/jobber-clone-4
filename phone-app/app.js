@@ -2861,6 +2861,13 @@ async function loadTemplates() {
   renderJobTemplateList();
 }
 
+function formatPriceOrRange(t) {
+  if (t.unit_price_max && t.unit_price_max > t.unit_price) {
+    return `${formatCurrency(t.unit_price)}–${formatCurrency(t.unit_price_max)}`;
+  }
+  return formatCurrency(t.unit_price);
+}
+
 function renderLineItemTemplateList() {
   const wrap = document.getElementById('line-item-template-list');
   if (lineItemTemplates.length === 0) {
@@ -2873,7 +2880,7 @@ function renderLineItemTemplateList() {
       <div class="unscheduled-job-row" style="cursor:default; margin-bottom:6px;">
         <div>
           <div class="ujr-title">${escapeHtml(t.description)}</div>
-          <div class="ujr-customer">${formatCurrency(t.unit_price)}</div>
+          <div class="ujr-customer">${formatPriceOrRange(t)}</div>
         </div>
         <button type="button" class="btn btn-ghost btn-small" data-delete-lit="${t.id}">Delete</button>
       </div>`
@@ -2917,8 +2924,9 @@ document.getElementById('line-item-template-form').addEventListener('submit', as
   e.preventDefault();
   const description = document.getElementById('lit-description').value.trim();
   const unit_price = document.getElementById('lit-price').value;
+  const unit_price_max = document.getElementById('lit-price-max').value;
   if (!description) return;
-  await window.api.lineItemTemplates.create({ description, unit_price });
+  await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max });
   e.target.reset();
   await loadTemplates();
 });
@@ -2952,7 +2960,7 @@ function openQuickAddPicker(target) {
         <div class="unscheduled-job-row" data-index="${i}">
           <div>
             <div class="ujr-title">${escapeHtml(t.description)}</div>
-            <div class="ujr-customer">${formatCurrency(t.unit_price)}</div>
+            <div class="ujr-customer">${formatPriceOrRange(t)}</div>
           </div>
           <span>›</span>
         </div>`
