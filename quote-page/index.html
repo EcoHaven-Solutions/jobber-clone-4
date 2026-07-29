@@ -19,11 +19,11 @@
     .card {
       max-width: 460px;
       width: 100%;
-      background: #23261F;
+      background: #3E7C98;
       border-radius: 16px;
       overflow: hidden;
       box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-      border: 1px solid #33362E;
+      border: 1px solid #2E6178;
       align-self: flex-start;
     }
     .header {
@@ -52,7 +52,7 @@
       display: block;
       font-size: 13px;
       font-weight: 600;
-      color: #A9AC9E;
+      color: #D6E9F1;
       margin-bottom: 5px;
       margin-top: 16px;
     }
@@ -60,7 +60,7 @@
     input, textarea {
       width: 100%;
       padding: 11px 13px;
-      border: 1px solid #40433A;
+      border: 1px solid #2E6178;
       border-radius: 9px;
       font-size: 15px;
       font-family: inherit;
@@ -70,20 +70,20 @@
     }
     input:focus, textarea:focus {
       outline: none;
-      border-color: #4F9FD6;
+      border-color: #5FBF3E;
     }
     button {
       width: 100%;
       margin-top: 24px;
       padding: 15px;
-      background: linear-gradient(160deg, #4F9FD6, #3D82B3);
+      background: linear-gradient(160deg, #5FBF3E, #4A9A30);
       color: #fff;
       border: none;
       border-radius: 9px;
       font-size: 16px;
       font-weight: 700;
       cursor: pointer;
-      box-shadow: 0 4px 14px rgba(79,159,214,0.35);
+      box-shadow: 0 4px 14px rgba(95,191,62,0.35);
       transition: transform 0.1s ease;
     }
     button:hover { transform: translateY(-1px); }
@@ -93,23 +93,23 @@
       text-align: center;
       padding: 18px;
       font-size: 12px;
-      color: #A9AC9E;
-      background: #1E211B;
-      border-top: 1px solid #33362E;
+      color: #D6E9F1;
+      background: #326479;
+      border-top: 1px solid #2E6178;
     }
-    .footer a { color: #4F9FD6; text-decoration: none; }
+    .footer a { color: #8FDB74; text-decoration: none; }
     #services-list {
       max-height: 280px;
       overflow-y: auto;
-      border: 1px solid #40433A;
+      border: 1px solid #2E6178;
       border-radius: 10px;
       padding: 6px 10px;
       margin-top: 6px;
-      background: #1E211B;
+      background: #1A1C18;
     }
     .service-item {
       padding: 10px 2px;
-      border-bottom: 1px solid #2C2F27;
+      border-bottom: 1px solid #2C3E48;
     }
     .service-item:last-child { border-bottom: none; }
     .service-row { display: flex; align-items: center; gap: 10px; font-size: 14.5px; }
@@ -119,7 +119,7 @@
       display: flex;
       align-items: center;
       gap: 0;
-      border: 1px solid #40433A;
+      border: 1px solid #2E6178;
       border-radius: 8px;
       overflow: hidden;
       flex: none;
@@ -128,7 +128,7 @@
       width: 34px;
       height: 34px;
       border: none;
-      background: #1A1C18;
+      background: #23261F;
       color: #EAEAE4;
       font-size: 18px;
       font-weight: 700;
@@ -139,7 +139,7 @@
       touch-action: manipulation;
       user-select: none;
     }
-    .qty-btn:active { background: #2A2D26; }
+    .qty-btn:active { background: #33362E; }
     .qty-btn:disabled { opacity: 0.35; cursor: default; }
     .qty-value {
       width: 34px;
@@ -149,15 +149,16 @@
       justify-content: center;
       font-size: 14px;
       font-weight: 700;
-      background: #23261F;
-      border-left: 1px solid #40433A;
-      border-right: 1px solid #40433A;
+      background: #1A1C18;
+      color: #EAEAE4;
+      border-left: 1px solid #2E6178;
+      border-right: 1px solid #2E6178;
     }
     .service-price { margin-left: auto; color: #8FDB74; font-weight: 700; font-size: 13.5px; white-space: nowrap; }
     #services-total {
       margin-top: 12px;
       padding-top: 12px;
-      border-top: 1px solid #40433A;
+      border-top: 1px solid #2E6178;
       font-size: 16px;
       font-weight: 700;
       text-align: right;
@@ -187,7 +188,7 @@
         <div id="services-list" style="display:none;"></div>
         <div id="services-total"></div>
 
-        <label>Anything else to add?</label>
+        <label>Your job not on this list? Let us know what work you need done.</label>
         <textarea id="f-message" rows="3" placeholder="Any other details about your project…"></textarea>
 
         <!-- Honeypot field: hidden from real visitors, catches simple bots -->
@@ -315,7 +316,7 @@
             ? "Thanks! Check your email for your preliminary estimate — we'll follow up soon."
             : "Thanks! We'll be in touch soon.";
           document.getElementById('form-wrap').innerHTML =
-            '<p style="text-align:center; color:#4F9FD6; font-size:16px; padding:20px 0;">' + confirmMsg + '</p>';
+            '<p style="text-align:center; color:#8FDB74; font-size:16px; padding:20px 0;">' + confirmMsg + '</p>';
         } else {
           msg.style.color = '#E08A6B';
           msg.textContent = data.error || 'Something went wrong. Please call/text 509-866-6388 instead.';
