@@ -2873,7 +2873,7 @@ function renderLineItemTemplateList() {
       (t) => `
       <div class="unscheduled-job-row" style="cursor:default; margin-bottom:6px;">
         <div>
-          <div class="ujr-title">${escapeHtml(t.description)}</div>
+          <div class="ujr-title">${escapeHtml(t.description)}${t.allow_quantity ? '' : ' <span style="font-weight:400; opacity:0.7;">(qty locked to 1)</span>'}</div>
           <div class="ujr-customer">${formatPriceOrRange(t)}${t.notes ? ' — ' + escapeHtml(t.notes) : ''}</div>
         </div>
         <button type="button" class="btn btn-ghost btn-small" data-delete-lit="${t.id}">Delete</button>
@@ -2894,8 +2894,9 @@ document.getElementById('line-item-template-form').addEventListener('submit', as
   const unit_price = document.getElementById('lit-price').value;
   const unit_price_max = document.getElementById('lit-price-max').value;
   const notes = document.getElementById('lit-notes').value.trim();
+  const allow_quantity = document.getElementById('lit-allow-quantity').checked;
   if (!description) return;
-  await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max, notes });
+  await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max, notes, allow_quantity });
   e.target.reset();
   await loadTemplates();
 });
@@ -2928,7 +2929,7 @@ function openQuickAddPicker(target) {
     listEl.querySelectorAll('[data-index]').forEach((row) => {
       row.addEventListener('click', () => {
         const t = lineItemTemplates[Number(row.dataset.index)];
-        const item = { description: t.description, quantity: 1, unit_price: t.unit_price };
+        const item = { description: t.description, quantity: 1, unit_price: t.unit_price, notes: t.notes || '' };
         if (quickAddTarget === 'quote') {
           addLineItemRow(item);
           updateQuoteTotal();
