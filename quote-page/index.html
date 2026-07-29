@@ -190,11 +190,14 @@
         var listEl = document.getElementById('services-list');
         listEl.innerHTML = allServices
           .map(function (s) {
+            var qtyInputHtml = s.allow_quantity
+              ? '<input type="number" class="service-qty" data-id="' + s.id + '" value="1" min="0.01" step="any" disabled />'
+              : '';
             return '<div class="service-item">' +
               '<div class="service-row">' +
               '<label class="service-row-check"><input type="checkbox" class="service-checkbox" value="' + s.id + '" />' +
               s.description + '</label>' +
-              '<input type="number" class="service-qty" data-id="' + s.id + '" value="1" min="0.01" step="any" disabled />' +
+              qtyInputHtml +
               '</div>' +
               '</div>';
           })
@@ -207,10 +210,10 @@
             var id = Number(cb.value);
             var qtyInput = listEl.querySelector('.service-qty[data-id="' + id + '"]');
             if (cb.checked) {
-              qtyInput.disabled = false;
-              selectedServices[id] = Number(qtyInput.value) || 1;
+              if (qtyInput) qtyInput.disabled = false;
+              selectedServices[id] = qtyInput ? Number(qtyInput.value) || 1 : 1;
             } else {
-              qtyInput.disabled = true;
+              if (qtyInput) qtyInput.disabled = true;
               delete selectedServices[id];
             }
             updateTotal();
