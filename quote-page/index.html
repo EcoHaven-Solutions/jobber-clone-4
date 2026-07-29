@@ -190,13 +190,10 @@
         var listEl = document.getElementById('services-list');
         listEl.innerHTML = allServices
           .map(function (s) {
-            var priceLabel = (s.unit_price_max && s.unit_price_max > s.unit_price)
-              ? money(s.unit_price) + '–' + money(s.unit_price_max)
-              : money(s.unit_price);
             return '<div class="service-item">' +
               '<div class="service-row">' +
               '<label class="service-row-check"><input type="checkbox" class="service-checkbox" value="' + s.id + '" />' +
-              s.description + '<span class="service-price">' + priceLabel + '</span></label>' +
+              s.description + '</label>' +
               '<input type="number" class="service-qty" data-id="' + s.id + '" value="1" min="0.01" step="any" disabled />' +
               '</div>' +
               '</div>';
@@ -233,25 +230,9 @@
       .catch(function () { /* fine to fail quietly -- form still works without presets */ });
 
     function updateTotal() {
-      var totalEl = document.getElementById('services-total');
-      var ids = Object.keys(selectedServices);
-      if (ids.length === 0) {
-        totalEl.style.display = 'none';
-        return;
-      }
-      var totalMin = 0;
-      var totalMax = 0;
-      ids.forEach(function (id) {
-        var s = allServices.find(function (x) { return x.id === Number(id); });
-        if (!s) return;
-        var qty = selectedServices[id];
-        totalMin += Number(s.unit_price) * qty;
-        totalMax += Number(s.unit_price_max || s.unit_price) * qty;
-      });
-      totalEl.textContent = totalMax > totalMin
-        ? 'Estimated total: ' + money(totalMin) + '–' + money(totalMax)
-        : 'Estimated total: ' + money(totalMin);
-      totalEl.style.display = 'block';
+      // Intentionally not shown on the form -- customers see pricing in
+      // their confirmation email instead, so they focus on picking
+      // services rather than the price while choosing.
     }
 
     document.getElementById('quote-form').addEventListener('submit', async function (e) {
