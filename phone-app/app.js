@@ -2849,11 +2849,58 @@ mapboxSettingsForm.addEventListener('submit', async (e) => {
 // ===================== Saved Line Items =====================
 
 let lineItemTemplates = [];
+let serviceCategories = [];
 
 async function loadTemplates() {
   lineItemTemplates = await window.api.lineItemTemplates.list();
+  serviceCategories = await window.api.serviceCategories.list();
   renderLineItemTemplateList();
+  renderCategoryList();
+  populateCategorySelect();
 }
+
+function renderCategoryList() {
+  const wrap = document.getElementById('category-list');
+  if (serviceCategories.length === 0) {
+    wrap.innerHTML = '<p class="empty-sub" style="margin:0;">No categories yet.</p>';
+    return;
+  }
+  wrap.innerHTML = serviceCategories
+    .map(
+      (c) => `
+      <div class="unscheduled-job-row" style="cursor:default; margin-bottom:6px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          ${c.image_url ? `<img src="${escapeHtml(c.image_url)}" style="width:36px; height:36px; object-fit:cover; border-radius:6px;" />` : ''}
+          <div class="ujr-title">${escapeHtml(c.name)}</div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-small" data-delete-cat="${c.id}">Delete</button>
+      </div>`
+    )
+    .join('');
+  wrap.querySelectorAll('[data-delete-cat]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      await window.api.serviceCategories.delete(Number(btn.dataset.deleteCat));
+      await loadTemplates();
+    });
+  });
+}
+
+function populateCategorySelect() {
+  const select = document.getElementById('lit-category');
+  const current = select.value;
+  select.innerHTML = '<option value="">— None —</option>' + serviceCategories.map((c) => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+  select.value = current;
+}
+
+document.getElementById('category-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('cat-name').value.trim();
+  const image_url = document.getElementById('cat-image-url').value.trim();
+  if (!name) return;
+  await window.api.serviceCategories.create({ name, image_url });
+  e.target.reset();
+  await loadTemplates();
+});
 
 function formatPriceOrRange(t) {
   if (t.unit_price_max && t.unit_price_max > t.unit_price) {
@@ -2873,7 +2920,7 @@ function renderLineItemTemplateList() {
       (t) => `
       <div class="unscheduled-job-row" style="cursor:default; margin-bottom:6px;">
         <div>
-          <div class="ujr-title">${escapeHtml(t.description)}${t.allow_quantity ? '' : ' <span style="font-weight:400; opacity:0.7;">(qty locked to 1)</span>'}</div>
+          <div class="ujr-title">${escapeHtml(t.description)}${t.allow_quantity ? '' : ' <span style="font-weight:400; opacity:0.7;">(qty locked to 1)</span>'}${t.category ? ` <span style="font-weight:400; opacity:0.7;">[${escapeHtml(t.category)}]</span>` : ''}</div>
           <div class="ujr-customer">${formatPriceOrRange(t)}${t.notes ? ' — ' + escapeHtml(t.notes) : ''}</div>
         </div>
         <button type="button" class="btn btn-ghost btn-small" data-delete-lit="${t.id}">Delete</button>
@@ -2895,8 +2942,9 @@ document.getElementById('line-item-template-form').addEventListener('submit', as
   const unit_price_max = document.getElementById('lit-price-max').value;
   const notes = document.getElementById('lit-notes').value.trim();
   const allow_quantity = document.getElementById('lit-allow-quantity').checked;
+  const category = document.getElementById('lit-category').value;
   if (!description) return;
-  await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max, notes, allow_quantity });
+  await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max, notes, allow_quantity, category });
   e.target.reset();
   await loadTemplates();
 });

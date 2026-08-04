@@ -845,9 +845,31 @@
         <div class="table-wrap settings-card" style="margin-top:20px;">
           <div class="drawer-body" style="padding:24px;">
             <p class="empty-sub" style="margin-top:0;">
+              <strong>Service categories</strong> — shown as clickable picture
+              cards on your public "Request an Estimate" page (e.g. "Sprinkler
+              Install," "Drought Tolerant Lawns"). For the image, go to your
+              website, right-click a photo → "Copy Image Address" → paste
+              the link here.
+            </p>
+            <form id="category-form">
+              <div class="field-row">
+                <input type="text" id="cat-name" placeholder="Category name (e.g. Sprinkler Install)" required style="flex:2;" />
+                <input type="text" id="cat-image-url" placeholder="Image URL from your website" />
+              </div>
+              <button type="submit" class="btn btn-ghost btn-small" style="margin-top:8px;">+ Add category</button>
+            </form>
+            <div id="category-list" style="margin-top:14px;"></div>
+          </div>
+        </div>
+
+        <div class="table-wrap settings-card" style="margin-top:20px;">
+          <div class="drawer-body" style="padding:24px;">
+            <p class="empty-sub" style="margin-top:0;">
               <strong>Saved line items</strong> — quick-fill common items
               (like "Sprinkler head replacement — $45") onto any estimate
               or invoice with one tap, instead of retyping them each time.
+              Assigning a category also makes an item show up under that
+              category on your public estimate page.
             </p>
             <form id="line-item-template-form">
               <div class="field-row">
@@ -856,6 +878,11 @@
                 <input type="number" id="lit-price-max" placeholder="Max (optional)" min="0" step="0.01" />
               </div>
               <p class="empty-sub" style="margin-top:6px;">Leave "Max" blank for a flat price, or fill it in for a range (e.g. $50–$150).</p>
+              <label>Category (optional)
+                <select id="lit-category">
+                  <option value="">— None —</option>
+                </select>
+              </label>
               <input type="text" id="lit-notes" placeholder="Details (optional) — e.g. what's included, notes for yourself" style="margin-top:8px;" />
               <label style="flex-direction:row; align-items:center; gap:8px; margin-top:10px;">
                 <input type="checkbox" id="lit-allow-quantity" style="width:auto;" checked />

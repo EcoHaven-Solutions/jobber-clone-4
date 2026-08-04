@@ -443,8 +443,14 @@ window.api = {
 
   lineItemTemplates: {
     list: async () => unwrap(await sb.from('line_item_templates').select('*').order('description')),
-    create: async (t) => unwrap(await sb.from('line_item_templates').insert({ description: t.description, unit_price: toNumOrDefault(t.unit_price, 0), unit_price_max: t.unit_price_max ? toNumOrDefault(t.unit_price_max, null) : null, notes: toNullableText(t.notes), allow_quantity: toBoolInt(t.allow_quantity) }).select().single()),
+    create: async (t) => unwrap(await sb.from('line_item_templates').insert({ description: t.description, unit_price: toNumOrDefault(t.unit_price, 0), unit_price_max: t.unit_price_max ? toNumOrDefault(t.unit_price_max, null) : null, notes: toNullableText(t.notes), allow_quantity: toBoolInt(t.allow_quantity), category: toNullableText(t.category) }).select().single()),
     delete: async (id) => { await sb.from('line_item_templates').delete().eq('id', id); return { id }; },
+  },
+
+  serviceCategories: {
+    list: async () => unwrap(await sb.from('service_categories').select('*').order('sort_order')),
+    create: async (c) => unwrap(await sb.from('service_categories').insert({ name: c.name, image_url: toNullableText(c.image_url) }).select().single()),
+    delete: async (id) => { await sb.from('service_categories').delete().eq('id', id); return { id }; },
   },
 
   timeEntries: {
