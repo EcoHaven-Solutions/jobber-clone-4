@@ -32,20 +32,24 @@
     .header {
       background: linear-gradient(160deg, #454542, #2E2E2C);
       color: #fff;
-      padding: 32px 24px;
-      text-align: center;
+      padding: 28px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      text-align: left;
     }
     .header h1 {
       margin: 0;
-      font-size: 21px;
+      font-size: 25px;
       font-weight: 700;
       letter-spacing: -0.2px;
+      line-height: 1.15;
     }
     .header p {
       margin: 6px 0 0;
-      font-size: 11px;
+      font-size: 13px;
       color: #D6E9F1;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.06em;
       font-weight: 600;
     }
     .body {
@@ -53,11 +57,11 @@
     }
     label {
       display: block;
-      font-size: 13px;
+      font-size: 15px;
       font-weight: 600;
       color: #D6E9F1;
-      margin-bottom: 5px;
-      margin-top: 16px;
+      margin-bottom: 6px;
+      margin-top: 18px;
     }
     label:first-of-type { margin-top: 0; }
     input, textarea {
@@ -103,7 +107,7 @@
     .footer a { color: #8FDB74; text-decoration: none; }
 
     /* ---- Category picker ---- */
-    #category-intro { font-size: 13px; color: #D6E9F1; margin: 0 0 12px; }
+    #category-intro { font-size: 15px; color: #D6E9F1; margin: 0 0 12px; font-weight: 600; }
     #category-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -156,7 +160,7 @@
       width: auto;
       margin: 0;
     }
-    #category-selection-title { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
+    #category-selection-title { font-size: 17px; font-weight: 700; margin-bottom: 10px; }
     #services-list {
       max-height: 320px;
       overflow-y: auto;
@@ -228,12 +232,14 @@
 <body>
   <div class="card">
     <div class="header">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:8px;">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex:none;">
         <path d="M12 2C12 2 8 6.5 8 10.5C8 12.9853 9.79086 15 12 15C14.2091 15 16 12.9853 16 10.5C16 6.5 12 2 12 2Z" fill="#4F9FD6"/>
         <path d="M12 22C12 22 5 19 5 13C8 13 10.5 14.5 12 17C13.5 14.5 16 13 19 13C19 19 12 22 12 22Z" fill="#5FBF3E"/>
       </svg>
-      <h1>EcoHaven Solutions LLC</h1>
-      <p>SPRINKLER INSTALLS &middot; REPAIRS &middot; UPGRADES</p>
+      <div>
+        <h1>EcoHaven Solutions LLC</h1>
+        <p>SPRINKLER INSTALLS &middot; REPAIRS &middot; UPGRADES</p>
+      </div>
     </div>
     <div class="body" id="form-wrap">
 
