@@ -72,7 +72,7 @@
       outline: none;
       border-color: #5FBF3E;
     }
-    button {
+    button.primary {
       width: 100%;
       margin-top: 24px;
       padding: 15px;
@@ -86,8 +86,8 @@
       box-shadow: 0 4px 14px rgba(95,191,62,0.35);
       transition: transform 0.1s ease;
     }
-    button:hover { transform: translateY(-1px); }
-    button:disabled { opacity: 0.6; transform: none; }
+    button.primary:hover { transform: translateY(-1px); }
+    button.primary:disabled { opacity: 0.6; transform: none; }
     #form-message { margin-top: 10px; font-size: 13px; }
     .footer {
       text-align: center;
@@ -98,13 +98,68 @@
       border-top: 1px solid #2E6178;
     }
     .footer a { color: #8FDB74; text-decoration: none; }
+
+    /* ---- Category picker ---- */
+    #category-intro { font-size: 13px; color: #D6E9F1; margin: 0 0 12px; }
+    #category-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .category-card {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      border: 1px solid #2E6178;
+      background: #23261F;
+      height: 110px;
+      display: flex;
+      align-items: flex-end;
+      transition: transform 0.12s ease;
+    }
+    .category-card:hover { transform: translateY(-2px); }
+    .category-card img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .category-card .overlay {
+      position: relative;
+      width: 100%;
+      background: linear-gradient(0deg, rgba(0,0,0,0.75), rgba(0,0,0,0));
+      padding: 10px 10px 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .category-card.no-image { align-items: center; justify-content: center; background: #326479; }
+    .category-card.no-image .overlay { background: none; text-align: center; padding: 8px; }
+
+    /* ---- Service checklist (within a category) ---- */
+    #btn-back-to-categories {
+      background: none;
+      border: none;
+      color: #D6E9F1;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      width: auto;
+      margin: 0;
+    }
+    #category-selection-title { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
     #services-list {
-      max-height: 280px;
+      max-height: 320px;
       overflow-y: auto;
       border: 1px solid #2E6178;
       border-radius: 10px;
       padding: 6px 10px;
-      margin-top: 6px;
       background: #454542;
     }
     .service-item {
@@ -154,17 +209,17 @@
       border-left: 1px solid #2E6178;
       border-right: 1px solid #2E6178;
     }
-    .service-price { margin-left: auto; color: #8FDB74; font-weight: 700; font-size: 13.5px; white-space: nowrap; }
-    #services-total {
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid #2E6178;
-      font-size: 16px;
-      font-weight: 700;
-      text-align: right;
+    #selected-count-badge {
       display: none;
+      margin-left: auto;
+      background: #5FBF3E;
       color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
     }
+    .cat-header-row { display: flex; align-items: center; }
   </style>
 </head>
 <body>
@@ -174,7 +229,24 @@
       <p>SPRINKLER INSTALLS &middot; REPAIRS &middot; UPGRADES</p>
     </div>
     <div class="body" id="form-wrap">
-      <form id="quote-form">
+
+      <!-- Step 1: category picker -->
+      <div id="category-step">
+        <p id="category-intro">What kind of work do you need?</p>
+        <div id="category-grid"></div>
+      </div>
+
+      <!-- Step 2: services within a category -->
+      <div id="services-step" style="display:none;">
+        <div class="cat-header-row">
+          <button type="button" id="btn-back-to-categories">&larr; Back to categories</button>
+          <span id="selected-count-badge"></span>
+        </div>
+        <div id="category-selection-title"></div>
+        <div id="services-list"></div>
+      </div>
+
+      <form id="quote-form" style="margin-top: 18px;">
         <label>Name *</label>
         <input type="text" id="f-name" required />
 
@@ -184,105 +256,172 @@
         <label>Email</label>
         <input type="email" id="f-email" />
 
-        <label id="services-label" style="display:none;">Select what you need (optional — get an instant estimate)</label>
-        <div id="services-list" style="display:none;"></div>
-        <div id="services-total"></div>
-
         <label>Your job not on this list? Let us know what work you need done.</label>
         <textarea id="f-message" rows="3" placeholder="Any other details about your project…"></textarea>
 
         <!-- Honeypot field: hidden from real visitors, catches simple bots -->
         <input type="text" id="f-website" style="position:absolute; left:-9999px;" tabindex="-1" autocomplete="off" />
 
-        <button type="submit" id="submit-btn">Request an Estimate</button>
+        <button type="submit" class="primary" id="submit-btn">Request an Estimate</button>
         <div id="form-message"></div>
       </form>
     </div>
-    <div class="footer">509-866-6388 &middot; <a href="https://ecohavenpro.com">ecohavenpro.com</a></div>
+    <div class="footer">Call/Text 509-866-6388 &middot; <a href="https://ecohavenpro.com">ecohavenpro.com</a></div>
   </div>
 
   <script>
     var SUPABASE_FN_URL = 'https://tudyqzbmlfkgcdfjdhej.supabase.co/functions/v1/public-lead-intake';
-    var selectedServices = {}; // { serviceId: quantity }
+    var selectedServices = {}; // { serviceId: quantity } -- persists across category switches
     var allServices = [];
+    var allCategories = [];
 
-    function money(n) {
-      return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-
-    // Load the preset services list on page load (if any are set up in Settings).
     fetch(SUPABASE_FN_URL, { method: 'GET' })
       .then(function (res) { return res.json(); })
       .then(function (data) {
-        if (!data.ok || !data.services || data.services.length === 0) return;
-        allServices = data.services;
-        var listEl = document.getElementById('services-list');
-        listEl.innerHTML = allServices
-          .map(function (s) {
-            var qtyHtml = s.allow_quantity
-              ? '<div class="qty-stepper" data-id="' + s.id + '">' +
-                '<button type="button" class="qty-btn qty-minus" disabled>−</button>' +
-                '<span class="qty-value">1</span>' +
-                '<button type="button" class="qty-btn qty-plus" disabled>+</button>' +
-                '</div>'
-              : '';
-            return '<div class="service-item">' +
-              '<div class="service-row">' +
-              '<label class="service-row-check"><input type="checkbox" class="service-checkbox" value="' + s.id + '" />' +
-              s.description + '</label>' +
-              qtyHtml +
-              '</div>' +
-              '</div>';
-          })
-          .join('');
-        document.getElementById('services-label').style.display = 'block';
-        listEl.style.display = 'block';
+        if (!data.ok) return;
+        allServices = data.services || [];
+        allCategories = data.categories || [];
 
-        listEl.querySelectorAll('.service-checkbox').forEach(function (cb) {
-          cb.addEventListener('change', function () {
-            var id = Number(cb.value);
-            var stepper = listEl.querySelector('.qty-stepper[data-id="' + id + '"]');
-            if (cb.checked) {
-              if (stepper) {
-                stepper.querySelectorAll('.qty-btn').forEach(function (b) { b.disabled = false; });
-                stepper.querySelector('.qty-value').textContent = '1';
-              }
-              selectedServices[id] = 1;
-            } else {
-              if (stepper) {
-                stepper.querySelectorAll('.qty-btn').forEach(function (b) { b.disabled = true; });
-              }
-              delete selectedServices[id];
-            }
-            updateTotal();
-          });
-        });
+        if (allCategories.length === 0) {
+          // No categories set up -- fall back to showing everything directly.
+          document.getElementById('category-step').style.display = 'none';
+          showServicesFor(null, 'Select what you need (optional — get an instant estimate)');
+          document.getElementById('services-step').style.display = 'block';
+          document.getElementById('btn-back-to-categories').style.display = 'none';
+          return;
+        }
 
-        listEl.querySelectorAll('.qty-stepper').forEach(function (stepper) {
-          var id = Number(stepper.dataset.id);
-          var valueEl = stepper.querySelector('.qty-value');
-          stepper.querySelector('.qty-minus').addEventListener('click', function () {
-            if (selectedServices[id] === undefined) return;
-            var next = Math.max(1, selectedServices[id] - 1);
-            selectedServices[id] = next;
-            valueEl.textContent = next;
-            updateTotal();
-          });
-          stepper.querySelector('.qty-plus').addEventListener('click', function () {
-            if (selectedServices[id] === undefined) return;
-            var next = selectedServices[id] + 1;
-            selectedServices[id] = next;
-            valueEl.textContent = next;
-            updateTotal();
-          });
-        });
+        renderCategoryGrid();
       })
       .catch(function () { /* fine to fail quietly -- form still works without presets */ });
 
-    function updateTotal() {
-      // Intentionally not shown on the form -- customers see pricing in
-      // their confirmation email instead, so they focus on picking
-      // services rather than the price while choosing.
+    function renderCategoryGrid() {
+      var gridEl = document.getElementById('category-grid');
+      var cards = allCategories.map(function (c) {
+        if (c.image_url) {
+          return '<div class="category-card" data-cat="' + escAttr(c.name) + '">' +
+            '<img src="' + escAttr(c.image_url) + '" alt="" />' +
+            '<div class="overlay">' + esc(c.name) + '</div>' +
+            '</div>';
+        }
+        return '<div class="category-card no-image" data-cat="' + escAttr(c.name) + '">' +
+          '<div class="overlay">' + esc(c.name) + '</div>' +
+          '</div>';
+      });
+
+      var hasUncategorized = allServices.some(function (s) { return !s.category; });
+      if (hasUncategorized) {
+        cards.push('<div class="category-card no-image" data-cat="__other__"><div class="overlay">Something else</div></div>');
+      }
+
+      gridEl.innerHTML = cards.join('');
+      gridEl.querySelectorAll('.category-card').forEach(function (card) {
+        card.addEventListener('click', function () {
+          var catName = card.dataset.cat === '__other__' ? null : card.dataset.cat;
+          var title = card.dataset.cat === '__other__' ? 'Other' : card.dataset.cat;
+          showServicesFor(catName, null, title, card.dataset.cat === '__other__');
+          document.getElementById('category-step').style.display = 'none';
+          document.getElementById('services-step').style.display = 'block';
+        });
+      });
+    }
+
+    function showServicesFor(categoryName, introLabel, title, isOther) {
+      var filtered = categoryName === null && isOther
+        ? allServices.filter(function (s) { return !s.category; })
+        : categoryName
+          ? allServices.filter(function (s) { return s.category === categoryName; })
+          : allServices;
+
+      document.getElementById('category-selection-title').textContent = title || '';
+      updateSelectedBadge();
+
+      var listEl = document.getElementById('services-list');
+      if (filtered.length === 0) {
+        listEl.innerHTML = '<p style="margin:0;color:#D6E9F1;font-size:13px;">Nothing here yet -- describe what you need in the notes below instead.</p>';
+        return;
+      }
+
+      listEl.innerHTML = filtered
+        .map(function (s) {
+          var checked = selectedServices[s.id] !== undefined;
+          var qtyVal = checked ? selectedServices[s.id] : 1;
+          var qtyHtml = s.allow_quantity
+            ? '<div class="qty-stepper" data-id="' + s.id + '">' +
+              '<button type="button" class="qty-btn qty-minus"' + (checked ? '' : ' disabled') + '>−</button>' +
+              '<span class="qty-value">' + qtyVal + '</span>' +
+              '<button type="button" class="qty-btn qty-plus"' + (checked ? '' : ' disabled') + '>+</button>' +
+              '</div>'
+            : '';
+          return '<div class="service-item">' +
+            '<div class="service-row">' +
+            '<label class="service-row-check"><input type="checkbox" class="service-checkbox" value="' + s.id + '"' + (checked ? ' checked' : '') + ' />' +
+            esc(s.description) + '</label>' +
+            qtyHtml +
+            '</div>' +
+            '</div>';
+        })
+        .join('');
+
+      listEl.querySelectorAll('.service-checkbox').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+          var id = Number(cb.value);
+          var stepper = listEl.querySelector('.qty-stepper[data-id="' + id + '"]');
+          if (cb.checked) {
+            if (stepper) {
+              stepper.querySelectorAll('.qty-btn').forEach(function (b) { b.disabled = false; });
+              stepper.querySelector('.qty-value').textContent = '1';
+            }
+            selectedServices[id] = 1;
+          } else {
+            if (stepper) stepper.querySelectorAll('.qty-btn').forEach(function (b) { b.disabled = true; });
+            delete selectedServices[id];
+          }
+          updateSelectedBadge();
+        });
+      });
+
+      listEl.querySelectorAll('.qty-stepper').forEach(function (stepper) {
+        var id = Number(stepper.dataset.id);
+        var valueEl = stepper.querySelector('.qty-value');
+        stepper.querySelector('.qty-minus').addEventListener('click', function () {
+          if (selectedServices[id] === undefined) return;
+          var next = Math.max(1, selectedServices[id] - 1);
+          selectedServices[id] = next;
+          valueEl.textContent = next;
+        });
+        stepper.querySelector('.qty-plus').addEventListener('click', function () {
+          if (selectedServices[id] === undefined) return;
+          var next = selectedServices[id] + 1;
+          selectedServices[id] = next;
+          valueEl.textContent = next;
+        });
+      });
+    }
+
+    function updateSelectedBadge() {
+      var badge = document.getElementById('selected-count-badge');
+      var count = Object.keys(selectedServices).length;
+      if (count === 0) {
+        badge.style.display = 'none';
+      } else {
+        badge.style.display = 'inline-block';
+        badge.textContent = count + ' selected';
+      }
+    }
+
+    document.getElementById('btn-back-to-categories').addEventListener('click', function () {
+      document.getElementById('services-step').style.display = 'none';
+      document.getElementById('category-step').style.display = 'block';
+    });
+
+    function esc(str) {
+      var div = document.createElement('div');
+      div.textContent = str || '';
+      return div.innerHTML;
+    }
+    function escAttr(str) {
+      return (str || '').replace(/"/g, '&quot;');
     }
 
     document.getElementById('quote-form').addEventListener('submit', async function (e) {
