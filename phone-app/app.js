@@ -2868,19 +2868,28 @@ function renderCategoryList() {
   wrap.innerHTML = serviceCategories
     .map(
       (c) => `
-      <div class="unscheduled-job-row" style="cursor:default; margin-bottom:6px;">
+      <div class="unscheduled-job-row" style="margin-bottom:6px;" data-edit-cat="${c.id}">
         <div style="display:flex; align-items:center; gap:10px;">
           ${c.image_url ? `<img src="${escapeHtml(c.image_url)}" style="width:36px; height:36px; object-fit:cover; border-radius:6px;" />` : ''}
           <div class="ujr-title">${escapeHtml(c.name)}</div>
         </div>
-        <button type="button" class="btn btn-ghost btn-small" data-delete-cat="${c.id}">Delete</button>
+        <button type="button" class="btn btn-ghost btn-small" data-delete-cat="${c.id}" onclick="event.stopPropagation()">Delete</button>
       </div>`
     )
     .join('');
   wrap.querySelectorAll('[data-delete-cat]').forEach((btn) => {
     btn.addEventListener('click', async () => {
+      if (!confirm('Delete this category?')) return;
       await window.api.serviceCategories.delete(Number(btn.dataset.deleteCat));
+      if (editingCategoryId === Number(btn.dataset.deleteCat)) cancelCategoryEdit();
       await loadTemplates();
+    });
+  });
+  wrap.querySelectorAll('[data-edit-cat]').forEach((row) => {
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', () => {
+      const cat = serviceCategories.find((c) => c.id === Number(row.dataset.editCat));
+      if (cat) startCategoryEdit(cat);
     });
   });
 }
@@ -2892,13 +2901,37 @@ function populateCategorySelect() {
   select.value = current;
 }
 
+let editingCategoryId = null;
+
+function startCategoryEdit(cat) {
+  editingCategoryId = cat.id;
+  document.getElementById('cat-name').value = cat.name;
+  document.getElementById('cat-image-url').value = cat.image_url || '';
+  document.getElementById('btn-submit-category').textContent = 'Update category';
+  document.getElementById('btn-cancel-category-edit').style.display = 'inline-block';
+  document.getElementById('cat-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelCategoryEdit() {
+  editingCategoryId = null;
+  document.getElementById('category-form').reset();
+  document.getElementById('btn-submit-category').textContent = '+ Add category';
+  document.getElementById('btn-cancel-category-edit').style.display = 'none';
+}
+
+document.getElementById('btn-cancel-category-edit').addEventListener('click', cancelCategoryEdit);
+
 document.getElementById('category-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const name = document.getElementById('cat-name').value.trim();
   const image_url = document.getElementById('cat-image-url').value.trim();
   if (!name) return;
-  await window.api.serviceCategories.create({ name, image_url });
-  e.target.reset();
+  if (editingCategoryId) {
+    await window.api.serviceCategories.update(editingCategoryId, { name, image_url });
+  } else {
+    await window.api.serviceCategories.create({ name, image_url });
+  }
+  cancelCategoryEdit();
   await loadTemplates();
 });
 
@@ -2918,22 +2951,55 @@ function renderLineItemTemplateList() {
   wrap.innerHTML = lineItemTemplates
     .map(
       (t) => `
-      <div class="unscheduled-job-row" style="cursor:default; margin-bottom:6px;">
+      <div class="unscheduled-job-row" style="margin-bottom:6px;" data-edit-lit="${t.id}">
         <div>
           <div class="ujr-title">${escapeHtml(t.description)}${t.allow_quantity ? '' : ' <span style="font-weight:400; opacity:0.7;">(qty locked to 1)</span>'}${t.category ? ` <span style="font-weight:400; opacity:0.7;">[${escapeHtml(t.category)}]</span>` : ''}</div>
           <div class="ujr-customer">${formatPriceOrRange(t)}${t.notes ? ' — ' + escapeHtml(t.notes) : ''}</div>
         </div>
-        <button type="button" class="btn btn-ghost btn-small" data-delete-lit="${t.id}">Delete</button>
+        <button type="button" class="btn btn-ghost btn-small" data-delete-lit="${t.id}" onclick="event.stopPropagation()">Delete</button>
       </div>`
     )
     .join('');
   wrap.querySelectorAll('[data-delete-lit]').forEach((btn) => {
     btn.addEventListener('click', async () => {
+      if (!confirm('Delete this saved item?')) return;
       await window.api.lineItemTemplates.delete(Number(btn.dataset.deleteLit));
+      if (editingLineItemTemplateId === Number(btn.dataset.deleteLit)) cancelLineItemTemplateEdit();
       await loadTemplates();
     });
   });
+  wrap.querySelectorAll('[data-edit-lit]').forEach((row) => {
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', () => {
+      const t = lineItemTemplates.find((x) => x.id === Number(row.dataset.editLit));
+      if (t) startLineItemTemplateEdit(t);
+    });
+  });
 }
+
+let editingLineItemTemplateId = null;
+
+function startLineItemTemplateEdit(t) {
+  editingLineItemTemplateId = t.id;
+  document.getElementById('lit-description').value = t.description;
+  document.getElementById('lit-price').value = t.unit_price;
+  document.getElementById('lit-price-max').value = t.unit_price_max || '';
+  document.getElementById('lit-notes').value = t.notes || '';
+  document.getElementById('lit-allow-quantity').checked = !!t.allow_quantity;
+  document.getElementById('lit-category').value = t.category || '';
+  document.getElementById('btn-submit-lit').textContent = 'Update saved item';
+  document.getElementById('btn-cancel-lit-edit').style.display = 'inline-block';
+  document.getElementById('lit-description').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelLineItemTemplateEdit() {
+  editingLineItemTemplateId = null;
+  document.getElementById('line-item-template-form').reset();
+  document.getElementById('btn-submit-lit').textContent = '+ Add saved item';
+  document.getElementById('btn-cancel-lit-edit').style.display = 'none';
+}
+
+document.getElementById('btn-cancel-lit-edit').addEventListener('click', cancelLineItemTemplateEdit);
 
 document.getElementById('line-item-template-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -2944,8 +3010,12 @@ document.getElementById('line-item-template-form').addEventListener('submit', as
   const allow_quantity = document.getElementById('lit-allow-quantity').checked;
   const category = document.getElementById('lit-category').value;
   if (!description) return;
-  await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max, notes, allow_quantity, category });
-  e.target.reset();
+  if (editingLineItemTemplateId) {
+    await window.api.lineItemTemplates.update(editingLineItemTemplateId, { description, unit_price, unit_price_max, notes, allow_quantity, category });
+  } else {
+    await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max, notes, allow_quantity, category });
+  }
+  cancelLineItemTemplateEdit();
   await loadTemplates();
 });
 

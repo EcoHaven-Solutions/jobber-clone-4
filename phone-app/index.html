@@ -856,7 +856,8 @@
                 <input type="text" id="cat-name" placeholder="Category name (e.g. Sprinkler Install)" required style="flex:2;" />
                 <input type="text" id="cat-image-url" placeholder="Image URL from your website" />
               </div>
-              <button type="submit" class="btn btn-ghost btn-small" style="margin-top:8px;">+ Add category</button>
+              <button type="submit" class="btn btn-ghost btn-small" id="btn-submit-category" style="margin-top:8px;">+ Add category</button>
+              <button type="button" class="btn btn-ghost btn-small" id="btn-cancel-category-edit" style="margin-top:8px; display:none;">Cancel edit</button>
             </form>
             <div id="category-list" style="margin-top:14px;"></div>
           </div>
@@ -888,7 +889,8 @@
                 <input type="checkbox" id="lit-allow-quantity" style="width:auto;" checked />
                 Customer can choose a quantity (uncheck for one-off items like a full system install)
               </label>
-              <button type="submit" class="btn btn-ghost btn-small" style="margin-top:8px;">+ Add saved item</button>
+              <button type="submit" class="btn btn-ghost btn-small" id="btn-submit-lit" style="margin-top:8px;">+ Add saved item</button>
+              <button type="button" class="btn btn-ghost btn-small" id="btn-cancel-lit-edit" style="margin-top:8px; display:none;">Cancel edit</button>
             </form>
             <div id="line-item-template-list" style="margin-top:14px;"></div>
           </div>
