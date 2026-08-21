@@ -1140,7 +1140,11 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
    Site Design tab
    ============================================================ */
 
-#view-design-editor {
+/* :not([hidden]) matters here -- an #id selector outranks the app's
+   .view[hidden] { display:none } rule on specificity alone, so without this
+   guard the editor would stay visibly flexed on every tab regardless of the
+   hidden attribute. */
+#view-design-editor:not([hidden]) {
   display: flex;
   flex-direction: column;
   height: 100%;

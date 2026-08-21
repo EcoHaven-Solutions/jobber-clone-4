@@ -32,6 +32,7 @@ let stage = null;
 let gridLayer = null;
 let mainLayer = null;
 let nodesById = new Map();      // element id -> Konva node (Group or Line)
+let imageObjCache = new Map();  // element id -> loaded HTMLImageElement (in-memory only, not persisted)
 let selectionRing = null;       // reusable highlight for point-type elements
 let selectedElementId = null;
 
@@ -183,11 +184,12 @@ function openDesign(design) {
   const data = design.canvas_data && typeof design.canvas_data === 'object' ? design.canvas_data : {};
   elements = Array.isArray(data.elements) ? data.elements : [];
   layerVisibility = Object.assign(
-    { boundary: true, lawn: true, bed: true, hardscape: true, water: true, plant: true, zone: true, head: true, pipe: true, fixture: true, label: true },
+    { image: true, boundary: true, lawn: true, bed: true, hardscape: true, water: true, plant: true, zone: true, head: true, pipe: true, fixture: true, label: true },
     data.layerVisibility || {}
   );
   pxPerFt = Number(design.scale_px_per_ft) || 10;
   designDirty = false;
+  imageObjCache.clear();
   selectedElementId = null;
   activeTool = 'select';
   armedPlantKey = null;
@@ -240,11 +242,13 @@ document.getElementById('btn-design-back').addEventListener('click', async () =>
 });
 
 document.getElementById('design-name-input').addEventListener('change', (e) => {
+  if (!currentDesign) return;
   currentDesign.name = e.target.value || 'Untitled design';
   markDirty();
 });
 
 async function saveDesign(silent) {
+  if (!currentDesign) return;
   const statusEl = document.getElementById('design-save-status');
   try {
     if (!silent) statusEl.textContent = 'Saving…';
@@ -298,6 +302,7 @@ function populateDesignLinkSelects() {
 }
 
 document.getElementById('btn-design-link').addEventListener('click', () => {
+  if (!currentDesign) return;
   populateDesignLinkSelects();
   document.getElementById('design-link-overlay').hidden = false;
   document.getElementById('design-link-drawer').hidden = false;
@@ -321,6 +326,7 @@ document.getElementById('design-link-job-select').addEventListener('change', (e)
 });
 
 document.getElementById('btn-apply-design-link').addEventListener('click', async () => {
+  if (!currentDesign) return;
   const customerId = Number(document.getElementById('design-link-customer-select').value) || null;
   const jobId = Number(document.getElementById('design-link-job-select').value) || null;
   currentDesign.customer_id = customerId;
@@ -329,6 +335,90 @@ document.getElementById('btn-apply-design-link').addEventListener('click', async
   currentDesign = await window.api.designs.get(currentDesign.id);
   updateLinkLabel();
   closeDesignLinkDrawer();
+});
+
+// ===================== Satellite backdrop =====================
+// Pulls a satellite image centered on a geocoded address and uses its known
+// real-world coverage to set the design's scale exactly -- no manual
+// "click two points and guess the distance" needed for this path.
+
+const FT_PER_DEG_LAT = 364000; // standard approximation, fine at this precision
+
+function closeSatelliteDrawer() {
+  document.getElementById('design-satellite-overlay').hidden = true;
+  document.getElementById('design-satellite-drawer').hidden = true;
+}
+
+document.getElementById('btn-design-satellite').addEventListener('click', () => {
+  if (!currentDesign || !isEditableViewport()) return;
+  const addrInput = document.getElementById('design-satellite-address');
+  document.getElementById('design-satellite-status').textContent = '';
+  if (!addrInput.value && currentDesign.customer_id && typeof customers !== 'undefined') {
+    const c = customers.find((x) => x.id === currentDesign.customer_id);
+    if (c) addrInput.value = [c.address, c.city, c.state, c.zip].filter(Boolean).join(', ');
+  }
+  document.getElementById('design-satellite-overlay').hidden = false;
+  document.getElementById('design-satellite-drawer').hidden = false;
+});
+document.getElementById('btn-close-design-satellite-drawer').addEventListener('click', closeSatelliteDrawer);
+document.getElementById('design-satellite-overlay').addEventListener('click', closeSatelliteDrawer);
+
+document.getElementById('btn-design-satellite-fetch').addEventListener('click', async () => {
+  if (!currentDesign) return;
+  const statusEl = document.getElementById('design-satellite-status');
+  const address = document.getElementById('design-satellite-address').value.trim();
+  const coverageFt = Math.max(30, Math.min(1000, Number(document.getElementById('design-satellite-coverage').value) || 200));
+
+  if (!address) { statusEl.textContent = 'Enter an address first.'; return; }
+  if (elements.length > 0) {
+    const proceed = confirm("This design already has things drawn. Adding a satellite image resets the scale to match it exactly -- existing plant/head sizes will resize (their positions won't move). Continue?");
+    if (!proceed) return;
+  }
+
+  statusEl.textContent = 'Looking up address…';
+  const point = typeof geocodeAddress === 'function' ? await geocodeAddress(address) : null;
+  if (!point) {
+    statusEl.textContent = 'Could not find that address. Try adding city/state, or check the Mapbox token in Settings.';
+    return;
+  }
+
+  statusEl.textContent = 'Fetching satellite image…';
+  const sizePx = 640;
+  const halfFt = coverageFt / 2;
+  const deltaLat = halfFt / FT_PER_DEG_LAT;
+  const deltaLon = halfFt / (FT_PER_DEG_LAT * Math.cos((point.lat * Math.PI) / 180));
+  const bbox = [point.lon - deltaLon, point.lat - deltaLat, point.lon + deltaLon, point.lat + deltaLat];
+
+  const url = (typeof mapboxAccessToken !== 'undefined' && mapboxAccessToken)
+    ? `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/[${bbox.join(',')}]/${sizePx}x${sizePx}?access_token=${mapboxAccessToken}`
+    : `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bbox.join(',')}&bboxSR=4326&imageSR=4326&size=${sizePx},${sizePx}&format=jpg&f=image`;
+
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    pxPerFt = sizePx / coverageFt;
+    document.getElementById('design-scale-label').textContent = `1 ft ≈ ${pxPerFt.toFixed(1)} px (from satellite image)`;
+
+    const el = {
+      id: uid(), type: 'image', src: url, x: -sizePx / 2, y: -sizePx / 2, width: sizePx, height: sizePx,
+      opacity: 0.85, address, coverageFt,
+    };
+    imageObjCache.set(el.id, img);
+    elements.unshift(el);
+    drawGrid();
+    renderAllElements();
+    fitViewToContent();
+    markDirty();
+    statusEl.textContent = 'Added.';
+    setTimeout(closeSatelliteDrawer, 400);
+  };
+  img.onerror = () => {
+    const hasToken = typeof mapboxAccessToken !== 'undefined' && mapboxAccessToken;
+    statusEl.textContent = hasToken
+      ? 'Could not load the image -- double-check the Mapbox token in Settings.'
+      : "Could not load the free satellite image right now. Try again, or add a Mapbox token in Settings for a more reliable source.";
+  };
+  img.src = url;
 });
 
 // ===================== Konva stage setup =====================
@@ -425,6 +515,10 @@ function computeBoundingBox() {
   for (const el of elements) {
     if (Array.isArray(el.points)) {
       for (let i = 0; i < el.points.length; i += 2) consider(el.points[i], el.points[i + 1]);
+    } else if (el.type === 'image' && typeof el.x === 'number') {
+      // x,y is the top-left corner, not a point -- consider the full rect.
+      consider(el.x, el.y);
+      consider(el.x + el.width, el.y + el.height);
     } else if (typeof el.x === 'number') {
       consider(el.x, el.y);
     }
@@ -598,7 +692,10 @@ function renderAllElements() {
   if (!mainLayer) return;
   nodesById.forEach((node) => node.destroy());
   nodesById.clear();
-  for (const el of elements) renderElement(el);
+  // Images always render first so they stay behind every hand-drawn element,
+  // regardless of where they happen to sit in the saved elements array.
+  for (const el of elements) if (el.type === 'image') renderElement(el);
+  for (const el of elements) if (el.type !== 'image') renderElement(el);
   mainLayer.add(selectionRing);
   mainLayer.batchDraw();
 }
@@ -612,6 +709,7 @@ function renderElement(el) {
   else if (el.type === 'head') node = buildHeadNode(el);
   else if (el.type === 'fixture') node = buildFixtureNode(el);
   else if (el.type === 'label') node = buildLabelNode(el);
+  else if (el.type === 'image') node = buildImageNode(el);
   if (!node) return;
   node.visible(elementMatchesLayer(el, layerLookupKey(el)) ? layerVisibility[layerLookupKey(el)] !== false : true);
   mainLayer.add(node);
@@ -725,6 +823,36 @@ function buildLabelNode(el) {
   return text;
 }
 
+function buildImageNode(el) {
+  const group = new Konva.Group({ x: el.x, y: el.y, draggable: activeTool === 'select', opacity: el.opacity != null ? el.opacity : 0.85 });
+  const cached = imageObjCache.get(el.id);
+  if (cached) {
+    group.add(new Konva.Image({ image: cached, width: el.width, height: el.height }));
+  } else {
+    group.add(new Konva.Rect({ width: el.width, height: el.height, fill: '#2A2A28', stroke: '#4A4A46' }));
+    group.add(new Konva.Text({ text: 'Loading satellite image…', x: 8, y: 8, fontSize: 12, fill: '#C4C4BC' }));
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      imageObjCache.set(el.id, img);
+      const node = nodesById.get(el.id);
+      if (node) {
+        node.destroyChildren();
+        node.add(new Konva.Image({ image: img, width: el.width, height: el.height }));
+        mainLayer.batchDraw();
+      }
+    };
+    img.onerror = () => {
+      const node = nodesById.get(el.id);
+      if (node) { node.findOne('Text').text('Satellite image failed to load'); mainLayer.batchDraw(); }
+    };
+    img.src = el.src;
+  }
+  group.on('dragend', () => { el.x = group.x(); el.y = group.y(); markDirty(); });
+  attachSelectHandler(group, el);
+  return group;
+}
+
 function hexToRgba(hex, alpha) {
   const h = hex.replace('#', '');
   const r = parseInt(h.substring(0, 2), 16), g = parseInt(h.substring(2, 4), 16), b = parseInt(h.substring(4, 6), 16);
@@ -747,7 +875,7 @@ function selectElement(id) {
   selectedElementId = id;
   const el = elements.find((e) => e.id === id);
   if (!el) return;
-  if (typeof el.x === 'number') positionSelectionRing(el);
+  if (typeof el.x === 'number' && el.type !== 'image') positionSelectionRing(el);
   else selectionRing.visible(false);
   mainLayer.batchDraw();
   showPropertiesTab(true);
@@ -854,6 +982,19 @@ function renderProperties(el) {
   } else if (el.type === 'label') {
     box.innerHTML = `<div class="design-properties-field"><label>Text</label><textarea id="pf-text" rows="3">${escapeHtml(el.text || '')}</textarea></div>`;
     document.getElementById('pf-text').addEventListener('change', (e) => { el.text = e.target.value; rerenderThis(); });
+  } else if (el.type === 'image') {
+    box.innerHTML = `
+      <div class="design-properties-field"><label>Source</label><div>${escapeHtml(el.address || 'Satellite image')}</div></div>
+      <div class="design-properties-field"><label>Coverage</label><div>${el.coverageFt || Math.round(el.width / pxPerFt)} ft wide</div></div>
+      <div class="design-properties-field"><label>Opacity</label><input id="pf-opacity" type="range" min="0.2" max="1" step="0.05" value="${el.opacity != null ? el.opacity : 0.85}" /></div>
+      <p class="empty-sub">Drag to nudge it into position. Delete and re-add from the Satellite backdrop button to change the address or coverage.</p>
+    `;
+    document.getElementById('pf-opacity').addEventListener('input', (e) => {
+      el.opacity = Number(e.target.value);
+      const node = nodesById.get(el.id);
+      if (node) { node.opacity(el.opacity); mainLayer.batchDraw(); }
+      markDirty();
+    });
   }
 }
 
@@ -1114,6 +1255,7 @@ function renderLegend() {
 // ===================== Print / export =====================
 
 document.getElementById('btn-design-print').addEventListener('click', () => {
+  if (!currentDesign) return;
   deselect();
   fitViewToContent();
   setTimeout(() => window.print(), 150);

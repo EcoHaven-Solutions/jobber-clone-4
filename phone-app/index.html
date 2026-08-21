@@ -317,6 +317,7 @@
           <aside class="design-toolbar" id="design-toolbar">
             <div class="design-tool-group">
               <div class="design-tool-group-label">Setup</div>
+              <button class="design-tool-btn" id="btn-design-satellite" title="Pull in a satellite image to trace over, scaled automatically">Satellite backdrop</button>
               <button class="design-tool-btn" data-tool="scale" title="Set scale: click two points, enter the real distance">Set scale</button>
               <button class="design-tool-btn" data-tool="select" title="Select / move / edit">Select</button>
               <button class="design-tool-btn" data-tool="pan" title="Pan the canvas">Pan</button>
@@ -386,6 +387,7 @@
             </div>
 
             <div class="design-side-panel-body" id="design-panel-layers" hidden>
+              <label class="design-layer-toggle"><input type="checkbox" data-layer="image" checked /> Satellite/base image</label>
               <label class="design-layer-toggle"><input type="checkbox" data-layer="boundary" checked /> Boundary</label>
               <label class="design-layer-toggle"><input type="checkbox" data-layer="lawn" checked /> Lawn</label>
               <label class="design-layer-toggle"><input type="checkbox" data-layer="bed" checked /> Planting beds</label>
@@ -1205,6 +1207,32 @@
           <button type="button" class="btn btn-primary" id="btn-apply-design-link">Apply</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Import a satellite image backdrop for a design -->
+  <div class="overlay" id="design-satellite-overlay" hidden></div>
+  <div class="drawer" id="design-satellite-drawer" hidden>
+    <div class="drawer-header">
+      <h2>Satellite backdrop</h2>
+      <button class="icon-btn" id="btn-close-design-satellite-drawer" aria-label="Close">&times;</button>
+    </div>
+    <div class="drawer-body">
+      <label>Address
+        <input type="text" id="design-satellite-address" placeholder="123 Main St, Spokane, WA" />
+      </label>
+      <label>Coverage width (feet)
+        <input type="number" id="design-satellite-coverage" value="200" min="30" max="1000" step="10" />
+      </label>
+      <p class="empty-sub">How wide an area to pull in, centered on the address. 150-250 ft covers a typical residential lot.</p>
+      <p class="empty-sub" id="design-satellite-status"></p>
+      <div class="drawer-actions" style="border-top:none;">
+        <div></div>
+        <div class="drawer-actions-right">
+          <button type="button" class="btn btn-primary" id="btn-design-satellite-fetch">Add satellite image</button>
+        </div>
+      </div>
+      <p class="empty-sub">This sets the design's scale to match the image exactly, so do this before hand-calibrating with "Set scale" -- not after (it'll overwrite that calibration).</p>
     </div>
   </div>
 
