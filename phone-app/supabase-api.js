@@ -161,6 +161,17 @@ function cleanLead(l) {
   };
 }
 
+function cleanDesign(d) {
+  return {
+    ...d,
+    customer_id: 'customer_id' in d ? toIntOrNull(d.customer_id) : undefined,
+    job_id: 'job_id' in d ? toIntOrNull(d.job_id) : undefined,
+    name: d.name && d.name.trim() ? d.name.trim() : 'Untitled design',
+    notes: toNullableText(d.notes),
+    scale_px_per_ft: toNumOrDefault(d.scale_px_per_ft, 10),
+  };
+}
+
 function cleanMileage(m) {
   return {
     ...m,
@@ -439,6 +450,16 @@ window.api = {
       await sb.from('leads').update({ status: 'converted' }).eq('id', id);
       return customer;
     },
+  },
+
+  designs: {
+    list: async () => unwrap(await sb.from('design_projects').select('*, customers(name), jobs(title)').order('updated_at', { ascending: false })),
+    listByCustomer: async (customerId) => unwrap(await sb.from('design_projects').select('*').eq('customer_id', customerId).order('updated_at', { ascending: false })),
+    listByJob: async (jobId) => unwrap(await sb.from('design_projects').select('*').eq('job_id', jobId).order('updated_at', { ascending: false })),
+    get: async (id) => unwrap(await sb.from('design_projects').select('*, customers(name), jobs(title)').eq('id', id).single()),
+    create: async (d) => unwrap(await sb.from('design_projects').insert(cleanDesign(d)).select().single()),
+    update: async (id, updates) => unwrap(await sb.from('design_projects').update(cleanDesign(updates)).eq('id', id).select().single()),
+    delete: async (id) => { await sb.from('design_projects').delete().eq('id', id); return { id }; },
   },
 
   lineItemTemplates: {

@@ -1135,3 +1135,335 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ============================================================
+   Site Design tab
+   ============================================================ */
+
+#view-design-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+}
+
+.design-editor-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.design-name-input {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ink);
+  padding: 6px 8px;
+  border-radius: 6px;
+  min-width: 160px;
+}
+
+.design-name-input:hover,
+.design-name-input:focus {
+  border-color: var(--line);
+  outline: none;
+  background: var(--surface);
+}
+
+.design-link-label {
+  font-size: 12px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.design-editor-spacer { flex: 1; }
+
+.design-save-status {
+  font-size: 12px;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+}
+
+.design-phone-banner {
+  display: none;
+  background: var(--danger-soft);
+  color: var(--ink);
+  padding: 10px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+}
+
+.design-editor-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 190px 1fr 260px;
+  min-height: 0;
+}
+
+.design-toolbar {
+  border-right: 1px solid var(--line);
+  padding: 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.design-tool-group-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+
+.design-tool-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 4px;
+  cursor: pointer;
+}
+
+.design-tool-btn:hover { border-color: var(--water); }
+
+.design-tool-btn.is-active {
+  background: var(--water);
+  border-color: var(--water);
+  color: #fff;
+}
+
+.design-canvas-wrap {
+  position: relative;
+  overflow: hidden;
+  background: #2A2A28;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.design-canvas-zoom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.design-canvas-zoom .btn { padding: 4px 10px; }
+
+#design-zoom-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  min-width: 40px;
+  text-align: center;
+}
+
+.design-scale-label {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+#design-draw-hint {
+  font-size: 12px;
+  color: var(--olive-light);
+}
+
+.design-stage {
+  flex: 1;
+  cursor: crosshair;
+}
+
+.design-side-panel {
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.design-side-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.design-side-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--ink-soft);
+  padding: 10px 6px;
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.design-side-tab.is-active {
+  color: var(--ink);
+  border-bottom-color: var(--water);
+}
+
+.design-side-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.design-catalog-section input,
+.design-catalog-section select {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 7px 8px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 6px;
+}
+
+.design-catalog-empty {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.design-catalog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.design-catalog-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+
+.design-catalog-item:hover { border-color: var(--water); }
+
+.design-catalog-item.is-armed {
+  background: var(--water);
+  border-color: var(--water);
+  color: #fff;
+}
+
+.design-catalog-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.3);
+}
+
+.design-catalog-item-sub {
+  color: var(--ink-soft);
+  font-size: 11px;
+  display: block;
+}
+
+.design-catalog-item.is-armed .design-catalog-item-sub { color: rgba(255,255,255,0.8); }
+
+.design-layer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.design-layer-toggle input { width: auto; }
+
+.design-legend-group {
+  margin-bottom: 16px;
+}
+
+.design-legend-group h4 {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+  margin: 0 0 6px;
+}
+
+.design-legend-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.design-legend-total {
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.design-properties-field {
+  margin-bottom: 10px;
+}
+
+.design-properties-field label {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-bottom: 4px;
+}
+
+.design-properties-field input,
+.design-properties-field select,
+.design-properties-field textarea {
+  width: 100%;
+  padding: 7px 8px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  border-radius: 6px;
+}
+
+/* List view reuses .table-wrap / .ticket-table / .empty-state as-is. */
+
+@media (max-width: 900px) {
+  .design-phone-banner { display: block; }
+
+  .design-editor-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .design-toolbar {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .design-tool-group { display: none; }
+
+  .design-side-panel {
+    border-left: none;
+    border-top: 1px solid var(--line);
+    max-height: 30vh;
+  }
+
+  .design-stage { cursor: default; }
+}

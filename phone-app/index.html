@@ -49,29 +49,32 @@
         <button class="nav-item" data-view="jobs">
           <span class="nav-tag">04</span> Jobs
         </button>
+        <button class="nav-item" data-view="design">
+          <span class="nav-tag">05</span> Design
+        </button>
         <button class="nav-item" data-view="quotes">
-          <span class="nav-tag">05</span> Estimates
+          <span class="nav-tag">06</span> Estimates
         </button>
         <button class="nav-item" data-view="invoices">
-          <span class="nav-tag">06</span> Invoices
+          <span class="nav-tag">07</span> Invoices
         </button>
         <button class="nav-item" data-view="expenses">
-          <span class="nav-tag">07</span> Expenses
+          <span class="nav-tag">08</span> Expenses
         </button>
         <button class="nav-item" data-view="mileage">
-          <span class="nav-tag">08</span> Mileage
+          <span class="nav-tag">09</span> Mileage
         </button>
         <button class="nav-item" data-view="employees">
-          <span class="nav-tag">09</span> Employees
+          <span class="nav-tag">10</span> Employees
         </button>
         <button class="nav-item" data-view="reminders">
-          <span class="nav-tag">10</span> Reminders
+          <span class="nav-tag">11</span> Reminders
         </button>
         <button class="nav-item" data-view="reports">
-          <span class="nav-tag">11</span> Reports
+          <span class="nav-tag">12</span> Reports
         </button>
         <button class="nav-item" data-view="settings">
-          <span class="nav-tag">12</span> Settings
+          <span class="nav-tag">13</span> Settings
         </button>
       </nav>
       <div class="sidebar-footer">
@@ -255,6 +258,155 @@
             <p>No jobs yet.</p>
             <p class="empty-sub">Schedule your first job against a customer on file.</p>
           </div>
+        </div>
+      </section>
+
+      <!-- ===== Site Design view (project list) ===== -->
+      <section class="view" id="view-design" hidden>
+        <header class="content-header">
+          <div>
+            <h1>Site Designs</h1>
+            <p class="subtitle" id="design-count">0 designs</p>
+          </div>
+          <button class="btn btn-primary" id="btn-new-design">+ New design</button>
+        </header>
+
+        <div class="toolbar">
+          <input type="search" id="design-search-input" placeholder="Search by design name or customer" />
+        </div>
+
+        <div class="table-wrap">
+          <table class="ticket-table" id="design-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Linked to</th>
+                <th>Last updated</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="design-rows"></tbody>
+          </table>
+          <div class="empty-state" id="design-empty-state" hidden>
+            <p>No site designs yet.</p>
+            <p class="empty-sub">Start a new design, or open a customer/job and click "Site design" to create one linked to that property.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== Site Design editor (canvas workspace) ===== -->
+      <section class="view" id="view-design-editor" hidden>
+        <div class="design-editor-topbar">
+          <button class="btn btn-ghost" id="btn-design-back">&larr; Designs</button>
+          <input type="text" id="design-name-input" class="design-name-input" value="Untitled design" />
+          <span id="design-link-label" class="design-link-label">Not linked to a customer/job</span>
+          <button class="btn btn-ghost" id="btn-design-link">Link customer/job</button>
+          <span class="design-editor-spacer"></span>
+          <span id="design-save-status" class="design-save-status"></span>
+          <button class="btn btn-ghost" id="btn-design-print">Print / Export</button>
+          <button class="btn btn-primary" id="btn-design-save">Save</button>
+        </div>
+
+        <div class="design-phone-banner" id="design-phone-banner">
+          Editing works best on a bigger screen. On this device you can view the design, but drawing tools are turned off &mdash; switch to a tablet or desktop to edit.
+        </div>
+
+        <div class="design-editor-body">
+          <!-- Drawing tools -->
+          <aside class="design-toolbar" id="design-toolbar">
+            <div class="design-tool-group">
+              <div class="design-tool-group-label">Setup</div>
+              <button class="design-tool-btn" data-tool="scale" title="Set scale: click two points, enter the real distance">Set scale</button>
+              <button class="design-tool-btn" data-tool="select" title="Select / move / edit">Select</button>
+              <button class="design-tool-btn" data-tool="pan" title="Pan the canvas">Pan</button>
+            </div>
+            <div class="design-tool-group">
+              <div class="design-tool-group-label">Site &amp; planting</div>
+              <button class="design-tool-btn" data-tool="area-boundary" title="Draw property boundary">Boundary</button>
+              <button class="design-tool-btn" data-tool="area-lawn" title="Draw a lawn area">Lawn</button>
+              <button class="design-tool-btn" data-tool="area-bed" title="Draw a planting bed">Bed</button>
+              <button class="design-tool-btn" data-tool="area-hardscape" title="Draw hardscape (patio/walk/deck)">Hardscape</button>
+              <button class="design-tool-btn" data-tool="area-water" title="Draw a water feature">Water</button>
+              <button class="design-tool-btn" data-tool="plant" title="Place a plant from the catalog">Plant</button>
+            </div>
+            <div class="design-tool-group">
+              <div class="design-tool-group-label">Irrigation</div>
+              <button class="design-tool-btn" data-tool="zone" title="Draw a zone outline">Zone</button>
+              <button class="design-tool-btn" data-tool="head" title="Place a sprinkler head from the catalog">Head</button>
+              <button class="design-tool-btn" data-tool="pipe-lateral" title="Draw a lateral line">Lateral pipe</button>
+              <button class="design-tool-btn" data-tool="pipe-mainline" title="Draw a mainline">Mainline</button>
+              <button class="design-tool-btn" data-tool="fixture" title="Place valve / controller / backflow / POC">Fixture</button>
+            </div>
+            <div class="design-tool-group">
+              <div class="design-tool-group-label">Edit</div>
+              <button class="design-tool-btn" data-tool="label" title="Add a text label">Label</button>
+              <button class="btn btn-danger design-tool-btn" id="btn-design-delete-selected" title="Delete the selected item">Delete selected</button>
+            </div>
+          </aside>
+
+          <!-- Canvas -->
+          <div class="design-canvas-wrap">
+            <div class="design-canvas-zoom">
+              <button class="btn btn-ghost" id="btn-design-zoom-out">&minus;</button>
+              <span id="design-zoom-label">100%</span>
+              <button class="btn btn-ghost" id="btn-design-zoom-in">+</button>
+              <span id="design-draw-hint"></span>
+              <span id="design-scale-label" class="design-scale-label">Scale not set</span>
+            </div>
+            <div id="design-stage" class="design-stage"></div>
+          </div>
+
+          <!-- Side panel: catalog / layers / legend -->
+          <aside class="design-side-panel">
+            <div class="design-side-tabs">
+              <button class="design-side-tab is-active" data-panel="catalog">Catalog</button>
+              <button class="design-side-tab" data-panel="layers">Layers</button>
+              <button class="design-side-tab" data-panel="legend">Legend &amp; Materials</button>
+              <button class="design-side-tab" data-panel="properties" id="design-properties-tab" hidden>Properties</button>
+            </div>
+
+            <div class="design-side-panel-body" id="design-panel-catalog">
+              <div id="design-catalog-plant" class="design-catalog-section" hidden>
+                <input type="search" id="design-plant-search" placeholder="Search plants&hellip;" />
+                <select id="design-plant-category-filter">
+                  <option value="">All categories</option>
+                </select>
+                <div id="design-plant-list" class="design-catalog-list"></div>
+              </div>
+              <div id="design-catalog-head" class="design-catalog-section" hidden>
+                <div id="design-head-list" class="design-catalog-list"></div>
+              </div>
+              <div id="design-catalog-fixture" class="design-catalog-section" hidden>
+                <div id="design-fixture-list" class="design-catalog-list"></div>
+              </div>
+              <div id="design-catalog-empty" class="design-catalog-empty">
+                Pick a tool on the left. Plant, Head, and Fixture tools will show their catalog here.
+              </div>
+            </div>
+
+            <div class="design-side-panel-body" id="design-panel-layers" hidden>
+              <label class="design-layer-toggle"><input type="checkbox" data-layer="boundary" checked /> Boundary</label>
+              <label class="design-layer-toggle"><input type="checkbox" data-layer="lawn" checked /> Lawn</label>
+              <label class="design-layer-toggle"><input type="checkbox" data-layer="bed" checked /> Planting beds</label>
+              <label class="design-layer-toggle"><input type="checkbox" data-layer="hardscape" checked /> Hardscape</label>
+              <label class="design-layer-toggle"><input type="checkbox" data-layer="water" checked /> Water features</label>
+              <label class="design-layer-toggle"><input type="checkbox" data-layer="plant" checked /> Plants</label>
+              <label class="design-layer-toggle"><input type="checkbox" data-layer="zone" checked /> Zones</label>
+              <label class="design-layer-toggle"><input type="checkbox" data-layer="head" checked /> Sprinkler heads</label>
+              <label class="design-layer-toggle"><input type="checkbox" data-layer="pipe" checked /> Pipes</label>
+              <label class="design-layer-toggle"><input type="checkbox" data-layer="fixture" checked /> Valves/controller/backflow</label>
+              <label class="design-layer-toggle"><input type="checkbox" data-layer="label" checked /> Text labels</label>
+            </div>
+
+            <div class="design-side-panel-body" id="design-panel-legend" hidden>
+              <div id="design-legend-content"></div>
+            </div>
+
+            <div class="design-side-panel-body" id="design-panel-properties" hidden>
+              <div id="design-properties-content"></div>
+            </div>
+          </aside>
         </div>
       </section>
 
@@ -979,7 +1131,10 @@
       </label>
 
       <div class="drawer-actions">
-        <button type="button" class="btn btn-danger" id="btn-delete-customer" hidden>Delete</button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-danger" id="btn-delete-customer" hidden>Delete</button>
+          <button type="button" class="btn btn-ghost" id="btn-customer-site-design" hidden>Site design</button>
+        </div>
         <div class="drawer-actions-right">
           <button type="button" class="btn btn-ghost" id="btn-cancel-drawer">Cancel</button>
           <button type="submit" class="btn btn-primary">Save customer</button>
@@ -1020,6 +1175,34 @@
         <div class="drawer-actions-right">
           <button type="button" class="btn btn-ghost" id="btn-cancel-import">Cancel</button>
           <button type="button" class="btn btn-primary" id="btn-confirm-import">Import customers</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Link a site design to a customer/job -->
+  <div class="overlay" id="design-link-overlay" hidden></div>
+  <div class="drawer" id="design-link-drawer" hidden>
+    <div class="drawer-header">
+      <h2>Link this design</h2>
+      <button class="icon-btn" id="btn-close-design-link-drawer" aria-label="Close">&times;</button>
+    </div>
+    <div class="drawer-body">
+      <label>Customer
+        <select id="design-link-customer-select">
+          <option value="">Not linked to a customer</option>
+        </select>
+      </label>
+      <label>Job
+        <select id="design-link-job-select">
+          <option value="">Not linked to a job</option>
+        </select>
+      </label>
+      <p class="empty-sub">Linking a job also links its customer automatically. A design's materials list can be pulled into that job's estimate later.</p>
+      <div class="drawer-actions" style="border-top:none;">
+        <div></div>
+        <div class="drawer-actions-right">
+          <button type="button" class="btn btn-primary" id="btn-apply-design-link">Apply</button>
         </div>
       </div>
     </div>
@@ -1324,7 +1507,10 @@
       </div>
 
       <div class="drawer-actions">
-        <button type="button" class="btn btn-danger" id="btn-delete-job" hidden>Delete</button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-danger" id="btn-delete-job" hidden>Delete</button>
+          <button type="button" class="btn btn-ghost" id="btn-job-site-design" hidden>Site design</button>
+        </div>
         <div class="drawer-actions-right">
           <button type="button" class="btn btn-ghost" id="btn-create-invoice-from-job" hidden>Create invoice</button>
           <button type="button" class="btn btn-ghost" id="btn-copy-job-text">Copy for text</button>
@@ -1839,7 +2025,10 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/konva@9/konva.min.js"></script>
   <script src="supabase-api.js"></script>
+  <script src="design-data.js"></script>
   <script src="app.js"></script>
+  <script src="design.js"></script>
 </body>
 </html>
