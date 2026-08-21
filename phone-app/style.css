@@ -1377,6 +1377,15 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
   border: 1px solid rgba(0,0,0,0.3);
 }
 
+.design-catalog-photo {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.2);
+}
+
 .design-catalog-item-sub {
   color: var(--ink-soft);
   font-size: 11px;
@@ -1470,4 +1479,121 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
   }
 
   .design-stage { cursor: default; }
+}
+
+/* ===== Print / PDF export -- built into #design-print-sheet by design.js
+   right before window.print(), then this media query hides everything else
+   on the page and shows only that sheet. ===== */
+
+.design-print-sheet {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  #design-print-sheet,
+  #design-print-sheet * {
+    visibility: visible !important;
+  }
+  #design-print-sheet {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 0;
+    color: #1a1a1a;
+    background: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  @page {
+    margin: 0.5in;
+  }
+}
+
+.design-print-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.design-print-meta {
+  font-size: 12px;
+  color: #555;
+  margin: 0 0 16px;
+}
+
+.design-print-plan img {
+  max-width: 100%;
+  border: 1px solid #ccc;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.design-print-section {
+  break-inside: avoid-page;
+}
+
+.design-print-section h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 4px;
+  margin: 18px 0 8px;
+}
+
+.design-print-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  padding: 3px 0;
+  border-bottom: 1px dotted #ddd;
+}
+
+.design-print-plant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.design-print-plant-card {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 11px;
+  text-align: center;
+  break-inside: avoid;
+}
+
+.design-print-plant-photo {
+  width: 100%;
+  height: 85px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #eee;
+  display: block;
+}
+
+.design-print-plant-fallback {
+  width: 100%;
+  height: 85px;
+  border-radius: 4px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 11px;
+  align-items: center;
+  justify-content: center;
+}
+
+.design-print-plant-name {
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+.design-print-plant-sub {
+  color: #666;
 }

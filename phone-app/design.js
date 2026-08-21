@@ -217,9 +217,25 @@ function openDesign(design) {
 
   clearInterval(autosaveTimer);
   autosaveTimer = setInterval(() => {
-    if (designDirty && !document.getElementById('view-design-editor').hidden) saveDesign(true);
+    // Deliberately NOT gated on the editor still being the visible view --
+    // navigating to another tab used to skip this check entirely, so anything
+    // drawn right before switching tabs (a lawn, a hardscape area, etc.) sat
+    // dirty and unsaved until the user came back and might never get saved
+    // if they didn't reopen the exact same design. This timer is a 60s
+    // safety net; the real fix is saving immediately on nav-away below.
+    if (designDirty && currentDesign) saveDesign(true);
   }, 60000);
 }
+
+// Save immediately when the user clicks away to any other tab while the
+// editor has unsaved changes -- otherwise anything drawn since the last save
+// (or the last 60s autosave tick) is silently lost, which looked like drawn
+// areas/plants "disappearing" when navigating away and back.
+document.querySelectorAll('.nav-item[data-view]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    if (currentDesign && designDirty) saveDesign(true);
+  });
+});
 
 function updateLinkLabel() {
   const bits = [];
@@ -617,7 +633,9 @@ function renderPlantList() {
     .forEach((p) => {
       const row = document.createElement('div');
       row.className = 'design-catalog-item' + (armedPlantKey === p.key ? ' is-armed' : '');
-      row.innerHTML = `<span class="design-catalog-swatch" style="background:${p.color}"></span>
+      row.innerHTML = `${p.photoUrl
+          ? `<img class="design-catalog-photo" src="${p.photoUrl}" alt="" onerror="this.outerHTML='<span class=&quot;design-catalog-swatch&quot; style=&quot;background:${p.color}&quot;></span>';" />`
+          : `<span class="design-catalog-swatch" style="background:${p.color}"></span>`}
         <span><strong>${escapeHtml(p.name)}</strong><span class="design-catalog-item-sub">${p.category} · ${p.sun} sun · ${p.water} water · ${p.spreadFt}ft spread</span></span>`;
       row.addEventListener('click', () => { armedPlantKey = p.key; renderPlantList(); document.getElementById('design-draw-hint').textContent = 'Click the plan to place this plant.'; });
       list.appendChild(row);
@@ -776,12 +794,32 @@ function buildPipeNode(el) {
   return line;
 }
 
+// True display radius from the plant's actual mature spread -- no artificial
+// floor, so a 1.5ft perennial visibly reads smaller than an 8ft shrub at any
+// given scale. Only a tiny floor (2px) to keep it from vanishing entirely.
+function plantDisplayRadiusPx(plant) {
+  return Math.max((plant.spreadFt / 2) * pxPerFt, 2);
+}
+
+// Minimum radius text can legibly sit inside; below this we skip the label
+// (and just show a small solid dot) instead of letting 2 letters of text
+// dwarf the actual circle, which made every small plant look the same size.
+const PLANT_LABEL_MIN_RADIUS = 12;
+
 function buildPlantNode(el) {
   const plant = CAT.PLANT_CATALOG.find((p) => p.key === el.plantKey) || { color: '#8FA65C', spreadFt: 3, name: '?' };
-  const radius = Math.max((plant.spreadFt / 2) * pxPerFt, 4);
+  const radius = plantDisplayRadiusPx(plant);
   const group = new Konva.Group({ x: el.x, y: el.y, draggable: activeTool === 'select' });
+  // Invisible larger hit target so small plants stay easy to click/select
+  // even though their true drawn circle is tiny.
+  const hitRadius = Math.max(radius, 9);
+  if (hitRadius > radius) group.add(new Konva.Circle({ radius: hitRadius, fill: 'transparent' }));
   group.add(new Konva.Circle({ radius, fill: hexToRgba(plant.color, 0.35), stroke: plant.color, strokeWidth: 1.5 }));
-  group.add(new Konva.Text({ text: plant.name.slice(0, 2).toUpperCase(), fontSize: 11, fill: '#F5F5F0', x: -8, y: -6 }));
+  if (radius >= PLANT_LABEL_MIN_RADIUS) {
+    group.add(new Konva.Text({ text: plant.name.slice(0, 2).toUpperCase(), fontSize: 11, fill: '#F5F5F0', x: -8, y: -6, listening: false }));
+  } else {
+    group.add(new Konva.Circle({ radius: Math.min(2.5, radius), fill: plant.color, listening: false }));
+  }
   group.on('dragend', () => { el.x = group.x(); el.y = group.y(); markDirty(); if (selectedElementId === el.id) positionSelectionRing(el); });
   attachSelectHandler(group, el);
   return group;
@@ -885,7 +923,7 @@ function selectElement(id) {
 
 function positionSelectionRing(el) {
   let radius = 16;
-  if (el.type === 'plant') { const p = CAT.PLANT_CATALOG.find((x) => x.key === el.plantKey); if (p) radius = Math.max((p.spreadFt / 2) * pxPerFt, 4) + 4; }
+  if (el.type === 'plant') { const p = CAT.PLANT_CATALOG.find((x) => x.key === el.plantKey); if (p) radius = plantDisplayRadiusPx(p) + 4; }
   if (el.type === 'head') { radius = 12; }
   selectionRing.position({ x: el.x, y: el.y });
   selectionRing.radius(radius);
@@ -1253,28 +1291,138 @@ function renderLegend() {
 }
 
 // ===================== Print / export =====================
+// window.print() lets the user "Save as PDF" in the browser's own print
+// dialog -- no separate PDF library needed. #design-print-sheet is built
+// fresh each time from current elements, and style.css's @media print rule
+// hides the rest of the app and shows only this sheet.
+
+function buildPrintSheet() {
+  const box = document.getElementById('design-print-sheet');
+  if (!box || !stage || !currentDesign) return;
+
+  const plantCounts = new Map();
+  elements.filter((e) => e.type === 'plant').forEach((e) => plantCounts.set(e.plantKey, (plantCounts.get(e.plantKey) || 0) + 1));
+  const headEls = elements.filter((e) => e.type === 'head');
+  const headCounts = new Map();
+  headEls.forEach((e) => headCounts.set(e.headKey, (headCounts.get(e.headKey) || 0) + 1));
+  const zoneEls = elements.filter((e) => e.type === 'zone').sort((a, b) => a.zoneNumber - b.zoneNumber);
+  const pipeEls = elements.filter((e) => e.type === 'pipe');
+  const lateralFt = pipeEls.filter((e) => e.subtype === 'lateral').reduce((s, e) => s + polylineLengthFt(e.points), 0);
+  const mainlineFt = pipeEls.filter((e) => e.subtype === 'mainline').reduce((s, e) => s + polylineLengthFt(e.points), 0);
+  const fixtureCounts = new Map();
+  elements.filter((e) => e.type === 'fixture').forEach((e) => fixtureCounts.set(e.fixtureKey, (fixtureCounts.get(e.fixtureKey) || 0) + 1));
+  const areaTotals = {};
+  elements.filter((e) => e.type === 'area' && e.subtype !== 'boundary').forEach((e) => {
+    areaTotals[e.subtype] = (areaTotals[e.subtype] || 0) + polygonAreaSqFt(e.points);
+  });
+
+  const linkBits = [];
+  if (currentDesign.customers && currentDesign.customers.name) linkBits.push(currentDesign.customers.name);
+  if (currentDesign.jobs && currentDesign.jobs.title) linkBits.push(currentDesign.jobs.title);
+
+  let html = `
+    <div class="design-print-title">${escapeHtml(currentDesign.name || 'Untitled design')}</div>
+    <div class="design-print-meta">${linkBits.length ? escapeHtml(linkBits.join(' — ')) + ' &middot; ' : ''}Printed ${new Date().toLocaleDateString()} &middot; Scale: 1 ft &asymp; ${pxPerFt.toFixed(1)} px</div>
+    <div class="design-print-plan"><img src="${stage.toDataURL({ pixelRatio: 2 })}" /></div>
+  `;
+
+  html += `<div class="design-print-section"><h3>Site areas</h3>`;
+  if (Object.keys(areaTotals).length === 0) {
+    html += `<div class="design-print-row"><span>No areas drawn</span><span></span></div>`;
+  }
+  for (const key of Object.keys(areaTotals)) {
+    const preset = CAT.AREA_PRESETS.find((p) => p.key === key);
+    html += `<div class="design-print-row"><span>${preset ? escapeHtml(preset.name) : key}</span><span>${areaTotals[key].toFixed(0)} sq ft</span></div>`;
+  }
+  html += `</div>`;
+
+  if (plantCounts.size) {
+    html += `<div class="design-print-section"><h3>Plants</h3><div class="design-print-plant-grid">`;
+    for (const [key, count] of plantCounts) {
+      const p = CAT.PLANT_CATALOG.find((x) => x.key === key);
+      if (!p) continue;
+      html += `
+        <div class="design-print-plant-card">
+          ${p.photoUrl
+            ? `<img class="design-print-plant-photo" src="${p.photoUrl}" alt="${escapeHtml(p.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />`
+            : ''}
+          <div class="design-print-plant-fallback" style="${p.photoUrl ? '' : 'display:flex;'} background:${p.color}">${escapeHtml(p.category)}</div>
+          <div class="design-print-plant-name">${escapeHtml(p.name)} &times;${count}</div>
+          <div class="design-print-plant-sub">${p.heightFt}ft tall &times; ${p.spreadFt}ft spread</div>
+        </div>`;
+    }
+    html += `</div></div>`;
+  }
+
+  if (headCounts.size) {
+    html += `<div class="design-print-section"><h3>Sprinkler heads</h3>`;
+    for (const [key, count] of headCounts) {
+      const h = CAT.HEAD_CATALOG.find((x) => x.key === key);
+      html += `<div class="design-print-row"><span>${h ? `${escapeHtml(h.brand)} ${escapeHtml(h.model)}` : key}</span><span>&times;${count}</span></div>`;
+    }
+    html += `</div>`;
+  }
+
+  if (zoneEls.length) {
+    html += `<div class="design-print-section"><h3>Zones</h3>`;
+    for (const z of zoneEls) {
+      const heads = headEls.filter((h) => h.zoneNumber === z.zoneNumber);
+      const gpm = heads.reduce((s, h) => {
+        const h2 = CAT.HEAD_CATALOG.find((x) => x.key === h.headKey);
+        return s + (h2 ? h2.gpmFull : 0) * ((h.arc || 360) / 360);
+      }, 0);
+      html += `<div class="design-print-row"><span>Zone ${z.zoneNumber}${z.label ? ` (${escapeHtml(z.label)})` : ''}</span><span>${heads.length} heads &middot; ~${gpm.toFixed(1)} GPM</span></div>`;
+    }
+    html += `</div>`;
+  }
+
+  if (mainlineFt || lateralFt) {
+    html += `<div class="design-print-section"><h3>Pipe (approx.)</h3>
+      <div class="design-print-row"><span>Mainline</span><span>${mainlineFt.toFixed(0)} ft</span></div>
+      <div class="design-print-row"><span>Lateral</span><span>${lateralFt.toFixed(0)} ft</span></div>
+    </div>`;
+  }
+
+  if (fixtureCounts.size) {
+    html += `<div class="design-print-section"><h3>Fixtures</h3>`;
+    for (const [key, count] of fixtureCounts) {
+      const f = CAT.FIXTURE_CATALOG.find((x) => x.key === key);
+      html += `<div class="design-print-row"><span>${f ? escapeHtml(f.name) : key}</span><span>&times;${count}</span></div>`;
+    }
+    html += `</div>`;
+  }
+
+  box.innerHTML = html;
+}
 
 document.getElementById('btn-design-print').addEventListener('click', () => {
   if (!currentDesign) return;
   deselect();
   fitViewToContent();
-  setTimeout(() => window.print(), 150);
+  setTimeout(() => { buildPrintSheet(); window.print(); }, 150);
 });
 
 // ===================== Wire up "Site design" buttons on Customer/Job drawers =====================
 
 document.getElementById('btn-customer-site-design').addEventListener('click', () => {
   if (!editingCustomerId) return;
-  const c = customers.find((x) => x.id === editingCustomerId);
+  // Capture before closing the drawer -- closeCustomerDrawer() clears
+  // editingCustomerId, so reading it after that call (as this used to)
+  // silently passed null and created designs with no customer link at all.
+  const customerId = editingCustomerId;
+  const c = customers.find((x) => x.id === customerId);
   if (typeof closeCustomerDrawer === 'function') closeCustomerDrawer();
-  openOrCreateDesignForCustomer(editingCustomerId, c ? c.name : 'Customer');
+  openOrCreateDesignForCustomer(customerId, c ? c.name : 'Customer');
 });
 
 document.getElementById('btn-job-site-design').addEventListener('click', () => {
   if (!editingJobId) return;
-  const j = jobs.find((x) => x.id === editingJobId);
+  // Same capture-before-close fix as above -- closeJobDrawer() clears
+  // editingJobId.
+  const jobId = editingJobId;
+  const j = jobs.find((x) => x.id === jobId);
   if (typeof closeJobDrawer === 'function') closeJobDrawer();
-  openOrCreateDesignForJob(editingJobId, j ? j.title : 'Job', j ? j.customer_id : null);
+  openOrCreateDesignForJob(jobId, j ? j.title : 'Job', j ? j.customer_id : null);
 });
 
 // Show/hide those buttons whenever a customer/job drawer opens for an
