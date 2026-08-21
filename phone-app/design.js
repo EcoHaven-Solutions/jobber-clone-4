@@ -455,6 +455,12 @@ function ensureStage() {
 
   stage.on('click tap', onStageClick);
   stage.on('wheel', onStageWheel);
+  // NOTE: deliberately NOT using Konva's dblclick/dbltap to finish a shape --
+  // tried it, but Konva's dblclick synthesis is purely time-based with no
+  // distance check, so two ordinary quick clicks in different spots while
+  // placing vertices (completely normal) can misfire as "finish" and
+  // truncate the shape. Enter-to-finish and auto-finish-on-tool-switch below
+  // are both deliberate actions and don't have that failure mode.
 
   window.addEventListener('resize', () => { resizeStage(); drawGrid(); });
 }
@@ -546,7 +552,13 @@ function computeBoundingBox() {
 // ===================== Tool selection =====================
 
 function setActiveTool(tool) {
-  cancelCurrentDraw();
+  // Auto-finish an in-progress shape instead of silently discarding it.
+  // Switching tools used to just cancel whatever you were drawing -- so
+  // drawing a boundary, then clicking "Plant" to start placing pins (without
+  // first pressing Enter) threw the boundary away with no warning. Now it
+  // finishes the shape if there are enough points for a valid one, exactly
+  // like pressing Enter would; Escape still explicitly discards a draw.
+  finishCurrentDraw();
   activeTool = tool;
   document.querySelectorAll('.design-tool-btn[data-tool]').forEach((b) => {
     b.classList.toggle('is-active', b.dataset.tool === tool);
@@ -561,14 +573,14 @@ function setActiveTool(tool) {
 
   const hints = {
     scale: 'Click two points, then enter the real distance between them.',
-    'area-boundary': 'Click to add points. Enter to finish, Esc to cancel.',
-    'area-lawn': 'Click to add points. Enter to finish, Esc to cancel.',
-    'area-bed': 'Click to add points. Enter to finish, Esc to cancel.',
-    'area-hardscape': 'Click to add points. Enter to finish, Esc to cancel.',
-    'area-water': 'Click to add points. Enter to finish, Esc to cancel.',
-    zone: 'Click to outline the zone. Enter to finish, Esc to cancel.',
-    'pipe-lateral': 'Click along the pipe run. Enter to finish, Esc to cancel.',
-    'pipe-mainline': 'Click along the pipe run. Enter to finish, Esc to cancel.',
+    'area-boundary': 'Click to add points. Press Enter (or pick another tool) to finish. Esc to cancel.',
+    'area-lawn': 'Click to add points. Press Enter (or pick another tool) to finish. Esc to cancel.',
+    'area-bed': 'Click to add points. Press Enter (or pick another tool) to finish. Esc to cancel.',
+    'area-hardscape': 'Click to add points. Press Enter (or pick another tool) to finish. Esc to cancel.',
+    'area-water': 'Click to add points. Press Enter (or pick another tool) to finish. Esc to cancel.',
+    zone: 'Click to outline the zone. Press Enter (or pick another tool) to finish. Esc to cancel.',
+    'pipe-lateral': 'Click along the pipe run. Press Enter (or pick another tool) to finish. Esc to cancel.',
+    'pipe-mainline': 'Click along the pipe run. Press Enter (or pick another tool) to finish. Esc to cancel.',
     plant: armedPlantKey ? 'Click the plan to place this plant.' : 'Pick a plant from the Catalog panel first.',
     head: armedHeadKey ? 'Click the plan to place this head.' : 'Pick a head from the Catalog panel first.',
     fixture: armedFixtureKey ? 'Click the plan to place this fixture.' : 'Pick a fixture from the Catalog panel first.',
@@ -752,17 +764,52 @@ function polygonCentroid(points) {
   return { x: x / n, y: y / n };
 }
 
+// A small procedurally-drawn tileable texture (short blade strokes over a
+// green wash) so a Lawn area reads as grass instead of a flat color fill --
+// built once on an offscreen canvas and reused as a Konva pattern.
+let grassPatternCanvas = null;
+function getGrassPatternCanvas() {
+  if (grassPatternCanvas) return grassPatternCanvas;
+  const size = 24;
+  const c = document.createElement('canvas');
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = 'rgba(122,180,90,0.35)';
+  ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = 'rgba(92,140,62,0.6)';
+  ctx.lineWidth = 1;
+  const blades = [
+    [3, 20, 2, 12], [7, 22, 6, 10], [11, 21, 13, 9], [15, 23, 14, 11],
+    [19, 20, 21, 10], [2, 8, 4, 2], [9, 6, 8, 0], [16, 7, 18, 1], [22, 9, 20, 3],
+  ];
+  blades.forEach(([x1, y1, x2, y2]) => {
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  });
+  grassPatternCanvas = c;
+  return c;
+}
+
 function buildAreaNode(el) {
   const preset = CAT.AREA_PRESETS.find((p) => p.key === el.subtype) || CAT.AREA_PRESETS[1];
-  const line = new Konva.Line({
+  const lineOpts = {
     points: el.points,
     closed: true,
-    fill: preset.fill,
     stroke: preset.stroke,
     strokeWidth: preset.strokeWidth || 2,
     dash: preset.dash || null,
     draggable: activeTool === 'select',
-  });
+  };
+  if (el.subtype === 'lawn') {
+    lineOpts.fillPatternImage = getGrassPatternCanvas();
+    lineOpts.fillPatternRepeat = 'repeat';
+  } else {
+    lineOpts.fill = preset.fill;
+  }
+  const line = new Konva.Line(lineOpts);
   line.on('dragend', () => onShapeDragEnd(el, line));
   attachSelectHandler(line, el);
   return line;
