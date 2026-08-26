@@ -393,7 +393,7 @@
         .map(function (s) {
           var checked = selectedServices[s.id] !== undefined;
           var qtyVal = checked ? selectedServices[s.id].quantity : 1;
-          var tier = checked ? selectedServices[s.id].tier : 'budget';
+          var tier = checked ? selectedServices[s.id].tier : 'premium';
           var qtyHtml = s.allow_quantity
             ? '<div class="qty-stepper" data-id="' + s.id + '">' +
               '<button type="button" class="qty-btn qty-minus"' + (checked ? '' : ' disabled') + '>−</button>' +
@@ -433,7 +433,7 @@
               stepper.querySelector('.qty-value').textContent = '1';
             }
             if (tierRow) tierRow.classList.add('is-visible');
-            selectedServices[id] = { quantity: 1, tier: 'budget' };
+            selectedServices[id] = { quantity: 1, tier: 'premium' };
           } else {
             if (stepper) stepper.querySelectorAll('.qty-btn').forEach(function (b) { b.disabled = true; });
             if (tierRow) tierRow.classList.remove('is-visible');
