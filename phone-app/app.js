@@ -2997,6 +2997,7 @@ function startLineItemTemplateEdit(t) {
   document.getElementById('lit-budget-fields').style.display = t.has_tier_pricing ? 'block' : 'none';
   document.getElementById('lit-budget-price').value = t.budget_price || '';
   document.getElementById('lit-budget-price-max').value = t.budget_price_max || '';
+  document.getElementById('lit-budget-notes').value = t.budget_notes || '';
   document.getElementById('lit-notes').value = t.notes || '';
   document.getElementById('lit-allow-quantity').checked = !!t.allow_quantity;
   document.getElementById('lit-category').value = t.category || '';
@@ -3029,14 +3030,15 @@ document.getElementById('line-item-template-form').addEventListener('submit', as
   const has_tier_pricing = document.getElementById('lit-has-tier-pricing').checked;
   const budget_price = document.getElementById('lit-budget-price').value;
   const budget_price_max = document.getElementById('lit-budget-price-max').value;
+  const budget_notes = document.getElementById('lit-budget-notes').value.trim();
   const notes = document.getElementById('lit-notes').value.trim();
   const allow_quantity = document.getElementById('lit-allow-quantity').checked;
   const category = document.getElementById('lit-category').value;
   if (!description) return;
   if (editingLineItemTemplateId) {
-    await window.api.lineItemTemplates.update(editingLineItemTemplateId, { description, unit_price, unit_price_max, has_tier_pricing, budget_price, budget_price_max, notes, allow_quantity, category });
+    await window.api.lineItemTemplates.update(editingLineItemTemplateId, { description, unit_price, unit_price_max, has_tier_pricing, budget_price, budget_price_max, budget_notes, notes, allow_quantity, category });
   } else {
-    await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max, has_tier_pricing, budget_price, budget_price_max, notes, allow_quantity, category });
+    await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max, has_tier_pricing, budget_price, budget_price_max, budget_notes, notes, allow_quantity, category });
   }
   cancelLineItemTemplateEdit();
   await loadTemplates();

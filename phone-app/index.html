@@ -1051,6 +1051,7 @@
                   <input type="number" id="lit-budget-price" placeholder="Price (or min)" min="0" step="0.01" />
                   <input type="number" id="lit-budget-price-max" placeholder="Max (optional)" min="0" step="0.01" />
                 </div>
+                <textarea id="lit-budget-notes" rows="3" placeholder="Budget-Friendly details (optional) — shown INSTEAD of the description above, only when a customer picks Budget-Friendly." style="margin-top:8px;"></textarea>
               </div>
               <p class="empty-sub" style="margin-top:6px;">Leave a "Max" field blank for a flat price, or fill it in for a range (e.g. $50–$150).</p>
               <label>Category (optional)
@@ -1058,7 +1059,7 @@
                   <option value="">— None —</option>
                 </select>
               </label>
-              <textarea id="lit-notes" rows="3" placeholder="Details (optional) — e.g. what's included, warranty, timeline. Shown to customers on the public estimate page and in their confirmation email." style="margin-top:8px;"></textarea>
+              <textarea id="lit-notes" rows="3" placeholder="Details (optional) — the description used for Premium/standard pricing. Shown in the confirmation email." style="margin-top:8px;"></textarea>
               <label style="flex-direction:row; align-items:center; gap:8px; margin-top:10px;">
                 <input type="checkbox" id="lit-allow-quantity" style="width:auto;" checked />
                 Customer can choose a quantity (uncheck for one-off items like a full system install)
