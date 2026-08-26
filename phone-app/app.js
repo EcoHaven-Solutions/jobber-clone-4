@@ -2962,7 +2962,7 @@ function renderLineItemTemplateList() {
       <div class="unscheduled-job-row" style="margin-bottom:6px;" data-edit-lit="${t.id}">
         <div>
           <div class="ujr-title">${escapeHtml(t.description)}${t.allow_quantity ? '' : ' <span style="font-weight:400; opacity:0.7;">(qty locked to 1)</span>'}${t.category ? ` <span style="font-weight:400; opacity:0.7;">[${escapeHtml(t.category)}]</span>` : ''}</div>
-          <div class="ujr-customer">Budget: ${formatPriceOrRange(t)}${formatPremiumPriceOrRange(t) ? ' · Premium: ' + formatPremiumPriceOrRange(t) : ''}${t.notes ? ' — ' + escapeHtml(t.notes) : ''}</div>
+          <div class="ujr-customer">${t.has_tier_pricing ? 'Budget: ' : ''}${formatPriceOrRange(t)}${t.has_tier_pricing && formatPremiumPriceOrRange(t) ? ' · Premium: ' + formatPremiumPriceOrRange(t) : ''}${t.notes ? ' — ' + escapeHtml(t.notes) : ''}</div>
         </div>
         <button type="button" class="btn btn-ghost btn-small" data-delete-lit="${t.id}" onclick="event.stopPropagation()">Delete</button>
       </div>`
@@ -2992,6 +2992,8 @@ function startLineItemTemplateEdit(t) {
   document.getElementById('lit-description').value = t.description;
   document.getElementById('lit-price').value = t.unit_price;
   document.getElementById('lit-price-max').value = t.unit_price_max || '';
+  document.getElementById('lit-has-tier-pricing').checked = !!t.has_tier_pricing;
+  document.getElementById('lit-premium-fields').style.display = t.has_tier_pricing ? 'block' : 'none';
   document.getElementById('lit-premium-price').value = t.premium_price || '';
   document.getElementById('lit-premium-price-max').value = t.premium_price_max || '';
   document.getElementById('lit-notes').value = t.notes || '';
@@ -3005,17 +3007,23 @@ function startLineItemTemplateEdit(t) {
 function cancelLineItemTemplateEdit() {
   editingLineItemTemplateId = null;
   document.getElementById('line-item-template-form').reset();
+  document.getElementById('lit-premium-fields').style.display = 'none';
   document.getElementById('btn-submit-lit').textContent = '+ Add saved item';
   document.getElementById('btn-cancel-lit-edit').style.display = 'none';
 }
 
 document.getElementById('btn-cancel-lit-edit').addEventListener('click', cancelLineItemTemplateEdit);
 
+document.getElementById('lit-has-tier-pricing').addEventListener('change', function () {
+  document.getElementById('lit-premium-fields').style.display = this.checked ? 'block' : 'none';
+});
+
 document.getElementById('line-item-template-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const description = document.getElementById('lit-description').value.trim();
   const unit_price = document.getElementById('lit-price').value;
   const unit_price_max = document.getElementById('lit-price-max').value;
+  const has_tier_pricing = document.getElementById('lit-has-tier-pricing').checked;
   const premium_price = document.getElementById('lit-premium-price').value;
   const premium_price_max = document.getElementById('lit-premium-price-max').value;
   const notes = document.getElementById('lit-notes').value.trim();
@@ -3023,9 +3031,9 @@ document.getElementById('line-item-template-form').addEventListener('submit', as
   const category = document.getElementById('lit-category').value;
   if (!description) return;
   if (editingLineItemTemplateId) {
-    await window.api.lineItemTemplates.update(editingLineItemTemplateId, { description, unit_price, unit_price_max, premium_price, premium_price_max, notes, allow_quantity, category });
+    await window.api.lineItemTemplates.update(editingLineItemTemplateId, { description, unit_price, unit_price_max, has_tier_pricing, premium_price, premium_price_max, notes, allow_quantity, category });
   } else {
-    await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max, premium_price, premium_price_max, notes, allow_quantity, category });
+    await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max, has_tier_pricing, premium_price, premium_price_max, notes, allow_quantity, category });
   }
   cancelLineItemTemplateEdit();
   await loadTemplates();
