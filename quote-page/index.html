@@ -227,6 +227,43 @@
       border-radius: 999px;
     }
     .cat-header-row { display: flex; align-items: center; }
+
+    /* ---- Budget-Friendly / Premium tier toggle ---- */
+    .tier-explainer {
+      font-size: 12.5px;
+      color: #D6E9F1;
+      background: #23261F;
+      border: 1px solid #2E6178;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin: 0 0 10px;
+      line-height: 1.4;
+    }
+    .tier-row {
+      display: none;
+      margin-top: 8px;
+      padding-left: 27px;
+    }
+    .tier-row.is-visible { display: flex; }
+    .tier-toggle {
+      display: flex;
+      border: 1px solid #2E6178;
+      border-radius: 8px;
+      overflow: hidden;
+      flex: none;
+    }
+    .tier-btn {
+      border: none;
+      background: #23261F;
+      color: #D6E9F1;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 7px 12px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .tier-btn + .tier-btn { border-left: 1px solid #2E6178; }
+    .tier-btn.is-selected { background: #5FBF3E; color: #fff; }
   </style>
 </head>
 <body>
@@ -256,6 +293,7 @@
           <span id="selected-count-badge"></span>
         </div>
         <div id="category-selection-title"></div>
+        <p class="tier-explainer">For each item you select, choose one: <strong>Budget-Friendly</strong> — final results may take multiple sessions. <strong>Premium</strong> — more expensive, but meant to be a one-and-done job.</p>
         <div id="services-list"></div>
       </div>
 
@@ -284,7 +322,7 @@
 
   <script>
     var SUPABASE_FN_URL = 'https://tudyqzbmlfkgcdfjdhej.supabase.co/functions/v1/public-lead-intake';
-    var selectedServices = {}; // { serviceId: quantity } -- persists across category switches
+    var selectedServices = {}; // { serviceId: { quantity, tier: 'budget'|'premium' } } -- persists across category switches
     var allServices = [];
     var allCategories = [];
 
@@ -358,7 +396,8 @@
       listEl.innerHTML = filtered
         .map(function (s) {
           var checked = selectedServices[s.id] !== undefined;
-          var qtyVal = checked ? selectedServices[s.id] : 1;
+          var qtyVal = checked ? selectedServices[s.id].quantity : 1;
+          var tier = checked ? selectedServices[s.id].tier : 'budget';
           var qtyHtml = s.allow_quantity
             ? '<div class="qty-stepper" data-id="' + s.id + '">' +
               '<button type="button" class="qty-btn qty-minus"' + (checked ? '' : ' disabled') + '>−</button>' +
@@ -366,12 +405,19 @@
               '<button type="button" class="qty-btn qty-plus"' + (checked ? '' : ' disabled') + '>+</button>' +
               '</div>'
             : '';
+          var tierHtml = '<div class="tier-row' + (checked ? ' is-visible' : '') + '" data-tier-row="' + s.id + '">' +
+            '<div class="tier-toggle" data-id="' + s.id + '">' +
+            '<button type="button" class="tier-btn tier-budget' + (tier === 'budget' ? ' is-selected' : '') + '">Budget-Friendly</button>' +
+            '<button type="button" class="tier-btn tier-premium' + (tier === 'premium' ? ' is-selected' : '') + '">Premium</button>' +
+            '</div>' +
+            '</div>';
           return '<div class="service-item">' +
             '<div class="service-row">' +
             '<label class="service-row-check"><input type="checkbox" class="service-checkbox" value="' + s.id + '"' + (checked ? ' checked' : '') + ' />' +
             esc(s.description) + '</label>' +
             qtyHtml +
             '</div>' +
+            tierHtml +
             '</div>';
         })
         .join('');
@@ -380,14 +426,17 @@
         cb.addEventListener('change', function () {
           var id = Number(cb.value);
           var stepper = listEl.querySelector('.qty-stepper[data-id="' + id + '"]');
+          var tierRow = listEl.querySelector('.tier-row[data-tier-row="' + id + '"]');
           if (cb.checked) {
             if (stepper) {
               stepper.querySelectorAll('.qty-btn').forEach(function (b) { b.disabled = false; });
               stepper.querySelector('.qty-value').textContent = '1';
             }
-            selectedServices[id] = 1;
+            if (tierRow) tierRow.classList.add('is-visible');
+            selectedServices[id] = { quantity: 1, tier: 'budget' };
           } else {
             if (stepper) stepper.querySelectorAll('.qty-btn').forEach(function (b) { b.disabled = true; });
+            if (tierRow) tierRow.classList.remove('is-visible');
             delete selectedServices[id];
           }
           updateSelectedBadge();
@@ -399,15 +448,33 @@
         var valueEl = stepper.querySelector('.qty-value');
         stepper.querySelector('.qty-minus').addEventListener('click', function () {
           if (selectedServices[id] === undefined) return;
-          var next = Math.max(1, selectedServices[id] - 1);
-          selectedServices[id] = next;
+          var next = Math.max(1, selectedServices[id].quantity - 1);
+          selectedServices[id].quantity = next;
           valueEl.textContent = next;
         });
         stepper.querySelector('.qty-plus').addEventListener('click', function () {
           if (selectedServices[id] === undefined) return;
-          var next = selectedServices[id] + 1;
-          selectedServices[id] = next;
+          var next = selectedServices[id].quantity + 1;
+          selectedServices[id].quantity = next;
           valueEl.textContent = next;
+        });
+      });
+
+      listEl.querySelectorAll('.tier-toggle').forEach(function (toggle) {
+        var id = Number(toggle.dataset.id);
+        var budgetBtn = toggle.querySelector('.tier-budget');
+        var premiumBtn = toggle.querySelector('.tier-premium');
+        budgetBtn.addEventListener('click', function () {
+          if (selectedServices[id] === undefined) return;
+          selectedServices[id].tier = 'budget';
+          budgetBtn.classList.add('is-selected');
+          premiumBtn.classList.remove('is-selected');
+        });
+        premiumBtn.addEventListener('click', function () {
+          if (selectedServices[id] === undefined) return;
+          selectedServices[id].tier = 'premium';
+          premiumBtn.classList.add('is-selected');
+          budgetBtn.classList.remove('is-selected');
         });
       });
     }
@@ -447,7 +514,7 @@
 
       try {
         var selectedList = Object.keys(selectedServices).map(function (id) {
-          return { id: Number(id), quantity: selectedServices[id] };
+          return { id: Number(id), quantity: selectedServices[id].quantity, tier: selectedServices[id].tier };
         });
         var res = await fetch(SUPABASE_FN_URL, {
           method: 'POST',

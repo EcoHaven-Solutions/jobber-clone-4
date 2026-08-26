@@ -1035,10 +1035,18 @@
             <form id="line-item-template-form">
               <div class="field-row">
                 <input type="text" id="lit-description" placeholder="Description" required style="flex:2;" />
+              </div>
+              <p class="empty-sub" style="margin-top:10px; margin-bottom:2px;"><strong>Budget-Friendly price</strong> — shown to customers who pick Budget-Friendly on the public estimate page.</p>
+              <div class="field-row">
                 <input type="number" id="lit-price" placeholder="Price (or min)" min="0" step="0.01" required />
                 <input type="number" id="lit-price-max" placeholder="Max (optional)" min="0" step="0.01" />
               </div>
-              <p class="empty-sub" style="margin-top:6px;">Leave "Max" blank for a flat price, or fill it in for a range (e.g. $50–$150).</p>
+              <p class="empty-sub" style="margin-top:10px; margin-bottom:2px;"><strong>Premium price</strong> — shown to customers who pick Premium instead. Leave blank to reuse the Budget-Friendly price.</p>
+              <div class="field-row">
+                <input type="number" id="lit-premium-price" placeholder="Price (or min)" min="0" step="0.01" />
+                <input type="number" id="lit-premium-price-max" placeholder="Max (optional)" min="0" step="0.01" />
+              </div>
+              <p class="empty-sub" style="margin-top:6px;">Leave a "Max" field blank for a flat price, or fill it in for a range (e.g. $50–$150).</p>
               <label>Category (optional)
                 <select id="lit-category">
                   <option value="">— None —</option>

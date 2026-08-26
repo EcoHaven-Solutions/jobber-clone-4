@@ -464,8 +464,8 @@ window.api = {
 
   lineItemTemplates: {
     list: async () => unwrap(await sb.from('line_item_templates').select('*').order('description')),
-    create: async (t) => unwrap(await sb.from('line_item_templates').insert({ description: t.description, unit_price: toNumOrDefault(t.unit_price, 0), unit_price_max: t.unit_price_max ? toNumOrDefault(t.unit_price_max, null) : null, notes: toNullableText(t.notes), allow_quantity: toBoolInt(t.allow_quantity), category: toNullableText(t.category) }).select().single()),
-    update: async (id, t) => unwrap(await sb.from('line_item_templates').update({ description: t.description, unit_price: toNumOrDefault(t.unit_price, 0), unit_price_max: t.unit_price_max ? toNumOrDefault(t.unit_price_max, null) : null, notes: toNullableText(t.notes), allow_quantity: toBoolInt(t.allow_quantity), category: toNullableText(t.category) }).eq('id', id).select().single()),
+    create: async (t) => unwrap(await sb.from('line_item_templates').insert({ description: t.description, unit_price: toNumOrDefault(t.unit_price, 0), unit_price_max: t.unit_price_max ? toNumOrDefault(t.unit_price_max, null) : null, premium_price: t.premium_price ? toNumOrDefault(t.premium_price, null) : null, premium_price_max: t.premium_price_max ? toNumOrDefault(t.premium_price_max, null) : null, notes: toNullableText(t.notes), allow_quantity: toBoolInt(t.allow_quantity), category: toNullableText(t.category) }).select().single()),
+    update: async (id, t) => unwrap(await sb.from('line_item_templates').update({ description: t.description, unit_price: toNumOrDefault(t.unit_price, 0), unit_price_max: t.unit_price_max ? toNumOrDefault(t.unit_price_max, null) : null, premium_price: t.premium_price ? toNumOrDefault(t.premium_price, null) : null, premium_price_max: t.premium_price_max ? toNumOrDefault(t.premium_price_max, null) : null, notes: toNullableText(t.notes), allow_quantity: toBoolInt(t.allow_quantity), category: toNullableText(t.category) }).eq('id', id).select().single()),
     delete: async (id) => { await sb.from('line_item_templates').delete().eq('id', id); return { id }; },
   },
 

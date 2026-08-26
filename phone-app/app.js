@@ -2942,6 +2942,14 @@ function formatPriceOrRange(t) {
   return formatCurrency(t.unit_price);
 }
 
+function formatPremiumPriceOrRange(t) {
+  if (!t.premium_price) return null;
+  if (t.premium_price_max && t.premium_price_max > t.premium_price) {
+    return `${formatCurrency(t.premium_price)}–${formatCurrency(t.premium_price_max)}`;
+  }
+  return formatCurrency(t.premium_price);
+}
+
 function renderLineItemTemplateList() {
   const wrap = document.getElementById('line-item-template-list');
   if (lineItemTemplates.length === 0) {
@@ -2954,7 +2962,7 @@ function renderLineItemTemplateList() {
       <div class="unscheduled-job-row" style="margin-bottom:6px;" data-edit-lit="${t.id}">
         <div>
           <div class="ujr-title">${escapeHtml(t.description)}${t.allow_quantity ? '' : ' <span style="font-weight:400; opacity:0.7;">(qty locked to 1)</span>'}${t.category ? ` <span style="font-weight:400; opacity:0.7;">[${escapeHtml(t.category)}]</span>` : ''}</div>
-          <div class="ujr-customer">${formatPriceOrRange(t)}${t.notes ? ' — ' + escapeHtml(t.notes) : ''}</div>
+          <div class="ujr-customer">Budget: ${formatPriceOrRange(t)}${formatPremiumPriceOrRange(t) ? ' · Premium: ' + formatPremiumPriceOrRange(t) : ''}${t.notes ? ' — ' + escapeHtml(t.notes) : ''}</div>
         </div>
         <button type="button" class="btn btn-ghost btn-small" data-delete-lit="${t.id}" onclick="event.stopPropagation()">Delete</button>
       </div>`
@@ -2984,6 +2992,8 @@ function startLineItemTemplateEdit(t) {
   document.getElementById('lit-description').value = t.description;
   document.getElementById('lit-price').value = t.unit_price;
   document.getElementById('lit-price-max').value = t.unit_price_max || '';
+  document.getElementById('lit-premium-price').value = t.premium_price || '';
+  document.getElementById('lit-premium-price-max').value = t.premium_price_max || '';
   document.getElementById('lit-notes').value = t.notes || '';
   document.getElementById('lit-allow-quantity').checked = !!t.allow_quantity;
   document.getElementById('lit-category').value = t.category || '';
@@ -3006,14 +3016,16 @@ document.getElementById('line-item-template-form').addEventListener('submit', as
   const description = document.getElementById('lit-description').value.trim();
   const unit_price = document.getElementById('lit-price').value;
   const unit_price_max = document.getElementById('lit-price-max').value;
+  const premium_price = document.getElementById('lit-premium-price').value;
+  const premium_price_max = document.getElementById('lit-premium-price-max').value;
   const notes = document.getElementById('lit-notes').value.trim();
   const allow_quantity = document.getElementById('lit-allow-quantity').checked;
   const category = document.getElementById('lit-category').value;
   if (!description) return;
   if (editingLineItemTemplateId) {
-    await window.api.lineItemTemplates.update(editingLineItemTemplateId, { description, unit_price, unit_price_max, notes, allow_quantity, category });
+    await window.api.lineItemTemplates.update(editingLineItemTemplateId, { description, unit_price, unit_price_max, premium_price, premium_price_max, notes, allow_quantity, category });
   } else {
-    await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max, notes, allow_quantity, category });
+    await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max, premium_price, premium_price_max, notes, allow_quantity, category });
   }
   cancelLineItemTemplateEdit();
   await loadTemplates();
