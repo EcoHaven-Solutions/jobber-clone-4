@@ -1053,6 +1053,35 @@
                 </div>
                 <textarea id="lit-budget-notes" rows="3" placeholder="Budget-Friendly details (optional) — shown INSTEAD of the description above, only when a customer picks Budget-Friendly." style="margin-top:8px;"></textarea>
               </div>
+              <label style="flex-direction:row; align-items:center; gap:8px; margin-top:10px;">
+                <input type="checkbox" id="lit-has-size-pricing" style="width:auto;" />
+                Also offer different pricing for Small / Medium / Large yards on the public estimate form
+              </label>
+              <div id="lit-size-fields" style="display:none;">
+                <p class="empty-sub" style="margin-top:10px; margin-bottom:2px;">"Medium" always uses the Premium price above (or the Budget-Friendly price, for customers who pick that tier). Set Small and Large below — leave either blank to reuse the Medium price for that same tier.</p>
+                <p class="empty-sub" style="margin-top:10px; margin-bottom:2px;"><strong>Small yard</strong> (Premium)</p>
+                <div class="field-row">
+                  <input type="number" id="lit-small-price" placeholder="Price (or min)" min="0" step="0.01" />
+                  <input type="number" id="lit-small-price-max" placeholder="Max (optional)" min="0" step="0.01" />
+                </div>
+                <p class="empty-sub" style="margin-top:10px; margin-bottom:2px;"><strong>Large yard</strong> (Premium)</p>
+                <div class="field-row">
+                  <input type="number" id="lit-large-price" placeholder="Price (or min)" min="0" step="0.01" />
+                  <input type="number" id="lit-large-price-max" placeholder="Max (optional)" min="0" step="0.01" />
+                </div>
+                <div id="lit-size-budget-fields" style="display:none;">
+                  <p class="empty-sub" style="margin-top:10px; margin-bottom:2px;"><strong>Small yard</strong> (Budget-Friendly)</p>
+                  <div class="field-row">
+                    <input type="number" id="lit-small-budget-price" placeholder="Price (or min)" min="0" step="0.01" />
+                    <input type="number" id="lit-small-budget-price-max" placeholder="Max (optional)" min="0" step="0.01" />
+                  </div>
+                  <p class="empty-sub" style="margin-top:10px; margin-bottom:2px;"><strong>Large yard</strong> (Budget-Friendly)</p>
+                  <div class="field-row">
+                    <input type="number" id="lit-large-budget-price" placeholder="Price (or min)" min="0" step="0.01" />
+                    <input type="number" id="lit-large-budget-price-max" placeholder="Max (optional)" min="0" step="0.01" />
+                  </div>
+                </div>
+              </div>
               <p class="empty-sub" style="margin-top:6px;">Leave a "Max" field blank for a flat price, or fill it in for a range (e.g. $50–$150).</p>
               <label>Category (optional)
                 <select id="lit-category">

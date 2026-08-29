@@ -2998,6 +2998,17 @@ function startLineItemTemplateEdit(t) {
   document.getElementById('lit-budget-price').value = t.budget_price || '';
   document.getElementById('lit-budget-price-max').value = t.budget_price_max || '';
   document.getElementById('lit-budget-notes').value = t.budget_notes || '';
+  document.getElementById('lit-has-size-pricing').checked = !!t.has_size_pricing;
+  document.getElementById('lit-size-fields').style.display = t.has_size_pricing ? 'block' : 'none';
+  document.getElementById('lit-size-budget-fields').style.display = (t.has_size_pricing && t.has_tier_pricing) ? 'block' : 'none';
+  document.getElementById('lit-small-price').value = t.small_price || '';
+  document.getElementById('lit-small-price-max').value = t.small_price_max || '';
+  document.getElementById('lit-large-price').value = t.large_price || '';
+  document.getElementById('lit-large-price-max').value = t.large_price_max || '';
+  document.getElementById('lit-small-budget-price').value = t.small_budget_price || '';
+  document.getElementById('lit-small-budget-price-max').value = t.small_budget_price_max || '';
+  document.getElementById('lit-large-budget-price').value = t.large_budget_price || '';
+  document.getElementById('lit-large-budget-price-max').value = t.large_budget_price_max || '';
   document.getElementById('lit-notes').value = t.notes || '';
   document.getElementById('lit-allow-quantity').checked = !!t.allow_quantity;
   document.getElementById('lit-category').value = t.category || '';
@@ -3011,6 +3022,8 @@ function cancelLineItemTemplateEdit() {
   document.getElementById('line-item-template-form').reset();
   document.getElementById('lit-premium-price-label').style.display = 'none';
   document.getElementById('lit-budget-fields').style.display = 'none';
+  document.getElementById('lit-size-fields').style.display = 'none';
+  document.getElementById('lit-size-budget-fields').style.display = 'none';
   document.getElementById('btn-submit-lit').textContent = '+ Add saved item';
   document.getElementById('btn-cancel-lit-edit').style.display = 'none';
 }
@@ -3020,6 +3033,12 @@ document.getElementById('btn-cancel-lit-edit').addEventListener('click', cancelL
 document.getElementById('lit-has-tier-pricing').addEventListener('change', function () {
   document.getElementById('lit-premium-price-label').style.display = this.checked ? 'block' : 'none';
   document.getElementById('lit-budget-fields').style.display = this.checked ? 'block' : 'none';
+  document.getElementById('lit-size-budget-fields').style.display = (this.checked && document.getElementById('lit-has-size-pricing').checked) ? 'block' : 'none';
+});
+
+document.getElementById('lit-has-size-pricing').addEventListener('change', function () {
+  document.getElementById('lit-size-fields').style.display = this.checked ? 'block' : 'none';
+  document.getElementById('lit-size-budget-fields').style.display = (this.checked && document.getElementById('lit-has-tier-pricing').checked) ? 'block' : 'none';
 });
 
 document.getElementById('line-item-template-form').addEventListener('submit', async (e) => {
@@ -3031,14 +3050,24 @@ document.getElementById('line-item-template-form').addEventListener('submit', as
   const budget_price = document.getElementById('lit-budget-price').value;
   const budget_price_max = document.getElementById('lit-budget-price-max').value;
   const budget_notes = document.getElementById('lit-budget-notes').value.trim();
+  const has_size_pricing = document.getElementById('lit-has-size-pricing').checked;
+  const small_price = document.getElementById('lit-small-price').value;
+  const small_price_max = document.getElementById('lit-small-price-max').value;
+  const large_price = document.getElementById('lit-large-price').value;
+  const large_price_max = document.getElementById('lit-large-price-max').value;
+  const small_budget_price = document.getElementById('lit-small-budget-price').value;
+  const small_budget_price_max = document.getElementById('lit-small-budget-price-max').value;
+  const large_budget_price = document.getElementById('lit-large-budget-price').value;
+  const large_budget_price_max = document.getElementById('lit-large-budget-price-max').value;
   const notes = document.getElementById('lit-notes').value.trim();
   const allow_quantity = document.getElementById('lit-allow-quantity').checked;
   const category = document.getElementById('lit-category').value;
   if (!description) return;
+  const payload = { description, unit_price, unit_price_max, has_tier_pricing, budget_price, budget_price_max, budget_notes, has_size_pricing, small_price, small_price_max, large_price, large_price_max, small_budget_price, small_budget_price_max, large_budget_price, large_budget_price_max, notes, allow_quantity, category };
   if (editingLineItemTemplateId) {
-    await window.api.lineItemTemplates.update(editingLineItemTemplateId, { description, unit_price, unit_price_max, has_tier_pricing, budget_price, budget_price_max, budget_notes, notes, allow_quantity, category });
+    await window.api.lineItemTemplates.update(editingLineItemTemplateId, payload);
   } else {
-    await window.api.lineItemTemplates.create({ description, unit_price, unit_price_max, has_tier_pricing, budget_price, budget_price_max, budget_notes, notes, allow_quantity, category });
+    await window.api.lineItemTemplates.create(payload);
   }
   cancelLineItemTemplateEdit();
   await loadTemplates();

@@ -254,6 +254,33 @@
     }
     .tier-btn + .tier-btn { border-left: 1px solid #2E6178; }
     .tier-btn.is-selected { background: #5FBF3E; color: #fff; }
+
+    /* ---- Small/Medium/Large yard-size picker ---- */
+    .size-row {
+      display: none;
+      margin-top: 8px;
+      padding-left: 27px;
+    }
+    .size-row.is-visible { display: flex; }
+    .size-toggle {
+      display: flex;
+      border: 1px solid #2E6178;
+      border-radius: 8px;
+      overflow: hidden;
+      flex: none;
+    }
+    .size-btn {
+      border: none;
+      background: #23261F;
+      color: #D6E9F1;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 7px 12px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .size-btn + .size-btn { border-left: 1px solid #2E6178; }
+    .size-btn.is-selected { background: #5FBF3E; color: #fff; }
   </style>
 </head>
 <body>
@@ -311,7 +338,7 @@
 
   <script>
     var SUPABASE_FN_URL = 'https://tudyqzbmlfkgcdfjdhej.supabase.co/functions/v1/public-lead-intake';
-    var selectedServices = {}; // { serviceId: { quantity, tier: 'budget'|'premium' } } -- persists across category switches
+    var selectedServices = {}; // { serviceId: { quantity, tier: 'budget'|'premium', size: 'small'|'medium'|'large' } } -- persists across category switches
     var allServices = [];
     var allCategories = [];
 
@@ -387,6 +414,7 @@
           var checked = selectedServices[s.id] !== undefined;
           var qtyVal = checked ? selectedServices[s.id].quantity : 1;
           var tier = checked ? selectedServices[s.id].tier : 'premium';
+          var size = checked ? selectedServices[s.id].size : 'medium';
           var qtyHtml = s.allow_quantity
             ? '<div class="qty-stepper" data-id="' + s.id + '">' +
               '<button type="button" class="qty-btn qty-minus"' + (checked ? '' : ' disabled') + '>−</button>' +
@@ -402,6 +430,15 @@
               '</div>' +
               '</div>'
             : '';
+          var sizeHtml = s.has_size_pricing
+            ? '<div class="size-row' + (checked ? ' is-visible' : '') + '" data-size-row="' + s.id + '">' +
+              '<div class="size-toggle" data-id="' + s.id + '">' +
+              '<button type="button" class="size-btn size-small' + (size === 'small' ? ' is-selected' : '') + '">Small yard</button>' +
+              '<button type="button" class="size-btn size-medium' + (size === 'medium' ? ' is-selected' : '') + '">Medium yard</button>' +
+              '<button type="button" class="size-btn size-large' + (size === 'large' ? ' is-selected' : '') + '">Large yard</button>' +
+              '</div>' +
+              '</div>'
+            : '';
           return '<div class="service-item">' +
             '<div class="service-row">' +
             '<label class="service-row-check"><input type="checkbox" class="service-checkbox" value="' + s.id + '"' + (checked ? ' checked' : '') + ' />' +
@@ -409,6 +446,7 @@
             qtyHtml +
             '</div>' +
             tierHtml +
+            sizeHtml +
             '</div>';
         })
         .join('');
@@ -418,16 +456,19 @@
           var id = Number(cb.value);
           var stepper = listEl.querySelector('.qty-stepper[data-id="' + id + '"]');
           var tierRow = listEl.querySelector('.tier-row[data-tier-row="' + id + '"]');
+          var sizeRow = listEl.querySelector('.size-row[data-size-row="' + id + '"]');
           if (cb.checked) {
             if (stepper) {
               stepper.querySelectorAll('.qty-btn').forEach(function (b) { b.disabled = false; });
               stepper.querySelector('.qty-value').textContent = '1';
             }
             if (tierRow) tierRow.classList.add('is-visible');
-            selectedServices[id] = { quantity: 1, tier: 'premium' };
+            if (sizeRow) sizeRow.classList.add('is-visible');
+            selectedServices[id] = { quantity: 1, tier: 'premium', size: 'medium' };
           } else {
             if (stepper) stepper.querySelectorAll('.qty-btn').forEach(function (b) { b.disabled = true; });
             if (tierRow) tierRow.classList.remove('is-visible');
+            if (sizeRow) sizeRow.classList.remove('is-visible');
             delete selectedServices[id];
           }
           updateSelectedBadge();
@@ -468,6 +509,22 @@
           budgetBtn.classList.remove('is-selected');
         });
       });
+
+      listEl.querySelectorAll('.size-toggle').forEach(function (toggle) {
+        var id = Number(toggle.dataset.id);
+        var smallBtn = toggle.querySelector('.size-small');
+        var mediumBtn = toggle.querySelector('.size-medium');
+        var largeBtn = toggle.querySelector('.size-large');
+        function selectSize(size, btn) {
+          if (selectedServices[id] === undefined) return;
+          selectedServices[id].size = size;
+          [smallBtn, mediumBtn, largeBtn].forEach(function (b) { b.classList.remove('is-selected'); });
+          btn.classList.add('is-selected');
+        }
+        smallBtn.addEventListener('click', function () { selectSize('small', smallBtn); });
+        mediumBtn.addEventListener('click', function () { selectSize('medium', mediumBtn); });
+        largeBtn.addEventListener('click', function () { selectSize('large', largeBtn); });
+      });
     }
 
     function updateSelectedBadge() {
@@ -505,7 +562,7 @@
 
       try {
         var selectedList = Object.keys(selectedServices).map(function (id) {
-          return { id: Number(id), quantity: selectedServices[id].quantity, tier: selectedServices[id].tier };
+          return { id: Number(id), quantity: selectedServices[id].quantity, tier: selectedServices[id].tier, size: selectedServices[id].size };
         });
         var res = await fetch(SUPABASE_FN_URL, {
           method: 'POST',
