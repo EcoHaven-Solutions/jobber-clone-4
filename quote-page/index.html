@@ -281,6 +281,48 @@
     }
     .size-btn + .size-btn { border-left: 1px solid #2E6178; }
     .size-btn.is-selected { background: #5FBF3E; color: #fff; }
+
+    /* ---- Free catalog request banner + mini form ---- */
+    #catalog-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      background: #23261F;
+      border: 1px solid #2E6178;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 18px;
+    }
+    #catalog-banner-text { font-size: 13px; color: #D6E9F1; line-height: 1.4; flex: 1; min-width: 180px; }
+    #catalog-banner-text strong { color: #fff; display: block; margin-bottom: 2px; }
+    #btn-open-catalog {
+      flex: none;
+      background: linear-gradient(160deg, #5FBF3E, #4A9A30);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #btn-back-from-catalog {
+      background: none;
+      border: none;
+      color: #D6E9F1;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0 0 10px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    #catalog-intro { font-size: 14px; color: #D6E9F1; margin: 0 0 14px; }
+    #catalog-message { margin-top: 10px; font-size: 13px; }
   </style>
 </head>
 <body>
@@ -296,6 +338,25 @@
       </div>
     </div>
     <div class="body" id="form-wrap">
+
+      <div id="catalog-banner">
+        <div id="catalog-banner-text"><strong>🌵 Not ready for an estimate yet?</strong>Get our free Drought-Tolerant Landscaping Catalog by email.</div>
+        <button type="button" id="btn-open-catalog">Request Free Catalog</button>
+      </div>
+
+      <div id="catalog-step" style="display:none;">
+        <button type="button" id="btn-back-from-catalog">&larr; Back</button>
+        <p id="catalog-intro">Enter your name and email and we'll send over our free Drought-Tolerant Landscaping Catalog right away.</p>
+        <label>Name *</label>
+        <input type="text" id="c-name" />
+        <label>Phone</label>
+        <input type="tel" id="c-phone" />
+        <label>Email *</label>
+        <input type="email" id="c-email" />
+        <input type="text" id="c-website" style="position:absolute; left:-9999px;" tabindex="-1" autocomplete="off" />
+        <button type="button" class="primary" id="catalog-submit-btn">Send Me The Catalog</button>
+        <div id="catalog-message"></div>
+      </div>
 
       <!-- Step 1: category picker -->
       <div id="category-step">
@@ -541,6 +602,67 @@
     document.getElementById('btn-back-to-categories').addEventListener('click', function () {
       document.getElementById('services-step').style.display = 'none';
       document.getElementById('category-step').style.display = 'block';
+    });
+
+    // ---- Free catalog request (separate mini-flow, no services/pricing involved) ----
+    document.getElementById('btn-open-catalog').addEventListener('click', function () {
+      document.getElementById('catalog-banner').style.display = 'none';
+      document.getElementById('category-step').style.display = 'none';
+      document.getElementById('services-step').style.display = 'none';
+      document.getElementById('quote-form').style.display = 'none';
+      document.getElementById('catalog-step').style.display = 'block';
+    });
+    document.getElementById('btn-back-from-catalog').addEventListener('click', function () {
+      document.getElementById('catalog-step').style.display = 'none';
+      document.getElementById('catalog-banner').style.display = 'flex';
+      document.getElementById('quote-form').style.display = 'block';
+      if (allCategories.length === 0) {
+        document.getElementById('services-step').style.display = 'block';
+      } else {
+        document.getElementById('category-step').style.display = 'block';
+      }
+    });
+    document.getElementById('catalog-submit-btn').addEventListener('click', async function () {
+      var btn = this;
+      var msg = document.getElementById('catalog-message');
+      var cName = document.getElementById('c-name').value.trim();
+      var cEmail = document.getElementById('c-email').value.trim();
+      msg.textContent = '';
+      if (!cName) { msg.style.color = '#E08A6B'; msg.textContent = 'Name is required.'; return; }
+      if (!cEmail) { msg.style.color = '#E08A6B'; msg.textContent = 'Email is required.'; return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+
+      try {
+        var res = await fetch(SUPABASE_FN_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            catalogRequest: true,
+            name: cName,
+            phone: document.getElementById('c-phone').value,
+            email: cEmail,
+            website: document.getElementById('c-website').value,
+          }),
+        });
+        var data = await res.json();
+
+        if (data.ok) {
+          document.getElementById('form-wrap').innerHTML =
+            '<p style="text-align:center; color:#8FDB74; font-size:16px; padding:20px 0;">Thanks! Check your email for your free catalog.</p>';
+        } else {
+          msg.style.color = '#E08A6B';
+          msg.textContent = data.error || 'Something went wrong. Please call/text 509-866-6388 instead.';
+          btn.disabled = false;
+          btn.textContent = 'Send Me The Catalog';
+        }
+      } catch (err) {
+        msg.style.color = '#E08A6B';
+        msg.textContent = 'Something went wrong. Please call/text 509-866-6388 instead.';
+        btn.disabled = false;
+        btn.textContent = 'Send Me The Catalog';
+      }
     });
 
     function esc(str) {
