@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Estimate Accepted — EcoHaven Solutions LLC</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Helvetica, Arial, sans-serif;
+      background:
+        linear-gradient(180deg, rgba(26,28,24,0.75), rgba(26,28,24,0.9)),
+        url('https://images.unsplash.com/photo-1770664945615-52203ab54c88?q=80&w=1654&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')
+        center / cover no-repeat;
+      color: #EAEAE4;
+      display: flex;
+      justify-content: center;
+      padding: 40px 16px;
+      min-height: 100vh;
+    }
+    .card {
+      max-width: 460px;
+      width: 100%;
+      background: #3E7C98;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      border: 1px solid #2E6178;
+      align-self: flex-start;
+      margin-top: 40px;
+    }
+    .header {
+      background: linear-gradient(160deg, #454542, #2E2E2C);
+      color: #fff;
+      padding: 28px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      text-align: left;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      line-height: 1.15;
+    }
+    .header p {
+      margin: 6px 0 0;
+      font-size: 13px;
+      color: #D6E9F1;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+    }
+    .body {
+      padding: 32px 26px 28px;
+      background: #2E2E2C;
+      text-align: center;
+    }
+    .body h2 {
+      margin: 0 0 12px;
+      font-size: 21px;
+      font-weight: 700;
+    }
+    .body p {
+      margin: 0;
+      font-size: 15px;
+      color: #D8D8D2;
+      line-height: 1.55;
+    }
+    .footer {
+      background: #23261F;
+      padding: 16px 24px;
+      text-align: center;
+      font-size: 12px;
+      color: #A9AC9E;
+    }
+    .footer a { color: #8FDB74; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex:none;">
+        <path d="M12 2C12 2 8 6.5 8 10.5C8 12.9853 9.79086 15 12 15C14.2091 15 16 12.9853 16 10.5C16 6.5 12 2 12 2Z" fill="#4F9FD6"/>
+        <path d="M12 22C12 22 5 19 5 13C8 13 10.5 14.5 12 17C13.5 14.5 16 13 19 13C19 19 12 22 12 22Z" fill="#5FBF3E"/>
+      </svg>
+      <div>
+        <h1>EcoHaven Solutions LLC</h1>
+        <p>SPRINKLER INSTALLS &middot; REPAIRS &middot; UPGRADES</p>
+      </div>
+    </div>
+    <div class="body">
+      <h2 id="heading">Loading…</h2>
+      <p id="message"></p>
+    </div>
+    <div class="footer">
+      Call/Text <a href="tel:5098666388">509-866-6388</a> &middot; ecohavenpro.com
+    </div>
+  </div>
+
+  <script>
+    // This page never talks to the database itself -- the actual "mark
+    // this estimate approved" work already happened server-side in the
+    // public-lead-intake Edge Function BEFORE it redirected here. This
+    // page only reads the ?status=/&number= it was redirected with and
+    // shows the matching message. (Supabase Edge Functions can't serve
+    // real interactive HTML directly -- they force text/plain on
+    // anything that looks like a webpage, as a phishing-prevention
+    // measure -- so the Edge Function redirects here instead, to a page
+    // that lives on GitHub Pages with no such restriction.)
+    var params = new URLSearchParams(window.location.search);
+    var status = params.get('status') || 'error';
+    var number = params.get('number');
+    var numberSuffix = number ? ' (#' + number + ')' : '';
+
+    var COPY = {
+      accepted: {
+        heading: 'Estimate Accepted!',
+        message: "Thanks for accepting your estimate" + numberSuffix + ". We'll be in touch soon to get you scheduled. Questions in the meantime? Call/text 509-866-6388."
+      },
+      already: {
+        heading: 'Already Accepted',
+        message: "This estimate" + numberSuffix + " was already accepted -- we'll be in touch soon to get you scheduled!"
+      },
+      notfound: {
+        heading: 'Link Not Found',
+        message: "This estimate link is invalid or has expired. Please call/text 509-866-6388 and we'll help sort it out."
+      },
+      error: {
+        heading: 'Something Went Wrong',
+        message: "We couldn't process that right now. Please call/text 509-866-6388."
+      }
+    };
+
+    var copy = COPY[status] || COPY.error;
+    document.getElementById('heading').textContent = copy.heading;
+    document.getElementById('message').textContent = copy.message;
+    document.title = copy.heading + ' — EcoHaven Solutions';
+  </script>
+</body>
+</html>
