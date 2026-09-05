@@ -346,11 +346,13 @@
 
       <div id="catalog-step" style="display:none;">
         <button type="button" id="btn-back-from-catalog">&larr; Back</button>
-        <p id="catalog-intro">Enter your name and email and we'll send over our free Drought-Tolerant Landscaping Catalog right away.</p>
+        <p id="catalog-intro">Enter your info and we'll send over our free Drought-Tolerant Landscaping Catalog right away.</p>
         <label>Name *</label>
         <input type="text" id="c-name" />
-        <label>Phone</label>
+        <label>Phone *</label>
         <input type="tel" id="c-phone" />
+        <label>Address *</label>
+        <input type="text" id="c-address" placeholder="Street address, city" />
         <label>Email *</label>
         <input type="email" id="c-email" />
         <input type="text" id="c-website" style="position:absolute; left:-9999px;" tabindex="-1" autocomplete="off" />
@@ -378,8 +380,11 @@
         <label>Name *</label>
         <input type="text" id="f-name" required />
 
-        <label>Phone</label>
-        <input type="tel" id="f-phone" />
+        <label>Phone *</label>
+        <input type="tel" id="f-phone" required />
+
+        <label>Address *</label>
+        <input type="text" id="f-address" required placeholder="Street address, city" />
 
         <label>Email</label>
         <input type="email" id="f-email" />
@@ -626,9 +631,13 @@
       var btn = this;
       var msg = document.getElementById('catalog-message');
       var cName = document.getElementById('c-name').value.trim();
+      var cPhone = document.getElementById('c-phone').value.trim();
+      var cAddress = document.getElementById('c-address').value.trim();
       var cEmail = document.getElementById('c-email').value.trim();
       msg.textContent = '';
       if (!cName) { msg.style.color = '#E08A6B'; msg.textContent = 'Name is required.'; return; }
+      if (!cPhone) { msg.style.color = '#E08A6B'; msg.textContent = 'Phone number is required.'; return; }
+      if (!cAddress) { msg.style.color = '#E08A6B'; msg.textContent = 'Address is required.'; return; }
       if (!cEmail) { msg.style.color = '#E08A6B'; msg.textContent = 'Email is required.'; return; }
 
       btn.disabled = true;
@@ -641,7 +650,8 @@
           body: JSON.stringify({
             catalogRequest: true,
             name: cName,
-            phone: document.getElementById('c-phone').value,
+            phone: cPhone,
+            address: cAddress,
             email: cEmail,
             website: document.getElementById('c-website').value,
           }),
@@ -692,6 +702,7 @@
           body: JSON.stringify({
             name: document.getElementById('f-name').value,
             phone: document.getElementById('f-phone').value,
+            address: document.getElementById('f-address').value,
             email: document.getElementById('f-email').value,
             message: document.getElementById('f-message').value,
             website: document.getElementById('f-website').value,
@@ -701,7 +712,8 @@
         var data = await res.json();
 
         if (data.ok) {
-          var confirmMsg = selectedList.length
+          var gaveEmail = !!document.getElementById('f-email').value.trim();
+          var confirmMsg = (selectedList.length && gaveEmail)
             ? "Thanks! Check your email for your preliminary estimate — we'll follow up soon."
             : "Thanks! We'll be in touch soon.";
           document.getElementById('form-wrap').innerHTML =

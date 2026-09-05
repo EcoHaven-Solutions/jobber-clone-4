@@ -444,9 +444,16 @@ window.api = {
     create: async (l) => unwrap(await sb.from('leads').insert(cleanLead(l)).select().single()),
     update: async (id, updates) => unwrap(await sb.from('leads').update(cleanLead(updates)).eq('id', id).select().single()),
     delete: async (id) => { await sb.from('leads').delete().eq('id', id); return { id }; },
+    // Any real Estimate the public quote form created for this Lead
+    // (quotes.lead_id) -- most recent first. Used to show a "linked
+    // estimate" readout on the Lead detail screen.
+    getQuotes: async (id) => unwrap(await sb.from('quotes').select('*').eq('lead_id', id).order('created_at', { ascending: false })),
     convertToCustomer: async (id) => {
       const lead = unwrap(await sb.from('leads').select('*').eq('id', id).single());
-      const customer = unwrap(await sb.from('customers').insert({ name: lead.name, phone: lead.phone, email: lead.email, notes: lead.notes }).select().single());
+      const customer = unwrap(await sb.from('customers').insert({ name: lead.name, phone: lead.phone, email: lead.email, address: lead.address, notes: lead.notes }).select().single());
+      // Any Estimate the website created for this Lead now belongs to the
+      // new Customer too, so it shows up normally under them going forward.
+      await sb.from('quotes').update({ customer_id: customer.id }).eq('lead_id', id);
       await sb.from('leads').update({ status: 'converted' }).eq('id', id);
       return customer;
     },
