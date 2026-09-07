@@ -520,13 +520,11 @@ window.api = {
       years.add(String(new Date().getFullYear()));
       return Array.from(years).sort().reverse();
     },
-    getYearlyInvoiceReport: async (year) =>
-      withTotals(
-        'invoices',
-        'invoice_items',
-        'invoice_id',
-        unwrap(await sb.from('invoices').select('*, customers(name), jobs(title)').gte('due_date', `${year}-01-01`).lte('due_date', `${year}-12-31`)).map(mapInvoiceRow)
-      ),
+    getYearlyInvoiceReport: async (year) => {
+      const allInvoices = unwrap(await sb.from('invoices').select('*, customers(name), jobs(title)'));
+      const forYear = allInvoices.filter((inv) => (inv.due_date || inv.created_at || '').slice(0, 4) === String(year));
+      return withTotals('invoices', 'invoice_items', 'invoice_id', forYear.map(mapInvoiceRow));
+    },
   },
 
   settings: {
