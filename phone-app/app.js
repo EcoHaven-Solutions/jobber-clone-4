@@ -50,6 +50,7 @@ navItems.forEach((btn) => {
       v.hidden = v.id !== `view-${target}`;
     });
     if (target === 'schedule' && window.initRouteMap) window.initRouteMap();
+    if (target === 'reports' && reportYearSelect.value) loadReportForYear(reportYearSelect.value);
   });
 });
 
