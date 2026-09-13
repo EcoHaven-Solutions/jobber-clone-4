@@ -940,6 +940,11 @@ function buildAreaNode(el) {
   } else if (el.subtype === 'flagstone') {
     lineOpts.fillPatternImage = getFlagstonePatternCanvas();
     lineOpts.fillPatternRepeat = 'repeat';
+    // The texture's 140px tile is drawn to represent ~4ft of path;
+    // scale it so that holds at this design's actual ft-to-px ratio.
+    const flagstoneScale = pxPerFt / 35;
+    lineOpts.fillPatternScaleX = flagstoneScale;
+    lineOpts.fillPatternScaleY = flagstoneScale;
   } else {
     lineOpts.fill = preset.fill;
   }
