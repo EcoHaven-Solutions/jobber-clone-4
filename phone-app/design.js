@@ -44,6 +44,7 @@ let drawingPoints = [];         // world-space [x,y,x,y,...] for the shape in pr
 let tempDrawLine = null;
 let tempDrawDots = [];
 let scaleClickPoints = [];      // for the "Set scale" tool
+let pendingPhotoPos = null;     // world-space click point waiting on the photo file picker
 
 let autosaveTimer = null;
 
@@ -184,7 +185,7 @@ function openDesign(design) {
   const data = design.canvas_data && typeof design.canvas_data === 'object' ? design.canvas_data : {};
   elements = Array.isArray(data.elements) ? data.elements : [];
   layerVisibility = Object.assign(
-    { image: true, boundary: true, lawn: true, bed: true, hardscape: true, flagstone: true, water: true, plant: true, zone: true, head: true, pipe: true, fixture: true, label: true },
+    { image: true, boundary: true, lawn: true, bed: true, hardscape: true, flagstone: true, water: true, plant: true, zone: true, head: true, pipe: true, fixture: true, label: true, photo: true },
     data.layerVisibility || {}
   );
   pxPerFt = Number(design.scale_px_per_ft) || 10;
@@ -586,6 +587,7 @@ function setActiveTool(tool) {
     head: armedHeadKey ? 'Click the plan to place this head.' : 'Pick a head from the Catalog panel first.',
     fixture: armedFixtureKey ? 'Click the plan to place this fixture.' : 'Pick a fixture from the Catalog panel first.',
     label: 'Click the plan to place a text label.',
+    photo: 'Click the plan to pin a reference photo (opens your photo picker).',
   };
   document.getElementById('design-draw-hint').textContent = isEditableViewport() ? (hints[tool] || '') : '';
 }
@@ -741,6 +743,7 @@ function renderElement(el) {
   else if (el.type === 'fixture') node = buildFixtureNode(el);
   else if (el.type === 'label') node = buildLabelNode(el);
   else if (el.type === 'image') node = buildImageNode(el);
+  else if (el.type === 'photo') node = buildPhotoNode(el);
   if (!node) return;
   node.visible(elementMatchesLayer(el, layerLookupKey(el)) ? layerVisibility[layerLookupKey(el)] !== false : true);
   mainLayer.add(node);
@@ -1077,6 +1080,42 @@ function buildImageNode(el) {
   return group;
 }
 
+function buildPhotoNode(el) {
+  const group = new Konva.Group({ x: el.x, y: el.y, draggable: activeTool === 'select' });
+  const cached = imageObjCache.get(el.id);
+  if (cached) {
+    group.add(new Konva.Image({ image: cached, width: el.width, height: el.height }));
+    group.add(new Konva.Rect({ width: el.width, height: el.height, stroke: '#FFD84A', strokeWidth: 2 }));
+  } else {
+    group.add(new Konva.Rect({ width: el.width, height: el.height, fill: '#2A2A28', stroke: '#FFD84A', strokeWidth: 2 }));
+    group.add(new Konva.Text({ text: 'Loading photo\u2026', x: 8, y: 8, fontSize: 11, fill: '#C4C4BC', width: el.width - 16 }));
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      imageObjCache.set(el.id, img);
+      const node = nodesById.get(el.id);
+      if (node) {
+        node.destroyChildren();
+        node.add(new Konva.Image({ image: img, width: el.width, height: el.height }));
+        node.add(new Konva.Rect({ width: el.width, height: el.height, stroke: '#FFD84A', strokeWidth: 2 }));
+        if (el.caption) node.add(new Konva.Text({ text: el.caption, x: 0, y: el.height + 6, fontSize: 12, fill: '#F5F5F0', width: el.width, align: 'center' }));
+        mainLayer.batchDraw();
+      }
+    };
+    img.onerror = () => {
+      const node = nodesById.get(el.id);
+      if (node) { const t = node.findOne('Text'); if (t) t.text('Photo failed to load'); mainLayer.batchDraw(); }
+    };
+    img.src = el.src;
+  }
+  if (cached && el.caption) {
+    group.add(new Konva.Text({ text: el.caption, x: 0, y: el.height + 6, fontSize: 12, fill: '#F5F5F0', width: el.width, align: 'center' }));
+  }
+  group.on('dragend', () => { el.x = group.x(); el.y = group.y(); markDirty(); });
+  attachSelectHandler(group, el);
+  return group;
+}
+
 function hexToRgba(hex, alpha) {
   const h = hex.replace('#', '');
   const r = parseInt(h.substring(0, 2), 16), g = parseInt(h.substring(2, 4), 16), b = parseInt(h.substring(4, 6), 16);
@@ -1099,7 +1138,7 @@ function selectElement(id) {
   selectedElementId = id;
   const el = elements.find((e) => e.id === id);
   if (!el) return;
-  if (typeof el.x === 'number' && el.type !== 'image') positionSelectionRing(el);
+  if (typeof el.x === 'number' && el.type !== 'image' && el.type !== 'photo') positionSelectionRing(el);
   else selectionRing.visible(false);
   mainLayer.batchDraw();
   showPropertiesTab(true);
@@ -1126,7 +1165,8 @@ function deselect() {
 function deleteElement(id) {
   const idx = elements.findIndex((e) => e.id === id);
   if (idx === -1) return;
-  elements.splice(idx, 1);
+  const [removedEl] = elements.splice(idx, 1);
+  if (removedEl.type === 'photo' && removedEl.src) deleteFromStorage(removedEl.src).catch(() => {});
   const node = nodesById.get(id);
   if (node) node.destroy();
   nodesById.delete(id);
@@ -1219,6 +1259,20 @@ function renderProperties(el) {
       if (node) { node.opacity(el.opacity); mainLayer.batchDraw(); }
       markDirty();
     });
+  } else if (el.type === 'photo') {
+    box.innerHTML = `
+      <div class="design-properties-field"><label>Caption</label><input id="pf-photo-caption" type="text" value="${escapeHtml(el.caption || '')}" placeholder="e.g. Belgard paver -- tan" /></div>
+      <div class="design-properties-field"><label>Size</label><input id="pf-photo-size" type="range" min="60" max="500" step="10" value="${el.width}" /></div>
+      <p class="empty-sub">Drag to reposition. Deleting this also removes the uploaded photo.</p>
+    `;
+    document.getElementById('pf-photo-caption').addEventListener('change', (e) => { el.caption = e.target.value; rerenderThis(); });
+    document.getElementById('pf-photo-size').addEventListener('input', (e) => {
+      const newWidth = Number(e.target.value);
+      const aspect = el.width ? el.height / el.width : 1;
+      el.width = newWidth;
+      el.height = Math.round(newWidth * aspect);
+      rerenderThis();
+    });
   }
 }
 
@@ -1244,6 +1298,7 @@ function onStageClick(e) {
   if (activeTool === 'head') { if (armedHeadKey) placeHead(pos); return; }
   if (activeTool === 'fixture') { if (armedFixtureKey) placeFixture(pos); return; }
   if (activeTool === 'label') { placeLabel(pos); return; }
+  if (activeTool === 'photo') { placePhotoAt(pos); return; }
   if (activeTool === 'select' && e.target === stage) deselect();
 }
 
@@ -1365,6 +1420,45 @@ function placeLabel(pos) {
   if (!text) return;
   addElement({ id: uid(), type: 'label', x: pos.x, y: pos.y, text });
 }
+
+function loadImageDimensions(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+function placePhotoAt(pos) {
+  if (!currentDesign) return;
+  pendingPhotoPos = pos;
+  designPhotoInput.value = '';
+  designPhotoInput.click();
+}
+
+const designPhotoInput = document.getElementById('design-photo-input');
+designPhotoInput.addEventListener('change', async () => {
+  const file = designPhotoInput.files && designPhotoInput.files[0];
+  const pos = pendingPhotoPos || { x: 0, y: 0 };
+  pendingPhotoPos = null;
+  if (!file || !currentDesign) { designPhotoInput.value = ''; return; }
+  try {
+    const dataUrl = await readFileAsDataURL(file);
+    const url = await uploadToStorage(dataUrl, `designs/${currentDesign.id}`);
+    const dims = await loadImageDimensions(url);
+    const defaultWidth = 160;
+    const defaultHeight = dims ? Math.round(defaultWidth * (dims.height / dims.width)) : defaultWidth;
+    addElement({
+      id: uid(), type: 'photo', src: url, caption: '',
+      x: pos.x - defaultWidth / 2, y: pos.y - defaultHeight / 2,
+      width: defaultWidth, height: defaultHeight,
+    });
+  } catch (err) {
+    alert(err.message);
+  }
+  designPhotoInput.value = '';
+});
 
 // ===================== Geometry helpers =====================
 

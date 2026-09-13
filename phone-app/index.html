@@ -345,6 +345,7 @@
             <div class="design-tool-group">
               <div class="design-tool-group-label">Edit</div>
               <button class="design-tool-btn" data-tool="label" title="Add a text label">Label</button>
+              <button class="design-tool-btn" data-tool="photo" title="Pin a reference photo (materials, samples, etc.)">Photo</button>
               <button class="btn btn-danger design-tool-btn" id="btn-design-delete-selected" title="Delete the selected item">Delete selected</button>
             </div>
           </aside>
@@ -359,6 +360,7 @@
               <span id="design-scale-label" class="design-scale-label">Scale not set</span>
             </div>
             <div id="design-stage" class="design-stage"></div>
+            <input type="file" id="design-photo-input" accept="image/*" style="display:none" />
           </div>
 
           <!-- Side panel: catalog / layers / legend -->
@@ -403,6 +405,7 @@
               <label class="design-layer-toggle"><input type="checkbox" data-layer="pipe" checked /> Pipes</label>
               <label class="design-layer-toggle"><input type="checkbox" data-layer="fixture" checked /> Valves/controller/backflow</label>
               <label class="design-layer-toggle"><input type="checkbox" data-layer="label" checked /> Text labels</label>
+              <label class="design-layer-toggle"><input type="checkbox" data-layer="photo" checked /> Reference photos</label>
             </div>
 
             <div class="design-side-panel-body" id="design-panel-legend" hidden>
