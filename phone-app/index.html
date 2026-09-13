@@ -2112,15 +2112,9 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/konva@9/konva.min.js"></script>
-  <script>
-    // Cache-busting for local app files (see comment in patch script /
-    // repo history for why). Forces a fresh fetch of these four files
-    // on every page load, regardless of browser cache.
-    var __v = Date.now();
-    document.write('<script src="supabase-api.js?v=' + __v + '"><\/script>');
-    document.write('<script src="design-data.js?v=' + __v + '"><\/script>');
-    document.write('<script src="app.js?v=' + __v + '"><\/script>');
-    document.write('<script src="design.js?v=' + __v + '"><\/script>');
-  </script>
+  <script src="supabase-api.js"></script>
+  <script src="design-data.js"></script>
+  <script src="app.js"></script>
+  <script src="design.js"></script>
 </body>
 </html>
