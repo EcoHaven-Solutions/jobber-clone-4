@@ -904,23 +904,6 @@ jobPhotoInput.addEventListener('change', () => {
   reader.readAsDataURL(file);
 });
 
-invoicePhotoInput.addEventListener('change', () => {
-  const file = invoicePhotoInput.files[0];
-  if (!file || !editingInvoiceId) return;
-  const reader = new FileReader();
-  reader.onload = async () => {
-    try {
-      await window.api.invoicePhotos.add(editingInvoiceId, reader.result);
-      invoicePhotoInput.value = '';
-      renderInvoicePhotoGallery(editingInvoiceId);
-    } catch (err) {
-      alert(err.message);
-      invoicePhotoInput.value = '';
-    }
-  };
-  reader.readAsDataURL(file);
-});
-
 jobNextOccurrenceBtn.addEventListener('click', async () => {
   if (!editingJobId) return;
   const confirmed = confirm('Create the next occurrence of this recurring job?');
@@ -1586,6 +1569,23 @@ const invoiceLineItemRowsEl = document.getElementById('invoice-line-item-rows');
 const invoiceTotalDisplay = document.getElementById('invoice-total-display');
 const invoicePhotoInput = document.getElementById('invoice-photo-input');
 const invoicePhotoGallery = document.getElementById('invoice-photo-gallery');
+
+invoicePhotoInput.addEventListener('change', () => {
+  const file = invoicePhotoInput.files[0];
+  if (!file || !editingInvoiceId) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      await window.api.invoicePhotos.add(editingInvoiceId, reader.result);
+      invoicePhotoInput.value = '';
+      renderInvoicePhotoGallery(editingInvoiceId);
+    } catch (err) {
+      alert(err.message);
+      invoicePhotoInput.value = '';
+    }
+  };
+  reader.readAsDataURL(file);
+});
 
 function populateInvoiceCustomerSelect() {
   const current = invoiceCustomerSelect.value;
