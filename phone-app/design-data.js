@@ -29,6 +29,11 @@ const PLANT_CATALOG = [
   { key: 'quaking-aspen', name: 'Quaking Aspen', category: 'Tree', sun: 'full', water: 'moderate', heightFt: 40, spreadFt: 20, color: '#7C9A4A', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/706118724/medium.jpg' },
   { key: 'flowering-crabapple', name: 'Flowering Crabapple', category: 'Tree', sun: 'full', water: 'moderate', heightFt: 20, spreadFt: 20, color: '#C97CA0', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/2448479/medium.JPG' },
   { key: 'serviceberry', name: 'Serviceberry', category: 'Tree', sun: 'partial', water: 'moderate', heightFt: 20, spreadFt: 15, color: '#8AA35B', photoUrl: 'https://gardenology.org/w/images/thumb/1/16/Amelanchier_grandiflora2.jpg/240px-Amelanchier_grandiflora2.jpg' },
+  { key: 'ponderosa-pine', name: 'Ponderosa Pine', category: 'Tree', sun: 'full', water: 'low', heightFt: 70, spreadFt: 30, color: '#5B6E3D', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/3790446/medium.JPG' },
+  { key: 'autumn-brilliance-serviceberry', name: 'Autumn Brilliance Serviceberry', category: 'Tree', sun: 'full', water: 'moderate', heightFt: 20, spreadFt: 20, color: '#D2542A', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/65493639/medium.jpg' },
+  { key: 'eastern-redbud', name: 'Eastern Redbud', category: 'Tree', sun: 'partial', water: 'moderate', heightFt: 25, spreadFt: 30, color: '#C13584', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/146752176/medium.jpg' },
+  { key: 'paperbark-maple', name: 'Paperbark Maple', category: 'Tree', sun: 'partial', water: 'moderate', heightFt: 25, spreadFt: 20, color: '#A9642F', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/93282513/medium.jpg' },
+  { key: 'silver-linden', name: 'Silver Linden', category: 'Tree', sun: 'full', water: 'moderate', heightFt: 60, spreadFt: 45, color: '#8CA084', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/289618202/medium.jpeg' },
 
   // ---- Shrubs ----
   { key: 'green-mountain-boxwood', name: "'Green Mountain' Boxwood", category: 'Shrub', sun: 'partial', water: 'moderate', heightFt: 4, spreadFt: 3, color: '#3E5C33', photoUrl: 'https://static.inaturalist.org/photos/43384449/medium.jpeg' },
@@ -41,6 +46,15 @@ const PLANT_CATALOG = [
   { key: 'arborvitae-emerald', name: "'Emerald Green' Arborvitae", category: 'Shrub', sun: 'full', water: 'moderate', heightFt: 12, spreadFt: 4, color: '#2E5233', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/4684247/medium.jpeg' },
   { key: 'juniper-blue-rug', name: "'Blue Rug' Juniper", category: 'Shrub', sun: 'full', water: 'low', heightFt: 1, spreadFt: 6, color: '#4F7A8C', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/250334018/medium.jpg' },
   { key: 'red-twig-dogwood', name: 'Red Twig Dogwood', category: 'Shrub', sun: 'partial', water: 'moderate', heightFt: 7, spreadFt: 7, color: '#A6402E', photoUrl: 'https://static.inaturalist.org/photos/16633753/medium.jpg' },
+  { key: 'elderberry', name: 'Elderberry', category: 'Shrub', sun: 'full', water: 'moderate', heightFt: 10, spreadFt: 8, color: '#2E2440', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/10180/medium.jpg' },
+  { key: 'smoke-tree', name: 'Smoke Tree', category: 'Shrub', sun: 'full', water: 'low', heightFt: 15, spreadFt: 15, color: '#B98CAE', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/136745491/medium.jpg' },
+  { key: 'mock-orange', name: 'Mock Orange', category: 'Shrub', sun: 'full', water: 'low', heightFt: 8, spreadFt: 6, color: '#F3EFD9', photoUrl: 'https://static.inaturalist.org/photos/40363644/medium.jpg' },
+  { key: 'golden-currant', name: 'Golden Currant', category: 'Shrub', sun: 'full', water: 'low', heightFt: 6, spreadFt: 6, color: '#DDA426', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/497524076/medium.jpg' },
+  { key: 'oregon-grape', name: 'Oregon Grape', category: 'Shrub', sun: 'partial', water: 'low', heightFt: 5, spreadFt: 5, color: '#D9B22F', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/22784/medium.jpg' },
+  { key: 'red-currant', name: 'Red Flowering Currant', category: 'Shrub', sun: 'partial', water: 'low', heightFt: 8, spreadFt: 6, color: '#C2456B', photoUrl: 'https://static.inaturalist.org/photos/72387844/medium.jpg' },
+  { key: 'spirea', name: 'Spirea', category: 'Shrub', sun: 'full', water: 'moderate', heightFt: 4, spreadFt: 4, color: '#D1608A', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/449207/medium.jpg' },
+  { key: 'ninebark', name: 'Ninebark', category: 'Shrub', sun: 'full', water: 'moderate', heightFt: 8, spreadFt: 6, color: '#5B3350', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/135237890/medium.jpeg' },
+  { key: 'upright-juniper', name: 'Upright Juniper', category: 'Shrub', sun: 'full', water: 'low', heightFt: 18, spreadFt: 4, color: '#6F8F99', photoUrl: 'https://static.inaturalist.org/photos/53827887/medium.jpeg' },
 
   // ---- Perennials ----
   { key: 'russian-sage', name: 'Russian Sage', category: 'Perennial', sun: 'full', water: 'low', heightFt: 3, spreadFt: 3, color: '#8C8FBF', photoUrl: 'https://static.inaturalist.org/photos/417032110/medium.jpeg' },
@@ -52,6 +66,12 @@ const PLANT_CATALOG = [
   { key: 'hosta', name: 'Hosta', category: 'Perennial', sun: 'shade', water: 'moderate', heightFt: 1.5, spreadFt: 2, color: '#4F7A4F', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/297985004/medium.jpg' },
   { key: 'peony', name: 'Peony', category: 'Perennial', sun: 'full', water: 'moderate', heightFt: 2.5, spreadFt: 2.5, color: '#C96F9C', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/887117/medium.jpg' },
   { key: 'catmint', name: "'Walker's Low' Catmint", category: 'Perennial', sun: 'full', water: 'low', heightFt: 1.5, spreadFt: 2, color: '#7A8FBF', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/131906502/medium.jpg' },
+  { key: 'blanket-flower-gaillardia', name: 'Blanket Flower', category: 'Perennial', sun: 'full', water: 'low', heightFt: 2, spreadFt: 1.5, color: '#D9752E', photoUrl: 'https://static.inaturalist.org/photos/45640107/medium.jpg' },
+  { key: 'yarrow', name: 'Yarrow', category: 'Perennial', sun: 'full', water: 'low', heightFt: 2, spreadFt: 2, color: '#DCD7B8', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/4902/medium.jpg' },
+  { key: 'bee-balm-monarda', name: 'Bee Balm (Wild Bergamot)', category: 'Perennial', sun: 'full', water: 'moderate', heightFt: 3, spreadFt: 2, color: '#B080C0', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/301795454/medium.jpg' },
+  { key: 'penstemon', name: 'Rocky Mountain Penstemon', category: 'Perennial', sun: 'full', water: 'low', heightFt: 2, spreadFt: 1.5, color: '#5C63B0', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/45389512/medium.jpg' },
+  { key: 'lupine', name: 'Bigleaf Lupine', category: 'Perennial', sun: 'full', water: 'moderate', heightFt: 3, spreadFt: 1.5, color: '#5C4E96', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/135866080/medium.jpg' },
+  { key: 'lenten-rose-hellebore', name: 'Lenten Rose', category: 'Perennial', sun: 'shade', water: 'moderate', heightFt: 1.5, spreadFt: 1.5, color: '#8C5B6E', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/357527342/medium.jpg' },
 
   // ---- Ornamental Grasses ----
   { key: 'karl-foerster', name: "'Karl Foerster' Feather Reed Grass", category: 'Ornamental Grass', sun: 'full', water: 'moderate', heightFt: 5, spreadFt: 2, color: '#B0A64F', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/305886393/medium.jpg' },
@@ -63,6 +83,9 @@ const PLANT_CATALOG = [
   { key: 'vinca-minor', name: 'Vinca Minor', category: 'Groundcover', sun: 'shade', water: 'moderate', heightFt: 0.5, spreadFt: 2, color: '#3E6F5C', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/623147456/medium.jpg' },
   { key: 'sedum-groundcover', name: 'Sedum Groundcover Mix', category: 'Groundcover', sun: 'full', water: 'low', heightFt: 0.3, spreadFt: 1.5, color: '#8FA65C', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/43927616/medium.jpg' },
   { key: 'sweet-woodruff', name: 'Sweet Woodruff', category: 'Groundcover', sun: 'shade', water: 'moderate', heightFt: 0.5, spreadFt: 1.5, color: '#4F8C5C', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/74944506/medium.jpg' },
+  { key: 'kinnikinnick', name: 'Kinnikinnick', category: 'Groundcover', sun: 'full', water: 'low', heightFt: 0.5, spreadFt: 4, color: '#4F6B4A', photoUrl: 'https://static.inaturalist.org/photos/181302737/medium.jpeg' },
+  { key: 'wild-strawberry', name: 'Wild Strawberry', category: 'Groundcover', sun: 'partial', water: 'moderate', heightFt: 0.3, spreadFt: 1.5, color: '#C9302C', photoUrl: 'https://inaturalist-open-data.s3.amazonaws.com/photos/600014255/medium.jpg' },
+  { key: 'ice-plant-delosperma', name: 'Ice Plant', category: 'Groundcover', sun: 'full', water: 'low', heightFt: 0.4, spreadFt: 2, color: '#D6488F', photoUrl: 'https://static.inaturalist.org/photos/585366703/medium.jpg' },
 ];
 
 // ---------------------------------------------------------------------------
