@@ -1588,6 +1588,151 @@ document.getElementById('btn-design-print').addEventListener('click', () => {
   setTimeout(() => { buildPrintSheet(); window.print(); }, 150);
 });
 
+function designFileBaseName() {
+  return (currentDesign.name || 'design').trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') || 'design';
+}
+
+document.getElementById('btn-design-download-png').addEventListener('click', () => {
+  if (!currentDesign || !stage) return;
+  deselect();
+  fitViewToContent();
+  setTimeout(() => {
+    const a = document.createElement('a');
+    a.href = stage.toDataURL({ pixelRatio: 2 });
+    a.download = `${designFileBaseName()}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }, 150);
+});
+
+document.getElementById('btn-design-download-pdf').addEventListener('click', () => {
+  if (!currentDesign || !stage) return;
+  deselect();
+  fitViewToContent();
+  setTimeout(() => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 36;
+
+    const linkBits = [];
+    if (currentDesign.customers && currentDesign.customers.name) linkBits.push(currentDesign.customers.name);
+    if (currentDesign.jobs && currentDesign.jobs.title) linkBits.push(currentDesign.jobs.title);
+
+    doc.setFontSize(18);
+    doc.text(currentDesign.name || 'Untitled design', margin, margin);
+    doc.setFontSize(10);
+    doc.setTextColor(90);
+    const metaLine = `${linkBits.length ? linkBits.join(' \u2014 ') + '   ' : ''}Printed ${new Date().toLocaleDateString()}   Scale: 1 ft \u2248 ${pxPerFt.toFixed(1)} px`;
+    doc.text(metaLine, margin, margin + 16);
+
+    const imgData = stage.toDataURL({ pixelRatio: 2 });
+    const imgProps = doc.getImageProperties(imgData);
+    const maxW = pageW - margin * 2;
+    const maxH = pageH - margin - 50;
+    let drawW = maxW;
+    let drawH = (imgProps.height / imgProps.width) * drawW;
+    if (drawH > maxH) {
+      drawH = maxH;
+      drawW = (imgProps.width / imgProps.height) * drawH;
+    }
+    doc.addImage(imgData, 'PNG', margin, margin + 30, drawW, drawH);
+
+    doc.addPage();
+    let y = margin;
+    doc.setTextColor(0);
+    function heading(text) {
+      if (y > pageH - margin - 20) { doc.addPage(); y = margin; }
+      doc.setFontSize(13);
+      doc.setFont(undefined, 'bold');
+      doc.text(text, margin, y);
+      y += 18;
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(10);
+    }
+    function row(label, value) {
+      if (y > pageH - margin) { doc.addPage(); y = margin; }
+      doc.text(String(label), margin, y);
+      doc.text(String(value), pageW - margin, y, { align: 'right' });
+      y += 14;
+    }
+
+    const plantCounts = new Map();
+    elements.filter((e) => e.type === 'plant').forEach((e) => plantCounts.set(e.plantKey, (plantCounts.get(e.plantKey) || 0) + 1));
+    const headEls = elements.filter((e) => e.type === 'head');
+    const headCounts = new Map();
+    headEls.forEach((e) => headCounts.set(e.headKey, (headCounts.get(e.headKey) || 0) + 1));
+    const zoneEls = elements.filter((e) => e.type === 'zone').sort((a, b) => a.zoneNumber - b.zoneNumber);
+    const pipeEls = elements.filter((e) => e.type === 'pipe');
+    const lateralFt = pipeEls.filter((e) => e.subtype === 'lateral').reduce((s, e) => s + polylineLengthFt(e.points), 0);
+    const mainlineFt = pipeEls.filter((e) => e.subtype === 'mainline').reduce((s, e) => s + polylineLengthFt(e.points), 0);
+    const fixtureCounts = new Map();
+    elements.filter((e) => e.type === 'fixture').forEach((e) => fixtureCounts.set(e.fixtureKey, (fixtureCounts.get(e.fixtureKey) || 0) + 1));
+    const areaTotals = {};
+    elements.filter((e) => e.type === 'area' && e.subtype !== 'boundary').forEach((e) => {
+      areaTotals[e.subtype] = (areaTotals[e.subtype] || 0) + polygonAreaSqFt(e.points);
+    });
+
+    heading('Site areas');
+    if (Object.keys(areaTotals).length === 0) row('No areas drawn', '');
+    for (const key of Object.keys(areaTotals)) {
+      const preset = CAT.AREA_PRESETS.find((p) => p.key === key);
+      row(preset ? preset.name : key, `${areaTotals[key].toFixed(0)} sq ft`);
+    }
+
+    if (plantCounts.size) {
+      y += 6;
+      heading('Plants');
+      for (const [key, count] of plantCounts) {
+        const p = CAT.PLANT_CATALOG.find((x) => x.key === key);
+        row(p ? p.name : key, `x${count}`);
+      }
+    }
+
+    if (headCounts.size) {
+      y += 6;
+      heading('Sprinkler heads');
+      for (const [key, count] of headCounts) {
+        const h = CAT.HEAD_CATALOG.find((x) => x.key === key);
+        row(h ? `${h.brand} ${h.model}` : key, `x${count}`);
+      }
+    }
+
+    if (zoneEls.length) {
+      y += 6;
+      heading('Zones');
+      for (const z of zoneEls) {
+        const heads = headEls.filter((h) => h.zoneNumber === z.zoneNumber);
+        const gpm = heads.reduce((s, h) => {
+          const h2 = CAT.HEAD_CATALOG.find((x) => x.key === h.headKey);
+          return s + (h2 ? h2.gpmFull : 0) * ((h.arc || 360) / 360);
+        }, 0);
+        row(`Zone ${z.zoneNumber}${z.label ? ` (${z.label})` : ''}`, `${heads.length} heads, ~${gpm.toFixed(1)} GPM`);
+      }
+    }
+
+    if (mainlineFt || lateralFt) {
+      y += 6;
+      heading('Pipe (approx.)');
+      row('Mainline', `${mainlineFt.toFixed(0)} ft`);
+      row('Lateral', `${lateralFt.toFixed(0)} ft`);
+    }
+
+    if (fixtureCounts.size) {
+      y += 6;
+      heading('Fixtures');
+      for (const [key, count] of fixtureCounts) {
+        const f = CAT.FIXTURE_CATALOG.find((x) => x.key === key);
+        row(f ? f.name : key, `x${count}`);
+      }
+    }
+
+    doc.save(`${designFileBaseName()}.pdf`);
+  }, 150);
+});
+
 // ===================== Wire up "Site design" buttons on Customer/Job drawers =====================
 
 document.getElementById('btn-customer-site-design').addEventListener('click', () => {
