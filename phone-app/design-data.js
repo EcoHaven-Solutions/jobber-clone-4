@@ -108,6 +108,7 @@ const AREA_PRESETS = [
   { key: 'lawn', name: 'Lawn', fill: 'rgba(122,180,90,0.35)', stroke: '#5C8C3E' },
   { key: 'bed', name: 'Planting Bed', fill: 'rgba(160,120,70,0.30)', stroke: '#8C6F3E' },
   { key: 'hardscape', name: 'Hardscape (patio/walk/deck)', fill: 'rgba(150,150,150,0.35)', stroke: '#6B6B6B' },
+  { key: 'flagstone', name: 'Flagstone / Stone Path', fill: 'rgba(160,148,120,0.4)', stroke: '#7A6F5C' },
   { key: 'water', name: 'Water Feature', fill: 'rgba(79,159,214,0.35)', stroke: '#2E6FA6' },
 ];
 
