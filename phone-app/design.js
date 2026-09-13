@@ -927,6 +927,18 @@ function getFlagstonePatternCanvas() {
   return c;
 }
 
+function buildAreaLabelText(el) {
+  if (!el.label) return null;
+  const text = new Konva.Text({
+    text: el.label, fontSize: 13, fontStyle: 'bold',
+    fill: '#1A1A1A', stroke: '#FFFFFF', strokeWidth: 4, fillAfterStrokeEnabled: true,
+    listening: false,
+  });
+  const c = polygonCentroid(el.points);
+  text.position({ x: c.x - text.width() / 2, y: c.y - text.height() / 2 });
+  return text;
+}
+
 function buildAreaNode(el) {
   const preset = CAT.AREA_PRESETS.find((p) => p.key === el.subtype) || CAT.AREA_PRESETS[1];
   const lineOpts = {
@@ -952,9 +964,19 @@ function buildAreaNode(el) {
     lineOpts.fill = preset.fill;
   }
   const line = new Konva.Line(lineOpts);
-  line.on('dragend', () => onShapeDragEnd(el, line));
+  const group = new Konva.Group({ draggable: false });
+  let text = buildAreaLabelText(el);
+  line.on('dragend', () => {
+    onShapeDragEnd(el, line);
+    if (text) {
+      const c = polygonCentroid(el.points);
+      text.position({ x: c.x - text.width() / 2, y: c.y - text.height() / 2 });
+    }
+  });
   attachSelectHandler(line, el);
-  return line;
+  group.add(line);
+  if (text) group.add(text);
+  return group;
 }
 
 function buildZoneNode(el) {
@@ -1190,11 +1212,11 @@ function renderProperties(el) {
       <div class="design-properties-field"><label>Area type</label>
         <select id="pf-subtype">${CAT.AREA_PRESETS.filter((p) => p.key !== 'boundary' || el.subtype === 'boundary').map((p) => `<option value="${p.key}" ${p.key === el.subtype ? 'selected' : ''}>${p.name}</option>`).join('')}</select>
       </div>
-      <div class="design-properties-field"><label>Label (optional)</label><input id="pf-label" type="text" value="${escapeHtml(el.label || '')}" /></div>
+      <div class="design-properties-field"><label>Label (optional)</label><input id="pf-label" type="text" placeholder="e.g. Firepit, Front walkway" value="${escapeHtml(el.label || '')}" /></div>
       <div class="design-properties-field"><label>Area</label><div>${polygonAreaSqFt(el.points).toFixed(0)} sq ft</div></div>
     `;
     document.getElementById('pf-subtype').addEventListener('change', (e) => { el.subtype = e.target.value; rerenderThis(); });
-    document.getElementById('pf-label').addEventListener('change', (e) => { el.label = e.target.value; markDirty(); });
+    document.getElementById('pf-label').addEventListener('change', (e) => { el.label = e.target.value; rerenderThis(); refreshLegendIfVisible(); });
   } else if (el.type === 'zone') {
     box.innerHTML = `
       <div class="design-properties-field"><label>Zone number</label><input id="pf-zone" type="number" min="1" value="${el.zoneNumber}" /></div>
@@ -1504,18 +1526,23 @@ function renderLegend() {
   const fixtureCounts = new Map();
   elements.filter((e) => e.type === 'fixture').forEach((e) => fixtureCounts.set(e.fixtureKey, (fixtureCounts.get(e.fixtureKey) || 0) + 1));
 
-  const areaTotals = {};
+  const areaGroups = new Map();
   elements.filter((e) => e.type === 'area' && e.subtype !== 'boundary').forEach((e) => {
-    areaTotals[e.subtype] = (areaTotals[e.subtype] || 0) + polygonAreaSqFt(e.points);
+    const label = (e.label || '').trim();
+    const key = `${e.subtype}||${label}`;
+    const existing = areaGroups.get(key) || { subtype: e.subtype, label, sqft: 0 };
+    existing.sqft += polygonAreaSqFt(e.points);
+    areaGroups.set(key, existing);
   });
 
   let html = '';
 
   html += `<div class="design-legend-group"><h4>Site areas</h4>`;
-  if (Object.keys(areaTotals).length === 0) html += `<div class="design-legend-row"><span>No areas drawn yet</span><span></span></div>`;
-  for (const key of Object.keys(areaTotals)) {
-    const preset = CAT.AREA_PRESETS.find((p) => p.key === key);
-    html += `<div class="design-legend-row"><span>${preset ? preset.name : key}</span><span>${areaTotals[key].toFixed(0)} sq ft</span></div>`;
+  if (areaGroups.size === 0) html += `<div class="design-legend-row"><span>No areas drawn yet</span><span></span></div>`;
+  for (const { subtype, label, sqft } of areaGroups.values()) {
+    const preset = CAT.AREA_PRESETS.find((p) => p.key === subtype);
+    const name = preset ? preset.name : subtype;
+    html += `<div class="design-legend-row"><span>${label ? `${escapeHtml(name)} \u2014 ${escapeHtml(label)}` : escapeHtml(name)}</span><span>${sqft.toFixed(0)} sq ft</span></div>`;
   }
   html += `</div>`;
 
@@ -1576,6 +1603,17 @@ function renderLegend() {
 // fresh each time from current elements, and style.css's @media print rule
 // hides the rest of the app and shows only this sheet.
 
+// Plant photos are hotlinked from a few outside sites, none of which send
+// CORS headers -- fine for normal <img> display, but html2canvas
+// (Download PNG/PDF) can't read cross-origin pixels into a canvas without
+// them. This routes those photos through a Supabase Edge Function that
+// fetches them server-side (no CORS restriction there) and re-serves them
+// with CORS allowed. See image-proxy.js for the function itself.
+function proxiedPlantPhotoUrl(url) {
+  if (!url) return url;
+  return `${SUPABASE_URL}/functions/v1/image-proxy?url=${encodeURIComponent(url)}`;
+}
+
 function buildPrintSheet() {
   const box = document.getElementById('design-print-sheet');
   if (!box || !stage || !currentDesign) return;
@@ -1591,9 +1629,13 @@ function buildPrintSheet() {
   const mainlineFt = pipeEls.filter((e) => e.subtype === 'mainline').reduce((s, e) => s + polylineLengthFt(e.points), 0);
   const fixtureCounts = new Map();
   elements.filter((e) => e.type === 'fixture').forEach((e) => fixtureCounts.set(e.fixtureKey, (fixtureCounts.get(e.fixtureKey) || 0) + 1));
-  const areaTotals = {};
+  const areaGroups = new Map();
   elements.filter((e) => e.type === 'area' && e.subtype !== 'boundary').forEach((e) => {
-    areaTotals[e.subtype] = (areaTotals[e.subtype] || 0) + polygonAreaSqFt(e.points);
+    const label = (e.label || '').trim();
+    const key = `${e.subtype}||${label}`;
+    const existing = areaGroups.get(key) || { subtype: e.subtype, label, sqft: 0 };
+    existing.sqft += polygonAreaSqFt(e.points);
+    areaGroups.set(key, existing);
   });
 
   const linkBits = [];
@@ -1607,12 +1649,13 @@ function buildPrintSheet() {
   `;
 
   html += `<div class="design-print-section"><h3>Site areas</h3>`;
-  if (Object.keys(areaTotals).length === 0) {
+  if (areaGroups.size === 0) {
     html += `<div class="design-print-row"><span>No areas drawn</span><span></span></div>`;
   }
-  for (const key of Object.keys(areaTotals)) {
-    const preset = CAT.AREA_PRESETS.find((p) => p.key === key);
-    html += `<div class="design-print-row"><span>${preset ? escapeHtml(preset.name) : key}</span><span>${areaTotals[key].toFixed(0)} sq ft</span></div>`;
+  for (const { subtype, label, sqft } of areaGroups.values()) {
+    const preset = CAT.AREA_PRESETS.find((p) => p.key === subtype);
+    const name = preset ? preset.name : subtype;
+    html += `<div class="design-print-row"><span>${label ? `${escapeHtml(name)} \u2014 ${escapeHtml(label)}` : escapeHtml(name)}</span><span>${sqft.toFixed(0)} sq ft</span></div>`;
   }
   html += `</div>`;
 
@@ -1624,7 +1667,7 @@ function buildPrintSheet() {
       html += `
         <div class="design-print-plant-card">
           ${p.photoUrl
-            ? `<img class="design-print-plant-photo" src="${p.photoUrl}" alt="${escapeHtml(p.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />`
+            ? `<img class="design-print-plant-photo" crossorigin="anonymous" src="${proxiedPlantPhotoUrl(p.photoUrl)}" alt="${escapeHtml(p.name)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />`
             : ''}
           <div class="design-print-plant-fallback" style="${p.photoUrl ? '' : 'display:flex;'} background:${p.color}">${escapeHtml(p.category)}</div>
           <div class="design-print-plant-name">${escapeHtml(p.name)} &times;${count}</div>
