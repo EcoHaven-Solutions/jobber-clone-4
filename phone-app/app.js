@@ -1570,21 +1570,44 @@ const invoiceTotalDisplay = document.getElementById('invoice-total-display');
 const invoicePhotoInput = document.getElementById('invoice-photo-input');
 const invoicePhotoGallery = document.getElementById('invoice-photo-gallery');
 
-invoicePhotoInput.addEventListener('change', () => {
-  const file = invoicePhotoInput.files[0];
-  if (!file || !editingInvoiceId) return;
-  const reader = new FileReader();
-  reader.onload = async () => {
-    try {
-      await window.api.invoicePhotos.add(editingInvoiceId, reader.result);
-      invoicePhotoInput.value = '';
-      renderInvoicePhotoGallery(editingInvoiceId);
-    } catch (err) {
-      alert(err.message);
-      invoicePhotoInput.value = '';
+const INVOICE_PHOTO_LIMIT = 10;
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+invoicePhotoInput.addEventListener('change', async () => {
+  const files = Array.from(invoicePhotoInput.files || []);
+  if (!files.length || !editingInvoiceId) return;
+
+  const existing = await window.api.invoicePhotos.list(editingInvoiceId);
+  const remaining = INVOICE_PHOTO_LIMIT - existing.length;
+  if (remaining <= 0) {
+    alert(`This invoice already has the max of ${INVOICE_PHOTO_LIMIT} photos. Remove one before adding another.`);
+    invoicePhotoInput.value = '';
+    return;
+  }
+
+  const toUpload = files.slice(0, remaining);
+  if (files.length > toUpload.length) {
+    alert(`Only ${remaining} more photo${remaining === 1 ? '' : 's'} can be added (${INVOICE_PHOTO_LIMIT} max per invoice) -- the rest weren't uploaded.`);
+  }
+
+  try {
+    for (const file of toUpload) {
+      const dataUrl = await readFileAsDataURL(file);
+      await window.api.invoicePhotos.add(editingInvoiceId, dataUrl);
     }
-  };
-  reader.readAsDataURL(file);
+  } catch (err) {
+    alert(err.message);
+  }
+  invoicePhotoInput.value = '';
+  renderInvoicePhotoGallery(editingInvoiceId);
 });
 
 function populateInvoiceCustomerSelect() {
