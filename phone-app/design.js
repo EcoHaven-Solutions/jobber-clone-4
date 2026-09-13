@@ -1634,6 +1634,19 @@ function buildPrintSheet() {
     html += `</div></div>`;
   }
 
+  const photoEls = elements.filter((e) => e.type === 'photo' && e.src);
+  if (photoEls.length) {
+    html += `<div class="design-print-section"><h3>Materials / reference photos</h3><div class="design-print-plant-grid">`;
+    for (const p of photoEls) {
+      html += `
+        <div class="design-print-plant-card">
+          <img class="design-print-plant-photo" src="${p.src}" alt="${escapeHtml(p.caption || 'Reference photo')}" />
+          <div class="design-print-plant-name">${escapeHtml(p.caption || 'Reference photo')}</div>
+        </div>`;
+    }
+    html += `</div></div>`;
+  }
+
   if (headCounts.size) {
     html += `<div class="design-print-section"><h3>Sprinkler heads</h3>`;
     for (const [key, count] of headCounts) {
@@ -1686,145 +1699,135 @@ function designFileBaseName() {
   return (currentDesign.name || 'design').trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '') || 'design';
 }
 
-document.getElementById('btn-design-download-png').addEventListener('click', () => {
+const PRINT_RENDER_WIDTH_PX = 720;  // matches Letter width (8.5in) minus 0.5in margins each side, at 96px/in
+const PRINT_PAGE_HEIGHT_PX = 960;   // matches Letter height (11in) minus 0.5in margins top/bottom, at 96px/in
+
+function showPrintSheetForCapture() {
+  const box = document.getElementById('design-print-sheet');
+  box.classList.add('design-print-render-mode');
+  return box;
+}
+
+function hidePrintSheetAfterCapture() {
+  document.getElementById('design-print-sheet').classList.remove('design-print-render-mode');
+}
+
+function waitForImagesToLoad(container, timeoutMs) {
+  const imgs = Array.from(container.querySelectorAll('img'));
+  const timeout = timeoutMs || 8000;
+  return Promise.all(imgs.map((img) => {
+    if (img.complete) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => { img.removeEventListener('load', done); img.removeEventListener('error', done); resolve(); };
+      img.addEventListener('load', done);
+      img.addEventListener('error', done);
+      setTimeout(done, timeout);
+    });
+  }));
+}
+
+// Picks page-break Y coordinates that fall in the gaps between sections,
+// cards, and rows instead of naive fixed-height slicing, so a plant card
+// (or a photo card, or a table row) never gets cut in half across pages --
+// the same intent as the print stylesheet's `break-inside: avoid-page`.
+function computeSafePageBreaks(container, pageHeightPx) {
+  const blocks = Array.from(container.querySelectorAll('.design-print-section, .design-print-plant-card, .design-print-row, .design-print-plan'));
+  const containerTop = container.getBoundingClientRect().top;
+  const edges = blocks.map((el) => {
+    const r = el.getBoundingClientRect();
+    return { top: r.top - containerTop, bottom: r.bottom - containerTop };
+  });
+  const totalHeight = container.scrollHeight;
+  const breaks = [0];
+  let cursor = 0;
+  while (cursor + pageHeightPx < totalHeight) {
+    let candidate = cursor + pageHeightPx;
+    for (let iter = 0; iter < 5; iter++) {
+      let changed = false;
+      for (const e of edges) {
+        if (e.top < candidate && e.bottom > candidate && e.top > cursor + 20) {
+          candidate = e.top;
+          changed = true;
+        }
+      }
+      if (!changed) break;
+    }
+    if (candidate <= cursor) candidate = cursor + pageHeightPx;
+    breaks.push(candidate);
+    cursor = candidate;
+  }
+  breaks.push(totalHeight);
+  return breaks;
+}
+
+async function withCapturedPrintSheet(btn, fn) {
   if (!currentDesign || !stage) return;
   deselect();
   fitViewToContent();
-  setTimeout(() => {
+  const originalText = btn.textContent;
+  btn.textContent = 'Preparing\u2026';
+  btn.disabled = true;
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    buildPrintSheet();
+    const box = showPrintSheetForCapture();
+    await waitForImagesToLoad(box);
+    const canvas = await html2canvas(box, { useCORS: true, backgroundColor: '#ffffff', scale: 2 });
+    const breaks = computeSafePageBreaks(box, PRINT_PAGE_HEIGHT_PX);
+    hidePrintSheetAfterCapture();
+    await fn(canvas, breaks);
+  } catch (err) {
+    hidePrintSheetAfterCapture();
+    alert('Could not generate the file: ' + err.message);
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('btn-design-download-png').addEventListener('click', () => {
+  const btn = document.getElementById('btn-design-download-png');
+  withCapturedPrintSheet(btn, async (canvas) => {
     const a = document.createElement('a');
-    a.href = stage.toDataURL({ pixelRatio: 2 });
+    a.href = canvas.toDataURL('image/png');
     a.download = `${designFileBaseName()}.png`;
     document.body.appendChild(a);
     a.click();
     a.remove();
-  }, 150);
+  });
 });
 
 document.getElementById('btn-design-download-pdf').addEventListener('click', () => {
-  if (!currentDesign || !stage) return;
-  deselect();
-  fitViewToContent();
-  setTimeout(() => {
+  const btn = document.getElementById('btn-design-download-pdf');
+  withCapturedPrintSheet(btn, async (canvas, breaks) => {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'letter' });
-    const pageW = doc.internal.pageSize.getWidth();
-    const pageH = doc.internal.pageSize.getHeight();
-    const margin = 36;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' });
+    const marginPt = 36; // 0.5in, matching the print stylesheet's @page margin
+    const contentWidthPt = doc.internal.pageSize.getWidth() - marginPt * 2;
+    const scale = 2; // must match the html2canvas scale used to build `canvas`
 
-    const linkBits = [];
-    if (currentDesign.customers && currentDesign.customers.name) linkBits.push(currentDesign.customers.name);
-    if (currentDesign.jobs && currentDesign.jobs.title) linkBits.push(currentDesign.jobs.title);
-
-    doc.setFontSize(18);
-    doc.text(currentDesign.name || 'Untitled design', margin, margin);
-    doc.setFontSize(10);
-    doc.setTextColor(90);
-    const metaLine = `${linkBits.length ? linkBits.join(' \u2014 ') + '   ' : ''}Printed ${new Date().toLocaleDateString()}   Scale: 1 ft \u2248 ${pxPerFt.toFixed(1)} px`;
-    doc.text(metaLine, margin, margin + 16);
-
-    const imgData = stage.toDataURL({ pixelRatio: 2 });
-    const imgProps = doc.getImageProperties(imgData);
-    const maxW = pageW - margin * 2;
-    const maxH = pageH - margin - 50;
-    let drawW = maxW;
-    let drawH = (imgProps.height / imgProps.width) * drawW;
-    if (drawH > maxH) {
-      drawH = maxH;
-      drawW = (imgProps.width / imgProps.height) * drawH;
-    }
-    doc.addImage(imgData, 'PNG', margin, margin + 30, drawW, drawH);
-
-    doc.addPage();
-    let y = margin;
-    doc.setTextColor(0);
-    function heading(text) {
-      if (y > pageH - margin - 20) { doc.addPage(); y = margin; }
-      doc.setFontSize(13);
-      doc.setFont(undefined, 'bold');
-      doc.text(text, margin, y);
-      y += 18;
-      doc.setFont(undefined, 'normal');
-      doc.setFontSize(10);
-    }
-    function row(label, value) {
-      if (y > pageH - margin) { doc.addPage(); y = margin; }
-      doc.text(String(label), margin, y);
-      doc.text(String(value), pageW - margin, y, { align: 'right' });
-      y += 14;
-    }
-
-    const plantCounts = new Map();
-    elements.filter((e) => e.type === 'plant').forEach((e) => plantCounts.set(e.plantKey, (plantCounts.get(e.plantKey) || 0) + 1));
-    const headEls = elements.filter((e) => e.type === 'head');
-    const headCounts = new Map();
-    headEls.forEach((e) => headCounts.set(e.headKey, (headCounts.get(e.headKey) || 0) + 1));
-    const zoneEls = elements.filter((e) => e.type === 'zone').sort((a, b) => a.zoneNumber - b.zoneNumber);
-    const pipeEls = elements.filter((e) => e.type === 'pipe');
-    const lateralFt = pipeEls.filter((e) => e.subtype === 'lateral').reduce((s, e) => s + polylineLengthFt(e.points), 0);
-    const mainlineFt = pipeEls.filter((e) => e.subtype === 'mainline').reduce((s, e) => s + polylineLengthFt(e.points), 0);
-    const fixtureCounts = new Map();
-    elements.filter((e) => e.type === 'fixture').forEach((e) => fixtureCounts.set(e.fixtureKey, (fixtureCounts.get(e.fixtureKey) || 0) + 1));
-    const areaTotals = {};
-    elements.filter((e) => e.type === 'area' && e.subtype !== 'boundary').forEach((e) => {
-      areaTotals[e.subtype] = (areaTotals[e.subtype] || 0) + polygonAreaSqFt(e.points);
-    });
-
-    heading('Site areas');
-    if (Object.keys(areaTotals).length === 0) row('No areas drawn', '');
-    for (const key of Object.keys(areaTotals)) {
-      const preset = CAT.AREA_PRESETS.find((p) => p.key === key);
-      row(preset ? preset.name : key, `${areaTotals[key].toFixed(0)} sq ft`);
-    }
-
-    if (plantCounts.size) {
-      y += 6;
-      heading('Plants');
-      for (const [key, count] of plantCounts) {
-        const p = CAT.PLANT_CATALOG.find((x) => x.key === key);
-        row(p ? p.name : key, `x${count}`);
-      }
-    }
-
-    if (headCounts.size) {
-      y += 6;
-      heading('Sprinkler heads');
-      for (const [key, count] of headCounts) {
-        const h = CAT.HEAD_CATALOG.find((x) => x.key === key);
-        row(h ? `${h.brand} ${h.model}` : key, `x${count}`);
-      }
-    }
-
-    if (zoneEls.length) {
-      y += 6;
-      heading('Zones');
-      for (const z of zoneEls) {
-        const heads = headEls.filter((h) => h.zoneNumber === z.zoneNumber);
-        const gpm = heads.reduce((s, h) => {
-          const h2 = CAT.HEAD_CATALOG.find((x) => x.key === h.headKey);
-          return s + (h2 ? h2.gpmFull : 0) * ((h.arc || 360) / 360);
-        }, 0);
-        row(`Zone ${z.zoneNumber}${z.label ? ` (${z.label})` : ''}`, `${heads.length} heads, ~${gpm.toFixed(1)} GPM`);
-      }
-    }
-
-    if (mainlineFt || lateralFt) {
-      y += 6;
-      heading('Pipe (approx.)');
-      row('Mainline', `${mainlineFt.toFixed(0)} ft`);
-      row('Lateral', `${lateralFt.toFixed(0)} ft`);
-    }
-
-    if (fixtureCounts.size) {
-      y += 6;
-      heading('Fixtures');
-      for (const [key, count] of fixtureCounts) {
-        const f = CAT.FIXTURE_CATALOG.find((x) => x.key === key);
-        row(f ? f.name : key, `x${count}`);
-      }
+    for (let i = 0; i < breaks.length - 1; i++) {
+      const sliceTopPx = breaks[i] * scale;
+      const sliceHeightPx = (breaks[i + 1] - breaks[i]) * scale;
+      if (sliceHeightPx <= 0) continue;
+      const sliceCanvas = document.createElement('canvas');
+      sliceCanvas.width = canvas.width;
+      sliceCanvas.height = sliceHeightPx;
+      const ctx = sliceCanvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+      ctx.drawImage(canvas, 0, sliceTopPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+      // JPEG, not PNG -- this is a photo-heavy report, and lossless PNG at 2x
+      // scale made multi-page PDFs 10-15MB+. JPEG at 0.85 quality looks the
+      // same to the eye and comes in at a fraction of the size.
+      const sliceDataUrl = sliceCanvas.toDataURL('image/jpeg', 0.85);
+      const sliceHeightPt = (sliceHeightPx / canvas.width) * contentWidthPt;
+      if (i > 0) doc.addPage();
+      doc.addImage(sliceDataUrl, 'JPEG', marginPt, marginPt, contentWidthPt, sliceHeightPt);
     }
 
     doc.save(`${designFileBaseName()}.pdf`);
-  }, 150);
+  });
 });
 
 // ===================== Wire up "Site design" buttons on Customer/Job drawers =====================
