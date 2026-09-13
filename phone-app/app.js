@@ -904,6 +904,23 @@ jobPhotoInput.addEventListener('change', () => {
   reader.readAsDataURL(file);
 });
 
+invoicePhotoInput.addEventListener('change', () => {
+  const file = invoicePhotoInput.files[0];
+  if (!file || !editingInvoiceId) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      await window.api.invoicePhotos.add(editingInvoiceId, reader.result);
+      invoicePhotoInput.value = '';
+      renderInvoicePhotoGallery(editingInvoiceId);
+    } catch (err) {
+      alert(err.message);
+      invoicePhotoInput.value = '';
+    }
+  };
+  reader.readAsDataURL(file);
+});
+
 jobNextOccurrenceBtn.addEventListener('click', async () => {
   if (!editingJobId) return;
   const confirmed = confirm('Create the next occurrence of this recurring job?');
@@ -1567,6 +1584,8 @@ const invoiceCustomerSelect = document.getElementById('invoice-customer-select')
 const invoiceJobSelect = document.getElementById('invoice-job-select');
 const invoiceLineItemRowsEl = document.getElementById('invoice-line-item-rows');
 const invoiceTotalDisplay = document.getElementById('invoice-total-display');
+const invoicePhotoInput = document.getElementById('invoice-photo-input');
+const invoicePhotoGallery = document.getElementById('invoice-photo-gallery');
 
 function populateInvoiceCustomerSelect() {
   const current = invoiceCustomerSelect.value;
@@ -1707,12 +1726,32 @@ function updateRecurringInvoiceFieldsVisibility() {
 
 document.getElementById('invoice-recurring-interval').addEventListener('change', updateRecurringInvoiceFieldsVisibility);
 
+async function renderInvoicePhotoGallery(invoiceId) {
+  invoicePhotoGallery.innerHTML = '';
+  if (!invoiceId) return;
+  const photos = await window.api.invoicePhotos.list(invoiceId);
+  for (const photo of photos) {
+    const item = document.createElement('div');
+    item.className = 'photo-gallery-item';
+    item.innerHTML = `
+      <img src="${receiptUrl(photo.filename)}" />
+      <button type="button" class="photo-remove" aria-label="Remove photo">&times;</button>
+    `;
+    item.querySelector('.photo-remove').addEventListener('click', async () => {
+      await window.api.invoicePhotos.delete(photo.id, invoiceId);
+      renderInvoicePhotoGallery(invoiceId);
+    });
+    invoicePhotoGallery.appendChild(item);
+  }
+}
+
 function openInvoiceDrawer(invoice = null, fromJob = null) {
   editingInvoiceId = invoice ? invoice.id : null;
   invoiceForm.reset();
   populateInvoiceCustomerSelect();
   populateInvoiceJobSelect();
   invoiceLineItemRowsEl.innerHTML = '';
+  invoicePhotoGallery.innerHTML = '';
 
   if (invoice) {
     invoiceDrawerTitle.textContent = 'Edit invoice';
@@ -1740,6 +1779,7 @@ function openInvoiceDrawer(invoice = null, fromJob = null) {
     invoiceForm.elements.next_invoice_date.value = invoice.next_invoice_date || '';
     updateRecurringInvoiceFieldsVisibility();
     (invoice.items && invoice.items.length ? invoice.items : [{}]).forEach(addInvoiceLineItemRow);
+    renderInvoicePhotoGallery(invoice.id);
   } else {
     invoiceDrawerTitle.textContent = 'New invoice';
     invoiceDrawerIdTag.textContent = 'NEW';

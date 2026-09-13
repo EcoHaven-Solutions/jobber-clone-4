@@ -333,6 +333,21 @@ window.api = {
     },
   },
 
+  invoicePhotos: {
+    list: async (invoiceId) => unwrap(await sb.from('invoice_photos').select('*').eq('invoice_id', invoiceId).order('created_at')),
+    add: async (invoiceId, base64Data) => {
+      const url = await uploadToStorage(base64Data, `invoices/${invoiceId}`);
+      await sb.from('invoice_photos').insert({ invoice_id: invoiceId, filename: url });
+      return unwrap(await sb.from('invoice_photos').select('*').eq('invoice_id', invoiceId).order('created_at'));
+    },
+    delete: async (id, invoiceId) => {
+      const row = unwrap(await sb.from('invoice_photos').select('*').eq('id', id).single());
+      await deleteFromStorage(row.filename);
+      await sb.from('invoice_photos').delete().eq('id', id);
+      return unwrap(await sb.from('invoice_photos').select('*').eq('invoice_id', invoiceId).order('created_at'));
+    },
+  },
+
   quotes: {
     list: async () => withTotals('quotes', 'quote_items', 'quote_id', unwrap(await sb.from('quotes').select('*, customers(name)').order('created_at', { ascending: false })).map(mapCustomerName)),
     get: async (id) => {
