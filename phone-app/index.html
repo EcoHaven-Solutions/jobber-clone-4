@@ -1641,12 +1641,14 @@
           <span>Line items</span>
           <div style="display:flex; gap:6px;">
             <button type="button" class="btn btn-ghost btn-small" id="btn-quick-add-quote-item">Quick add</button>
+            <button type="button" class="btn btn-ghost btn-small" id="btn-add-quote-discount">Discount</button>
             <button type="button" class="btn btn-ghost btn-small" id="btn-add-line-item">+ Add item</button>
           </div>
         </div>
         <div id="line-item-rows"></div>
         <div class="totals-block">
           <div class="totals-row"><span>Subtotal</span><span id="quote-subtotal-display">$0.00</span></div>
+          <div class="totals-row" id="quote-discount-row" hidden><span>Discount</span><span id="quote-discount-display">$0.00</span></div>
           <div class="totals-row"><span>Tax</span><span id="quote-tax-display">$0.00</span></div>
           <div class="totals-row totals-row-grand"><span>Total</span><span id="quote-total-display">$0.00</span></div>
         </div>
@@ -1724,12 +1726,15 @@
           <span>Line items</span>
           <div style="display:flex; gap:6px;">
             <button type="button" class="btn btn-ghost btn-small" id="btn-quick-add-invoice-item">Quick add</button>
+            <!-- DISCOUNT-PATCH -->
+            <button type="button" class="btn btn-ghost btn-small" id="btn-add-invoice-discount">Discount</button>
             <button type="button" class="btn btn-ghost btn-small" id="btn-add-invoice-line-item">+ Add item</button>
           </div>
         </div>
         <div id="invoice-line-item-rows"></div>
         <div class="totals-block">
           <div class="totals-row"><span>Subtotal</span><span id="invoice-subtotal-display">$0.00</span></div>
+          <div class="totals-row" id="invoice-discount-row" hidden><span>Discount</span><span id="invoice-discount-display">$0.00</span></div>
           <div class="totals-row"><span>Tax</span><span id="invoice-tax-display">$0.00</span></div>
           <div class="totals-row totals-row-grand"><span>Total</span><span id="invoice-total-display">$0.00</span></div>
         </div>

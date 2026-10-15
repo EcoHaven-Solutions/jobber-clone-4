@@ -1224,7 +1224,9 @@ async function loadQuotes() {
 }
 
 function formatCurrency(amount) {
-  return `$${Number(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const n = Number(amount || 0);
+  const text = `$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return n < 0 ? `-${text}` : text;
 }
 
 function renderQuotes() {
@@ -1293,7 +1295,68 @@ document.getElementById('btn-delete-selected-quotes').addEventListener('click', 
   await loadQuotes();
 });
 
+// DISCOUNT-PATCH: a discount is stored as an ordinary line item with a
+// NEGATIVE price (so subtotal/tax/total, reports, Stripe and recurring
+// invoices all keep working with no database change). In the editor it is
+// shown as a "$ or %" row so you never have to type a minus sign.
+function isDiscountRow(row) {
+  return row.classList.contains('li-discount');
+}
+
+function discountRowAmount(row, grossBase) {
+  const value = Math.max(0, parseFloat(row.querySelector('.li-disc-value').value) || 0);
+  if (row.querySelector('.li-disc-type').value === 'percent') {
+    return Math.round(grossBase * (Math.min(value, 100) / 100) * 100) / 100;
+  }
+  return value;
+}
+
+function lineItemRowsSummary(container) {
+  const rows = Array.from(container.querySelectorAll('.line-item-row'));
+  const gross = rows.filter((r) => !isDiscountRow(r)).reduce((sum, row) => {
+    const qty = parseFloat(row.querySelector('.li-qty').value) || 0;
+    const price = parseFloat(row.querySelector('.li-price').value) || 0;
+    return sum + qty * price;
+  }, 0);
+  let discount = 0;
+  rows.filter(isDiscountRow).forEach((row) => {
+    const amt = discountRowAmount(row, gross);
+    discount += amt;
+    const hint = row.querySelector('.li-disc-hint');
+    if (hint) hint.textContent = amt ? `Takes off ${formatCurrency(amt)}` : '';
+  });
+  return { gross, discount, net: gross - discount };
+}
+
+function createDiscountRow(item, onChange) {
+  const row = document.createElement('div');
+  row.className = 'line-item-row li-discount';
+  const stored = Math.abs((Number(item.unit_price) || 0) * (Number(item.quantity) || 1));
+  const startValue = item.discount_value !== undefined ? item.discount_value : (stored || '');
+  row.innerHTML = `
+    <div class="li-main-row">
+      <input type="text" class="li-desc" placeholder="Discount name" value="${escapeHtml(item.description || 'Discount')}" />
+      <select class="li-disc-type" aria-label="Discount type"><option value="amount">$</option><option value="percent">%</option></select>
+      <input type="number" class="li-disc-value" min="0" step="0.01" inputmode="decimal" placeholder="0" value="${startValue}" />
+      <button type="button" class="line-item-remove" aria-label="Remove discount">&times;</button>
+    </div>
+    <input type="text" class="li-notes" placeholder="Reason (optional) — e.g. repeat customer, referral" value="${escapeHtml(item.notes || '')}" />
+    <div class="li-disc-hint"></div>
+  `;
+  if (item.discount_type === 'percent') row.querySelector('.li-disc-type').value = 'percent';
+  row.querySelector('.li-disc-value').addEventListener('input', onChange);
+  row.querySelector('.li-disc-type').addEventListener('change', onChange);
+  row.querySelector('.line-item-remove').addEventListener('click', () => {
+    row.remove();
+    onChange();
+  });
+  return row;
+}
+
 function createLineItemRow(item, onChange) {
+  if (item.discount || Number(item.unit_price) < 0) {
+    return createDiscountRow(item, onChange);
+  }
   lineItemCounter += 1;
   const row = document.createElement('div');
   row.className = 'line-item-row';
@@ -1318,27 +1381,37 @@ function createLineItemRow(item, onChange) {
 }
 
 function collectLineItemsFrom(container) {
+  const { gross } = lineItemRowsSummary(container);
   return Array.from(container.querySelectorAll('.line-item-row'))
-    .map((row) => ({
-      description: row.querySelector('.li-desc').value.trim(),
-      quantity: parseFloat(row.querySelector('.li-qty').value) || 0,
-      unit_price: parseFloat(row.querySelector('.li-price').value) || 0,
-      notes: row.querySelector('.li-notes').value.trim(),
-    }))
+    .map((row) => {
+      if (isDiscountRow(row)) {
+        const amt = discountRowAmount(row, gross);
+        if (!amt) return null; // empty discount row -- skip it
+        const isPercent = row.querySelector('.li-disc-type').value === 'percent';
+        let desc = row.querySelector('.li-desc').value.trim() || 'Discount';
+        if (isPercent && !desc.includes('%')) {
+          desc += ` (${parseFloat(row.querySelector('.li-disc-value').value) || 0}%)`;
+        }
+        return { description: desc, quantity: 1, unit_price: -amt, notes: row.querySelector('.li-notes').value.trim() };
+      }
+      return {
+        description: row.querySelector('.li-desc').value.trim(),
+        quantity: parseFloat(row.querySelector('.li-qty').value) || 0,
+        unit_price: parseFloat(row.querySelector('.li-price').value) || 0,
+        notes: row.querySelector('.li-notes').value.trim(),
+      };
+    })
     // Only drop rows that are completely untouched (no description AND no
     // price) -- e.g. a spare "+ Add item" row nobody filled in.
-    .filter((item) => item.description || item.unit_price);
+    .filter((item) => item && (item.description || item.unit_price));
 }
 
 // Used for the live running total: counts every row's quantity × price as you
 // type, even before a description is entered. collectLineItemsFrom (above) is
 // only for the actual save, where blank rows should be skipped.
 function sumLineItemsFrom(container) {
-  return Array.from(container.querySelectorAll('.line-item-row')).reduce((sum, row) => {
-    const qty = parseFloat(row.querySelector('.li-qty').value) || 0;
-    const price = parseFloat(row.querySelector('.li-price').value) || 0;
-    return sum + qty * price;
-  }, 0);
+  // Net amount: item total minus any discount rows.
+  return lineItemRowsSummary(container).net;
 }
 
 function addLineItemRow(item = {}) {
@@ -1350,12 +1423,14 @@ function collectLineItems() {
 }
 
 function updateQuoteTotal() {
-  const subtotal = sumLineItemsFrom(lineItemRowsEl);
+  const { gross, discount, net } = lineItemRowsSummary(lineItemRowsEl);
   const rate = parseFloat(quoteForm.elements.tax_rate.value) || 0;
-  const tax = subtotal * (rate / 100);
-  document.getElementById('quote-subtotal-display').textContent = formatCurrency(subtotal);
+  const tax = net * (rate / 100);
+  document.getElementById('quote-subtotal-display').textContent = formatCurrency(gross);
+  document.getElementById('quote-discount-row').hidden = !discount;
+  document.getElementById('quote-discount-display').textContent = formatCurrency(-discount);
   document.getElementById('quote-tax-display').textContent = formatCurrency(tax);
-  quoteTotalDisplay.textContent = formatCurrency(subtotal + tax);
+  quoteTotalDisplay.textContent = formatCurrency(net + tax);
 }
 
 function openQuoteDrawer(quote = null) {
@@ -1458,10 +1533,10 @@ function buildQuoteCopyText() {
   const customer = customers.find((c) => c.id === Number(customerId));
   const title = quoteForm.elements.title.value || 'Estimate';
   const items = collectLineItems();
-  const subtotal = sumLineItemsFrom(lineItemRowsEl);
+  const { gross: subtotal, discount, net } = lineItemRowsSummary(lineItemRowsEl);
   const rate = parseFloat(quoteForm.elements.tax_rate.value) || 0;
-  const tax = subtotal * (rate / 100);
-  const total = subtotal + tax;
+  const tax = net * (rate / 100);
+  const total = net + tax;
   const idTag = editingQuoteId ? `E-${currentQuoteNumber || editingQuoteId}` : 'NEW';
 
   const lines = [];
@@ -1475,6 +1550,7 @@ function buildQuoteCopyText() {
   });
   lines.push('');
   lines.push(`Subtotal: ${formatCurrency(subtotal)}`);
+  if (discount) lines.push(`Discount: ${formatCurrency(-discount)}`);
   if (rate) lines.push(`Tax (${rate}%): ${formatCurrency(tax)}`);
   lines.push(`Total: ${formatCurrency(total)}`);
   lines.push('');
@@ -1542,6 +1618,11 @@ document.getElementById('btn-new-quote').addEventListener('click', () => {
 document.getElementById('btn-close-quote-drawer').addEventListener('click', closeQuoteDrawer);
 document.getElementById('btn-cancel-quote-drawer').addEventListener('click', closeQuoteDrawer);
 document.getElementById('btn-add-line-item').addEventListener('click', () => addLineItemRow());
+document.getElementById('btn-add-quote-discount').addEventListener('click', () => {
+  addLineItemRow({ discount: true, description: 'Discount' });
+  const valueInput = lineItemRowsEl.lastElementChild.querySelector('.li-disc-value');
+  if (valueInput) valueInput.focus();
+});
 document.getElementById('quote-tax-rate').addEventListener('input', updateQuoteTotal);
 quoteOverlay.addEventListener('click', closeQuoteDrawer);
 quoteStatusFilter.addEventListener('change', renderQuotes);
@@ -1730,12 +1811,14 @@ function addInvoiceLineItemRow(item = {}) {
 }
 
 function updateInvoiceTotal() {
-  const subtotal = sumLineItemsFrom(invoiceLineItemRowsEl);
+  const { gross, discount, net } = lineItemRowsSummary(invoiceLineItemRowsEl);
   const rate = parseFloat(invoiceForm.elements.tax_rate.value) || 0;
-  const tax = subtotal * (rate / 100);
-  document.getElementById('invoice-subtotal-display').textContent = formatCurrency(subtotal);
+  const tax = net * (rate / 100);
+  document.getElementById('invoice-subtotal-display').textContent = formatCurrency(gross);
+  document.getElementById('invoice-discount-row').hidden = !discount;
+  document.getElementById('invoice-discount-display').textContent = formatCurrency(-discount);
   document.getElementById('invoice-tax-display').textContent = formatCurrency(tax);
-  invoiceTotalDisplay.textContent = formatCurrency(subtotal + tax);
+  invoiceTotalDisplay.textContent = formatCurrency(net + tax);
 }
 
 function updateRecurringInvoiceFieldsVisibility() {
@@ -1901,10 +1984,10 @@ function buildInvoiceCopyText() {
   const title = invoiceForm.elements.title.value || 'Invoice';
   const dueDate = invoiceForm.elements.due_date.value;
   const items = collectLineItemsFrom(invoiceLineItemRowsEl);
-  const subtotal = sumLineItemsFrom(invoiceLineItemRowsEl);
+  const { gross: subtotal, discount, net } = lineItemRowsSummary(invoiceLineItemRowsEl);
   const rate = parseFloat(invoiceForm.elements.tax_rate.value) || 0;
-  const tax = subtotal * (rate / 100);
-  const total = subtotal + tax;
+  const tax = net * (rate / 100);
+  const total = net + tax;
   const idTag = currentInvoiceNumber ? `I-${currentInvoiceNumber}` : 'NEW';
   const payLink = invoicePaymentLinkWrap.hidden ? null : invoicePaymentLinkDisplay.value;
 
@@ -1919,6 +2002,7 @@ function buildInvoiceCopyText() {
   });
   lines.push('');
   lines.push(`Subtotal: ${formatCurrency(subtotal)}`);
+  if (discount) lines.push(`Discount: ${formatCurrency(-discount)}`);
   if (rate) lines.push(`Tax (${rate}%): ${formatCurrency(tax)}`);
   lines.push(`Total: ${formatCurrency(total)}`);
   if (dueDate) lines.push(`Due: ${dueDate}`);
@@ -1974,6 +2058,11 @@ document.getElementById('btn-new-invoice').addEventListener('click', () => {
 document.getElementById('btn-close-invoice-drawer').addEventListener('click', closeInvoiceDrawer);
 document.getElementById('btn-cancel-invoice-drawer').addEventListener('click', closeInvoiceDrawer);
 document.getElementById('btn-add-invoice-line-item').addEventListener('click', () => addInvoiceLineItemRow());
+document.getElementById('btn-add-invoice-discount').addEventListener('click', () => {
+  addInvoiceLineItemRow({ discount: true, description: 'Discount' });
+  const valueInput = invoiceLineItemRowsEl.lastElementChild.querySelector('.li-disc-value');
+  if (valueInput) valueInput.focus();
+});
 document.getElementById('btn-add-job-line-item').addEventListener('click', () => addJobLineItemRow());
 document.getElementById('invoice-tax-rate').addEventListener('input', updateInvoiceTotal);
 invoiceOverlay.addEventListener('click', closeInvoiceDrawer);
