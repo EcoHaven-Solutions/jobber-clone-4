@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=20261017a" />
 </head>
 <body>
   <div class="shell">
@@ -1658,6 +1658,12 @@
         <textarea name="notes" rows="3"></textarea>
       </label>
 
+      <!-- QUOTE-ATTACH-PATCH -->
+      <div class="drawer-section-label">Attachments</div>
+      <input type="file" id="quote-attachment-input" multiple />
+      <p class="empty-sub">PDFs, plans, photos, spec sheets -- up to 15 files, 20 MB each. They're listed as download links in the emailed estimate.</p>
+      <div id="quote-attachment-list" class="attachment-list"></div>
+
       <div class="drawer-actions">
         <button type="button" class="btn btn-danger" id="btn-delete-quote" hidden>Delete</button>
         <div class="drawer-actions-right">
@@ -2127,9 +2133,9 @@
   <script src="https://cdn.jsdelivr.net/npm/konva@9/konva.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="supabase-api.js"></script>
-  <script src="design-data.js"></script>
-  <script src="app.js"></script>
-  <script src="design.js"></script>
+  <script src="supabase-api.js?v=20261017a"></script>
+  <script src="design-data.js?v=20261017a"></script>
+  <script src="app.js?v=20261017a"></script>
+  <script src="design.js?v=20261017a"></script>
 </body>
 </html>

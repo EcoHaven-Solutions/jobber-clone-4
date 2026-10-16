@@ -1467,6 +1467,7 @@ function openQuoteDrawer(quote = null) {
   }
 
   updateQuoteTotal();
+  renderQuoteAttachments(editingQuoteId);
   quoteOverlay.hidden = false;
   quoteDrawer.hidden = false;
 }
@@ -1495,6 +1496,100 @@ async function saveCurrentQuote() {
   }
   return true;
 }
+
+// QUOTE-ATTACH-PATCH ---- estimate attachments ----
+const quoteAttachmentInput = document.getElementById('quote-attachment-input');
+const quoteAttachmentList = document.getElementById('quote-attachment-list');
+const QUOTE_ATTACHMENT_MAX_FILES = 15;
+const QUOTE_ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024;
+
+function formatFileSize(bytes) {
+  const n = Number(bytes) || 0;
+  if (!n) return '';
+  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function renderQuoteAttachments(quoteId) {
+  quoteAttachmentList.innerHTML = '';
+  if (!quoteId) return;
+  let rows;
+  try {
+    rows = await window.api.quoteAttachments.list(quoteId);
+  } catch (err) {
+    quoteAttachmentList.innerHTML = '<p class="empty-sub">Attachments aren\'t set up yet -- run the add_quote_attachments.sql step in Supabase.</p>';
+    return;
+  }
+  if (quoteId !== editingQuoteId) return; // drawer moved on while loading
+  for (const att of rows) {
+    const ext = ((att.name || '').split('.').pop() || 'file').slice(0, 4);
+    const row = document.createElement('div');
+    row.className = 'attachment-row';
+    row.innerHTML = `
+      <span class="attachment-ext">${escapeHtml(ext)}</span>
+      <a href="${escapeHtml(att.file_url)}" target="_blank" rel="noopener">${escapeHtml(att.name || 'Attachment')}</a>
+      <span class="attachment-size">${formatFileSize(att.size_bytes)}</span>
+      <button type="button" class="attachment-remove" aria-label="Remove attachment">&times;</button>
+    `;
+    row.querySelector('.attachment-remove').addEventListener('click', async () => {
+      if (!confirm(`Remove "${att.name || 'this attachment'}" from the estimate?`)) return;
+      try {
+        await window.api.quoteAttachments.delete(att.id, quoteId);
+      } catch (err) {
+        alert(err.message);
+      }
+      renderQuoteAttachments(quoteId);
+    });
+    quoteAttachmentList.appendChild(row);
+  }
+}
+
+quoteAttachmentInput.addEventListener('change', async () => {
+  const files = Array.from(quoteAttachmentInput.files || []);
+  quoteAttachmentInput.value = '';
+  if (!files.length) return;
+
+  // A brand-new estimate has to be saved once before files can be attached to it.
+  if (!editingQuoteId) {
+    const saved = await saveCurrentQuote();
+    if (!saved) {
+      alert('Pick a customer and enter an estimate title first, then add attachments.');
+      return;
+    }
+    await loadQuotes();
+  }
+  const quoteId = editingQuoteId;
+
+  let existing = [];
+  try {
+    existing = await window.api.quoteAttachments.list(quoteId);
+  } catch (err) {
+    alert('Attachments aren\'t set up yet -- run the add_quote_attachments.sql step in Supabase first.');
+    return;
+  }
+  const room = QUOTE_ATTACHMENT_MAX_FILES - existing.length;
+  if (room <= 0) {
+    alert(`This estimate already has the max of ${QUOTE_ATTACHMENT_MAX_FILES} attachments. Remove one first.`);
+    return;
+  }
+  const toUpload = files.slice(0, room);
+  if (files.length > toUpload.length) {
+    alert(`Only ${room} more file${room === 1 ? '' : 's'} can be added (${QUOTE_ATTACHMENT_MAX_FILES} max) -- the rest weren't uploaded.`);
+  }
+
+  for (const file of toUpload) {
+    if (file.size > QUOTE_ATTACHMENT_MAX_BYTES) {
+      alert(`"${file.name}" is over 20 MB and was skipped.`);
+      continue;
+    }
+    try {
+      await window.api.quoteAttachments.add(quoteId, file);
+    } catch (err) {
+      alert(`Couldn't upload "${file.name}": ${err.message}`);
+    }
+  }
+  renderQuoteAttachments(quoteId);
+});
 
 quoteForm.addEventListener('submit', async (e) => {
   e.preventDefault();

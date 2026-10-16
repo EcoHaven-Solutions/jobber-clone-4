@@ -217,6 +217,17 @@ async function deleteFromStorage(url) {
   await sb.storage.from('attachments').remove([path]);
 }
 
+// QUOTE-ATTACH-PATCH: upload any file (PDF, Word, photo...) as-is, keeping its name in the path.
+async function uploadFileToStorage(file, folder) {
+  const safeName = (file.name || 'file').replace(/[^A-Za-z0-9._-]+/g, '_').slice(-80);
+  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`;
+  const { error } = await sb.storage.from('attachments').upload(path, file, {
+    contentType: file.type || 'application/octet-stream',
+  });
+  if (error) throw new Error(error.message);
+  return sb.storage.from('attachments').getPublicUrl(path).data.publicUrl;
+}
+
 window.api = {
   isElectron: false,
 
@@ -345,6 +356,25 @@ window.api = {
       await deleteFromStorage(row.filename);
       await sb.from('invoice_photos').delete().eq('id', id);
       return unwrap(await sb.from('invoice_photos').select('*').eq('invoice_id', invoiceId).order('created_at'));
+    },
+  },
+
+  quoteAttachments: {
+    list: async (quoteId) => unwrap(await sb.from('quote_attachments').select('*').eq('quote_id', quoteId).order('created_at')),
+    add: async (quoteId, file) => {
+      const url = await uploadFileToStorage(file, `quote-attachments/${quoteId}`);
+      const { error } = await sb.from('quote_attachments').insert({ quote_id: quoteId, file_url: url, name: file.name || 'Attachment', size_bytes: file.size || null });
+      if (error) {
+        await deleteFromStorage(url); // don't leave an orphan file behind
+        throw new Error(error.message);
+      }
+      return unwrap(await sb.from('quote_attachments').select('*').eq('quote_id', quoteId).order('created_at'));
+    },
+    delete: async (id, quoteId) => {
+      const row = unwrap(await sb.from('quote_attachments').select('*').eq('id', id).single());
+      await deleteFromStorage(row.file_url);
+      await sb.from('quote_attachments').delete().eq('id', id);
+      return unwrap(await sb.from('quote_attachments').select('*').eq('quote_id', quoteId).order('created_at'));
     },
   },
 

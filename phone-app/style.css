@@ -1634,3 +1634,24 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
 .li-disc-hint:empty {
   display: none;
 }
+
+
+/* QUOTE-ATTACH-PATCH: estimate attachments */
+.attachment-list { display: flex; flex-direction: column; gap: 6px; }
+.attachment-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px;
+  font-size: 13px;
+}
+.attachment-row .attachment-ext {
+  flex: 0 0 auto; min-width: 38px; text-align: center;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+  padding: 3px 5px; border-radius: 4px; background: var(--line); color: var(--ink-soft);
+  text-transform: uppercase;
+}
+.attachment-row a { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-row .attachment-size { flex: 0 0 auto; color: var(--ink-soft); font-size: 12px; }
+.attachment-row .attachment-remove {
+  flex: 0 0 auto; background: none; border: none; color: var(--ink-soft);
+  cursor: pointer; font-size: 16px; line-height: 1;
+}
