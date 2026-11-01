@@ -397,6 +397,19 @@ window.api = {
     },
   },
 
+  // AUTOPAY-PATCH: saved cards + automatic card charges (Stripe).
+  autopay: {
+    cardSetupLink: (customerId, email) => invokeFunction('send-notifications', { type: 'card-setup-link', id: customerId, email: !!email }),
+    approveCharge: (outboxId) => invokeFunction('send-notifications', { type: 'autocharge-approve', id: outboxId }),
+    removeCard: async (customerId) => {
+      const { error } = await sb
+        .from('customers')
+        .update({ stripe_payment_method_id: null, card_brand: null, card_last4: null, autopay_authorized_at: null })
+        .eq('id', customerId);
+      if (error) throw new Error(error.message);
+    },
+  },
+
   quotes: {
     list: async () => withTotals('quotes', 'quote_items', 'quote_id', unwrap(await sb.from('quotes').select('*, customers(name)').order('created_at', { ascending: false })).map(mapCustomerName)),
     get: async (id) => {

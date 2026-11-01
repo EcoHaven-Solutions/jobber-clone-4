@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-  <link rel="stylesheet" href="style.css?v=20261101b" />
+  <link rel="stylesheet" href="style.css?v=20261102a" />
 </head>
 <body>
   <div class="shell">
@@ -1200,6 +1200,15 @@
         <textarea name="system_notes" rows="2" placeholder="Valve locations, quirks, access notes..."></textarea>
       </label>
 
+      <!-- AUTOPAY-PATCH -->
+      <div class="drawer-section-label">Automatic payments (card on file)</div>
+      <p class="empty-sub" id="customer-card-status">Save the customer first, then you can send a card setup link.</p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+        <button type="button" class="btn btn-ghost btn-small" id="btn-email-card-link" hidden>Email card setup link</button>
+        <button type="button" class="btn btn-ghost btn-small" id="btn-copy-card-link" hidden>Copy link (to text)</button>
+        <button type="button" class="btn btn-ghost btn-small" id="btn-remove-card" hidden>Remove saved card</button>
+      </div>
+
       <label style="flex-direction:row; align-items:center; gap:8px;">
         <input type="checkbox" name="exclude_from_mass_comms" style="width:auto;" />
         Don't include in seasonal batches or mass texts/emails
@@ -1743,6 +1752,14 @@
         A fresh copy of this invoice (same items) will be created automatically on that date, and going forward on the same schedule.
       </p>
 
+      <label style="flex-direction:row; align-items:center; gap:8px;">
+        <input type="checkbox" name="auto_charge" id="invoice-auto-charge" style="width:auto;" />
+        Charge the customer's saved card automatically
+      </label>
+      <p class="empty-sub" id="invoice-auto-charge-hint" style="margin-top:-8px;">
+        You approve each charge first in Reminders. The customer is emailed the invoice and charged a few days later.
+      </p>
+
       <div class="line-items">
         <div class="line-items-header">
           <span>Line items</span>
@@ -2149,9 +2166,9 @@
   <script src="https://cdn.jsdelivr.net/npm/konva@9/konva.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="supabase-api.js?v=20261101b"></script>
-  <script src="design-data.js?v=20261101b"></script>
-  <script src="app.js?v=20261101b"></script>
-  <script src="design.js?v=20261101b"></script>
+  <script src="supabase-api.js?v=20261102a"></script>
+  <script src="design-data.js?v=20261102a"></script>
+  <script src="app.js?v=20261102a"></script>
+  <script src="design.js?v=20261102a"></script>
 </body>
 </html>

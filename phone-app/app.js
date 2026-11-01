@@ -166,6 +166,7 @@ function openCustomerDrawer(customer = null) {
     deleteBtn.hidden = true;
   }
 
+  renderCustomerCardStatus(customer); // AUTOPAY-PATCH
   overlay.hidden = false;
   drawer.hidden = false;
 }
@@ -1979,6 +1980,8 @@ function openInvoiceDrawer(invoice = null, fromJob = null) {
     invoiceForm.elements.notes.value = invoice.notes || '';
     invoiceForm.elements.recurring_interval.value = invoice.recurring_interval || 'none';
     invoiceForm.elements.next_invoice_date.value = invoice.next_invoice_date || '';
+    invoiceForm.elements.auto_charge.checked = !!invoice.auto_charge;
+    currentInvoiceForAutoCharge = invoice;
     updateRecurringInvoiceFieldsVisibility();
     (invoice.items && invoice.items.length ? invoice.items : [{}]).forEach(addInvoiceLineItemRow);
     renderInvoicePhotoGallery(invoice.id);
@@ -1990,6 +1993,8 @@ function openInvoiceDrawer(invoice = null, fromJob = null) {
     invoicePaymentLinkBtn.hidden = true;
     invoicePaymentLinkWrap.hidden = true;
     currentInvoiceNumber = null;
+    currentInvoiceForAutoCharge = null;
+    invoiceForm.elements.auto_charge.checked = false;
     invoiceForm.elements.tax_rate.value = defaultTaxRate;
     updateRecurringInvoiceFieldsVisibility();
     if (fromJob) {
@@ -2007,6 +2012,7 @@ function openInvoiceDrawer(invoice = null, fromJob = null) {
   }
 
   updateInvoiceTotal();
+  refreshInvoiceAutoChargeHint();
   invoiceOverlay.hidden = false;
   invoiceDrawer.hidden = false;
 }
@@ -2020,6 +2026,7 @@ function closeInvoiceDrawer() {
 function buildInvoiceDataFromForm() {
   const data = Object.fromEntries(new FormData(invoiceForm).entries());
   data.items = collectLineItemsFrom(invoiceLineItemRowsEl);
+  data.auto_charge = !!invoiceForm.elements.auto_charge.checked; // AUTOPAY-PATCH
   return data;
 }
 
@@ -4076,6 +4083,100 @@ document.getElementById('btn-save-signature').addEventListener('click', async ()
   await loadJobs();
 });
 
+// ===================== Saved cards / automatic payments =====================
+// AUTOPAY-PATCH
+
+let currentInvoiceForAutoCharge = null;
+
+function cardOnFileText(c) {
+  if (!c || !c.stripe_payment_method_id) return '';
+  const brand = c.card_brand ? c.card_brand.charAt(0).toUpperCase() + c.card_brand.slice(1) : 'Card';
+  return brand + ' ending ' + (c.card_last4 || '????');
+}
+
+function renderCustomerCardStatus(customer) {
+  const statusEl = document.getElementById('customer-card-status');
+  const emailBtn = document.getElementById('btn-email-card-link');
+  const copyBtn = document.getElementById('btn-copy-card-link');
+  const removeBtn = document.getElementById('btn-remove-card');
+  if (!statusEl) return;
+  if (!customer || !customer.id) {
+    statusEl.textContent = 'Save the customer first, then you can send a card setup link.';
+    emailBtn.hidden = true; copyBtn.hidden = true; removeBtn.hidden = true;
+    return;
+  }
+  const has = !!customer.stripe_payment_method_id;
+  statusEl.textContent = has
+    ? 'Card on file: ' + cardOnFileText(customer) + (customer.autopay_authorized_at ? ' (saved ' + new Date(customer.autopay_authorized_at).toLocaleDateString() + ')' : '')
+    : 'No card saved. Send the customer a link to save one (the link works for 24 hours).';
+  emailBtn.hidden = !customer.email;
+  emailBtn.textContent = has ? 'Email link to replace card' : 'Email card setup link';
+  copyBtn.hidden = false;
+  removeBtn.hidden = !has;
+}
+
+function currentCardCustomer() {
+  return customers.find((c) => String(c.id) === String(editingCustomerId)) || null;
+}
+
+async function refreshCustomersAndCardStatus() {
+  await loadCustomers();
+  renderCustomerCardStatus(currentCardCustomer());
+}
+
+document.getElementById('btn-email-card-link').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  if (!editingCustomerId) return;
+  btn.disabled = true;
+  try {
+    const result = await window.api.autopay.cardSetupLink(editingCustomerId, true);
+    if (!result || result.ok === false) alert('Could not send: ' + ((result && result.error) || 'unknown error'));
+    else alert('Card setup link emailed. You will get an email when they save their card.');
+  } catch (err) { alert('Something went wrong: ' + (err && err.message ? err.message : err)); }
+  btn.disabled = false;
+});
+
+document.getElementById('btn-copy-card-link').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  if (!editingCustomerId) return;
+  btn.disabled = true;
+  try {
+    const result = await window.api.autopay.cardSetupLink(editingCustomerId, false);
+    if (!result || result.ok === false || !result.url) {
+      alert('Could not create the link: ' + ((result && result.error) || 'unknown error'));
+    } else {
+      try { await navigator.clipboard.writeText(result.url); alert('Link copied. Paste it into a text message (it works for 24 hours).'); }
+      catch (clipErr) { prompt('Copy this link:', result.url); }
+    }
+  } catch (err) { alert('Something went wrong: ' + (err && err.message ? err.message : err)); }
+  btn.disabled = false;
+});
+
+document.getElementById('btn-remove-card').addEventListener('click', async () => {
+  if (!editingCustomerId) return;
+  if (!confirm('Remove the saved card from this customer? Automatic charges will stop for them.')) return;
+  try {
+    await window.api.autopay.removeCard(editingCustomerId);
+    await refreshCustomersAndCardStatus();
+  } catch (err) { alert('Something went wrong: ' + (err && err.message ? err.message : err)); }
+});
+
+function refreshInvoiceAutoChargeHint() {
+  const hint = document.getElementById('invoice-auto-charge-hint');
+  if (!hint) return;
+  const cust = customers.find((c) => String(c.id) === String(invoiceForm.elements.customer_id.value));
+  const parts = [];
+  if (cust && cust.stripe_payment_method_id) parts.push('Card on file: ' + cardOnFileText(cust) + '.');
+  else if (cust) parts.push('This customer has no saved card yet. Open the customer and send a card setup link.');
+  parts.push('You approve each charge first in Reminders; the customer is emailed the invoice and charged a few days later.');
+  const inv = currentInvoiceForAutoCharge;
+  if (inv && inv.charge_on) parts.push('Charge scheduled for ' + inv.charge_on + '.');
+  if (inv && inv.charge_error) parts.push('Note: ' + inv.charge_error);
+  if (inv && inv.stripe_note) parts.push('Stripe: ' + inv.stripe_note);
+  hint.textContent = parts.join(' ');
+}
+invoiceForm.elements.customer_id.addEventListener('change', refreshInvoiceAutoChargeHint);
+
 // ===================== Email Outbox (approval queue) =====================
 // OUTBOX-PATCH: automatic emails are parked in email_outbox; nothing goes to a
 // customer until you press Send here.
@@ -4085,6 +4186,7 @@ const OUTBOX_KIND_LABELS = {
   followup2: 'Final estimate follow-up (28 days)',
   'job-reminder': 'Job reminder (tomorrow)',
   'web-estimate': 'Website estimate confirmation',
+  autocharge: 'Automatic card charge (needs your OK)',
 };
 
 let outboxPending = [];
@@ -4142,7 +4244,8 @@ function renderOutbox() {
       (row.error ? `<div class="outbox-warn">Last send failed: ${escapeHtml(row.error)}</div>` : '') +
       `<details><summary>Preview email</summary><iframe sandbox="" class="outbox-frame"></iframe></details>` +
       `<div class="outbox-actions">` +
-      `<button type="button" class="btn btn-primary" data-act="send">Send</button>` +
+      `<button type="button" class="btn btn-primary" data-act="send">${row.kind === 'autocharge' ? 'Approve &amp; notify customer' : 'Send'}</button>` +
+      (row.kind === 'autocharge' ? `<button type="button" class="btn btn-ghost" data-act="open-invoice">Open invoice</button>` : '') +
       `<button type="button" class="btn btn-ghost" data-act="skip">Don't send</button>` +
       (row.quote_id ? `<button type="button" class="btn btn-ghost" data-act="approved">Customer accepted</button><button type="button" class="btn btn-ghost" data-act="declined">Customer declined</button>` : '') +
       `</div>`;
@@ -4180,12 +4283,29 @@ document.addEventListener('click', async (e) => {
     if (act === 'send') {
       if (q && (q.status === 'approved' || q.status === 'declined') &&
           !confirm('This estimate is already marked ' + (QUOTE_STATUS_LABELS[q.status] || q.status) + '. Send the email anyway?')) return;
+      if (row.kind === 'autocharge') {
+        if (!confirm('Email ' + (row.to_name || 'the customer') + ' their invoice now, and charge their saved card in a few days?')) return;
+        btn.disabled = true; btn.textContent = 'Working...';
+        const approved = await window.api.autopay.approveCharge(row.id);
+        if (!approved || approved.ok === false) {
+          alert('Could not approve: ' + ((approved && approved.error) || 'unknown error'));
+        } else {
+          alert('Done. The customer was emailed, and the card will be charged on ' + approved.chargeOn + '.');
+        }
+        await loadOutbox();
+        if (typeof loadInvoices === 'function') await loadInvoices();
+        return;
+      }
       if (!confirm('Send this email to ' + (row.to_email || 'the customer') + ' now?')) return;
       btn.disabled = true; btn.textContent = 'Sending...';
       const result = await window.api.outbox.send(row.id);
       if (!result || result.ok === false) {
         alert('Could not send: ' + ((result && result.error) || 'unknown error'));
       }
+    } else if (act === 'open-invoice') {
+      const inv = invoices.find((i) => String(i.id) === String(row.invoice_id));
+      if (inv) openInvoiceDrawer(inv); else alert('Could not find that invoice.');
+      return;
     } else if (act === 'skip') {
       await window.api.outbox.discard(row.id);
     } else if (act === 'approved' || act === 'declined') {
