@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Adds an "Outbox" tab: automatic emails wait there until you approve them.
+"""Adds an "Emails waiting for your OK" section to the Reminders tab: automatic estimate follow-ups wait there until you approve them.
 
 Run from ~/Downloads/jobber-clone :   python3 patch_outbox.py
 Edits phone-app/index.html, app.js, supabase-api.js, style.css.
@@ -52,39 +52,34 @@ patch('phone-app/supabase-api.js', [
 
 # ------------------------------------------------------------ index.html
 patch('phone-app/index.html', [
- ('nav item',
-  """        <button class="nav-item" data-view="reminders">
-          <span class="nav-tag">11</span> Reminders
-        </button>
+ ('nav badge',
+  """<span class="nav-tag">11</span> Reminders""",
+  """<span class="nav-tag">11</span> Reminders <span class="nav-badge" id="outbox-badge" hidden>0</span>"""),
+ ('outbox section inside Reminders',
+  """            <p class="subtitle">Backflow tests due &amp; customers overdue for service</p>
+          </div>
+        </header>
 """,
-  """        <button class="nav-item" data-view="reminders">
-          <span class="nav-tag">11</span> Reminders
-        </button>
-        <button class="nav-item" data-view="outbox">
-          <span class="nav-tag">&#9993;</span> Outbox <span class="nav-badge" id="outbox-badge" hidden>0</span>
-        </button>
-"""),
- ('outbox view',
-  "      <!-- ===== Reminders view ===== -->",
-  """      <!-- ===== Outbox view (OUTBOX-PATCH) ===== -->
-      <section class="view" id="view-outbox" hidden>
-        <header class="content-header">
+  """            <p class="subtitle">Emails to approve, backflow tests due &amp; customers overdue for service</p>
+          </div>
+        </header>
+
+        <!-- OUTBOX-PATCH: approval queue for automatic emails -->
+        <div class="content-header">
           <div>
-            <h1>Outbox</h1>
-            <p class="subtitle">Automatic emails wait here until you approve them</p>
+            <h1 style="font-size:18px;">Emails waiting for your OK</h1>
+            <p class="subtitle">Automatic estimate follow-ups wait here until you approve them</p>
           </div>
           <button class="btn btn-ghost" id="btn-outbox-refresh" type="button">Refresh</button>
-        </header>
+        </div>
         <p class="empty-sub" id="outbox-message" hidden></p>
         <div id="outbox-list"></div>
-        <p class="empty-sub" id="outbox-empty" hidden>Nothing waiting. Automatic emails (estimate follow-ups, job reminders, website estimate confirmations) will show up here for your OK before they go out.</p>
+        <p class="empty-sub" id="outbox-empty" hidden>Nothing waiting. Estimate follow-ups will show up here for your OK before they go out.</p>
         <details class="outbox-history" id="outbox-history" hidden>
           <summary>Recently sent / skipped</summary>
           <div id="outbox-history-list"></div>
         </details>
-      </section>
-
-      <!-- ===== Reminders view ===== -->"""),
+"""),
  ('cache css', 'style.css?v=20261017a', 'style.css?v=20261101a'),
  ('cache api', 'supabase-api.js?v=20261017a', 'supabase-api.js?v=20261101a'),
  ('cache data', 'design-data.js?v=20261017a', 'design-data.js?v=20261101a'),
@@ -144,7 +139,7 @@ else:
 patch('phone-app/app.js', [
  ('open view loads outbox',
   "    if (target === 'reports' && reportYearSelect.value) loadReportForYear(reportYearSelect.value);",
-  "    if (target === 'reports' && reportYearSelect.value) loadReportForYear(reportYearSelect.value);\n    if (target === 'outbox') loadOutbox(); // OUTBOX-PATCH"),
+  "    if (target === 'reports' && reportYearSelect.value) loadReportForYear(reportYearSelect.value);\n    if (target === 'reminders') loadOutbox(); // OUTBOX-PATCH"),
  ('outbox code',
   "// ===================== Init =====================",
   r"""// ===================== Email Outbox (approval queue) =====================
