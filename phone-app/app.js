@@ -51,6 +51,7 @@ navItems.forEach((btn) => {
     });
     if (target === 'schedule' && window.initRouteMap) window.initRouteMap();
     if (target === 'reports' && reportYearSelect.value) loadReportForYear(reportYearSelect.value);
+    if (target === 'outbox') loadOutbox(); // OUTBOX-PATCH
   });
 });
 
@@ -4075,6 +4076,132 @@ document.getElementById('btn-save-signature').addEventListener('click', async ()
   await loadJobs();
 });
 
+// ===================== Email Outbox (approval queue) =====================
+// OUTBOX-PATCH: automatic emails are parked in email_outbox; nothing goes to a
+// customer until you press Send here.
+
+const OUTBOX_KIND_LABELS = {
+  followup1: 'Estimate follow-up (14 days)',
+  followup2: 'Final estimate follow-up (28 days)',
+  'job-reminder': 'Job reminder (tomorrow)',
+  'web-estimate': 'Website estimate confirmation',
+};
+
+let outboxPending = [];
+
+function outboxQuoteFor(row) {
+  if (!row.quote_id || typeof quotes === 'undefined') return null;
+  return quotes.find((q) => String(q.id) === String(row.quote_id)) || null;
+}
+
+function updateOutboxBadge() {
+  const badge = document.getElementById('outbox-badge');
+  if (!badge) return;
+  badge.textContent = String(outboxPending.length);
+  badge.hidden = outboxPending.length === 0;
+}
+
+async function loadOutbox() {
+  const msg = document.getElementById('outbox-message');
+  if (!msg) return;
+  try {
+    outboxPending = await window.api.outbox.listPending();
+    msg.hidden = true;
+  } catch (err) {
+    outboxPending = [];
+    msg.hidden = false;
+    msg.textContent = 'The Outbox is not set up yet. Run add_email_outbox.sql in Supabase (SQL Editor) one time, then tap Refresh. (' + (err && err.message ? err.message : err) + ')';
+  }
+  updateOutboxBadge();
+  renderOutbox();
+  try {
+    const recent = await window.api.outbox.listRecent();
+    renderOutboxHistory(recent);
+  } catch (err) { /* history is optional */ }
+}
+
+function renderOutbox() {
+  const list = document.getElementById('outbox-list');
+  const empty = document.getElementById('outbox-empty');
+  const msg = document.getElementById('outbox-message');
+  if (!list) return;
+  list.innerHTML = '';
+  empty.hidden = outboxPending.length > 0 || !msg.hidden;
+  outboxPending.forEach((row) => {
+    const q = outboxQuoteFor(row);
+    const stale = q && (q.status === 'approved' || q.status === 'declined');
+    const card = document.createElement('div');
+    card.className = 'outbox-card' + (stale ? ' is-stale' : '');
+    card.dataset.id = row.id;
+    const when = row.created_at ? new Date(row.created_at).toLocaleDateString() : '';
+    card.innerHTML =
+      `<div class="outbox-kind">${escapeHtml(OUTBOX_KIND_LABELS[row.kind] || row.kind)}</div>` +
+      `<div class="outbox-subject">${escapeHtml(row.subject || '')}</div>` +
+      `<div class="outbox-meta">To: ${escapeHtml(row.to_name || '')} &lt;${escapeHtml(row.to_email || '')}&gt; &middot; queued ${escapeHtml(when)}</div>` +
+      (stale ? `<div class="outbox-warn">This estimate is already marked ${escapeHtml(QUOTE_STATUS_LABELS[q.status] || q.status)}. You probably should NOT send this.</div>` : '') +
+      (row.error ? `<div class="outbox-warn">Last send failed: ${escapeHtml(row.error)}</div>` : '') +
+      `<details><summary>Preview email</summary><iframe sandbox="" class="outbox-frame"></iframe></details>` +
+      `<div class="outbox-actions">` +
+      `<button type="button" class="btn btn-primary" data-act="send">Send</button>` +
+      `<button type="button" class="btn btn-ghost" data-act="skip">Don't send</button>` +
+      (row.quote_id ? `<button type="button" class="btn btn-ghost" data-act="approved">Customer accepted</button><button type="button" class="btn btn-ghost" data-act="declined">Customer declined</button>` : '') +
+      `</div>`;
+    card.querySelector('iframe').srcdoc = row.html || '';
+    list.appendChild(card);
+  });
+}
+
+function renderOutboxHistory(rows) {
+  const wrap = document.getElementById('outbox-history');
+  const list = document.getElementById('outbox-history-list');
+  if (!wrap || !list) return;
+  list.innerHTML = '';
+  wrap.hidden = !rows.length;
+  rows.forEach((r) => {
+    const d = document.createElement('div');
+    d.className = 'outbox-history-row';
+    const when = r.decided_at ? new Date(r.decided_at).toLocaleDateString() : '';
+    d.textContent = `${r.status === 'sent' ? 'Sent' : 'Skipped'} ${when} — ${r.to_name || r.to_email}: ${r.subject}`;
+    list.appendChild(d);
+  });
+}
+
+document.addEventListener('click', async (e) => {
+  const refresh = e.target.closest('#btn-outbox-refresh');
+  if (refresh) { await loadOutbox(); return; }
+  const btn = e.target.closest('.outbox-card [data-act]');
+  if (!btn) return;
+  const card = btn.closest('.outbox-card');
+  const row = outboxPending.find((r) => String(r.id) === card.dataset.id);
+  if (!row) return;
+  const act = btn.dataset.act;
+  const q = outboxQuoteFor(row);
+  try {
+    if (act === 'send') {
+      if (q && (q.status === 'approved' || q.status === 'declined') &&
+          !confirm('This estimate is already marked ' + (QUOTE_STATUS_LABELS[q.status] || q.status) + '. Send the email anyway?')) return;
+      if (!confirm('Send this email to ' + (row.to_email || 'the customer') + ' now?')) return;
+      btn.disabled = true; btn.textContent = 'Sending...';
+      const result = await window.api.outbox.send(row.id);
+      if (!result || result.ok === false) {
+        alert('Could not send: ' + ((result && result.error) || 'unknown error'));
+      }
+    } else if (act === 'skip') {
+      await window.api.outbox.discard(row.id);
+    } else if (act === 'approved' || act === 'declined') {
+      const label = act === 'approved' ? 'accepted' : 'declined';
+      if (!confirm('Mark this estimate as ' + label + ' and remove its waiting emails?')) return;
+      await window.api.outbox.markQuote(row.quote_id, act);
+      if (typeof loadQuotes === 'function') await loadQuotes();
+    }
+  } catch (err) {
+    alert('Something went wrong: ' + (err && err.message ? err.message : err));
+  }
+  await loadOutbox();
+});
+
+setInterval(() => { loadOutbox().catch(() => {}); }, 120000);
+
 // ===================== Init =====================
 
 (async function init() {
@@ -4091,6 +4218,7 @@ document.getElementById('btn-save-signature').addEventListener('click', async ()
   await loadSettings();
   await loadReportYears();
   await loadReminders();
+  await loadOutbox();
 
   if (window.api.app && window.api.app.getPhoneAccessUrl) {
     const url = await window.api.app.getPhoneAccessUrl();

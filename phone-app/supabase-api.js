@@ -378,6 +378,25 @@ window.api = {
     },
   },
 
+  // OUTBOX-PATCH: automatic emails wait in email_outbox until approved.
+  outbox: {
+    listPending: async () => unwrap(await sb.from('email_outbox').select('*').eq('status', 'pending').order('created_at')),
+    listRecent: async () =>
+      unwrap(await sb.from('email_outbox').select('id, created_at, kind, to_email, to_name, subject, status, decided_at').neq('status', 'pending').order('decided_at', { ascending: false }).limit(15)),
+    send: (id) => invokeFunction('send-notifications', { type: 'outbox-send', id }),
+    discard: async (id) => {
+      const { error } = await sb.from('email_outbox').update({ status: 'discarded', decided_at: new Date().toISOString() }).eq('id', id);
+      if (error) throw new Error(error.message);
+    },
+    // Customer told you yes/no in person: set the estimate's status and drop any waiting emails for it.
+    markQuote: async (quoteId, status) => {
+      const r1 = await sb.from('quotes').update({ status }).eq('id', quoteId);
+      if (r1.error) throw new Error(r1.error.message);
+      const r2 = await sb.from('email_outbox').update({ status: 'discarded', decided_at: new Date().toISOString() }).eq('quote_id', quoteId).eq('status', 'pending');
+      if (r2.error) throw new Error(r2.error.message);
+    },
+  },
+
   quotes: {
     list: async () => withTotals('quotes', 'quote_items', 'quote_id', unwrap(await sb.from('quotes').select('*, customers(name)').order('created_at', { ascending: false })).map(mapCustomerName)),
     get: async (id) => {
