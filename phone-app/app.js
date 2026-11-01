@@ -51,7 +51,7 @@ navItems.forEach((btn) => {
     });
     if (target === 'schedule' && window.initRouteMap) window.initRouteMap();
     if (target === 'reports' && reportYearSelect.value) loadReportForYear(reportYearSelect.value);
-    if (target === 'outbox') loadOutbox(); // OUTBOX-PATCH
+    if (target === 'reminders') loadOutbox(); // OUTBOX-MOVE
   });
 });
 

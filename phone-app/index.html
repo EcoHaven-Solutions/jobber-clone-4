@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-  <link rel="stylesheet" href="style.css?v=20261101a" />
+  <link rel="stylesheet" href="style.css?v=20261101b" />
 </head>
 <body>
   <div class="shell">
@@ -68,10 +68,7 @@
           <span class="nav-tag">10</span> Employees
         </button>
         <button class="nav-item" data-view="reminders">
-          <span class="nav-tag">11</span> Reminders
-        </button>
-        <button class="nav-item" data-view="outbox">
-          <span class="nav-tag">&#9993;</span> Outbox <span class="nav-badge" id="outbox-badge" hidden>0</span>
+          <span class="nav-tag">11</span> Reminders <span class="nav-badge" id="outbox-badge" hidden>0</span>
         </button>
         <button class="nav-item" data-view="reports">
           <span class="nav-tag">12</span> Reports
@@ -580,32 +577,30 @@
         </div>
       </section>
 
-      <!-- ===== Outbox view (OUTBOX-PATCH) ===== -->
-      <section class="view" id="view-outbox" hidden>
-        <header class="content-header">
-          <div>
-            <h1>Outbox</h1>
-            <p class="subtitle">Automatic emails wait here until you approve them</p>
-          </div>
-          <button class="btn btn-ghost" id="btn-outbox-refresh" type="button">Refresh</button>
-        </header>
-        <p class="empty-sub" id="outbox-message" hidden></p>
-        <div id="outbox-list"></div>
-        <p class="empty-sub" id="outbox-empty" hidden>Nothing waiting. Automatic emails (estimate follow-ups, job reminders, website estimate confirmations) will show up here for your OK before they go out.</p>
-        <details class="outbox-history" id="outbox-history" hidden>
-          <summary>Recently sent / skipped</summary>
-          <div id="outbox-history-list"></div>
-        </details>
-      </section>
-
       <!-- ===== Reminders view ===== -->
       <section class="view" id="view-reminders" hidden>
         <header class="content-header">
           <div>
             <h1>Reminders</h1>
-            <p class="subtitle">Backflow tests due &amp; customers overdue for service</p>
+            <p class="subtitle">Emails to approve, backflow tests due &amp; customers overdue for service</p>
           </div>
         </header>
+
+        <!-- OUTBOX-MOVE: approval queue for automatic emails -->
+        <div class="content-header">
+          <div>
+            <h1 style="font-size:18px;">Emails waiting for your OK</h1>
+            <p class="subtitle">Automatic estimate follow-ups wait here until you approve them</p>
+          </div>
+          <button class="btn btn-ghost" id="btn-outbox-refresh" type="button">Refresh</button>
+        </div>
+        <p class="empty-sub" id="outbox-message" hidden></p>
+        <div id="outbox-list"></div>
+        <p class="empty-sub" id="outbox-empty" hidden>Nothing waiting. Estimate follow-ups will show up here for your OK before they go out.</p>
+        <details class="outbox-history" id="outbox-history" hidden>
+          <summary>Recently sent / skipped</summary>
+          <div id="outbox-history-list"></div>
+        </details>
 
         <div class="content-header">
           <div>
@@ -2154,9 +2149,9 @@
   <script src="https://cdn.jsdelivr.net/npm/konva@9/konva.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="supabase-api.js?v=20261101a"></script>
-  <script src="design-data.js?v=20261101a"></script>
-  <script src="app.js?v=20261101a"></script>
-  <script src="design.js?v=20261101a"></script>
+  <script src="supabase-api.js?v=20261101b"></script>
+  <script src="design-data.js?v=20261101b"></script>
+  <script src="app.js?v=20261101b"></script>
+  <script src="design.js?v=20261101b"></script>
 </body>
 </html>
