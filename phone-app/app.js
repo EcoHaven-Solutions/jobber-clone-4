@@ -2732,9 +2732,46 @@ function openLeadDrawer(lead = null) {
   }
 
   refreshLeadQuoteInfo(lead ? lead.id : null);
+  renderLeadPhotos(lead ? lead.id : null); // LEAD-PHOTOS-PATCH
 
   leadOverlay.hidden = false;
   leadDrawer.hidden = false;
+}
+
+// LEAD-PHOTOS-PATCH: photos the customer attached on the public estimate form.
+async function renderLeadPhotos(leadId) {
+  const wrap = document.getElementById('lead-photos-wrap');
+  const gallery = document.getElementById('lead-photo-gallery');
+  if (!wrap || !gallery) return;
+  gallery.innerHTML = '';
+  wrap.hidden = true;
+  if (!leadId) return;
+  let rows;
+  try {
+    rows = await window.api.leadPhotos.list(leadId);
+  } catch (err) {
+    return; // table not set up yet -- nothing to show
+  }
+  if (leadId !== editingLeadId || !rows.length) return;
+  wrap.hidden = false;
+  rows.forEach((photo) => {
+    const item = document.createElement('div');
+    item.className = 'photo-gallery-item';
+    item.innerHTML = `
+      <a href="${escapeHtml(photo.file_url)}" target="_blank" rel="noopener"><img src="${escapeHtml(photo.file_url)}" loading="lazy" alt="Customer photo" /></a>
+      <button type="button" class="photo-remove" aria-label="Remove photo">&times;</button>
+    `;
+    item.querySelector('.photo-remove').addEventListener('click', async () => {
+      if (!confirm('Remove this photo?')) return;
+      try {
+        await window.api.leadPhotos.delete(photo.id);
+      } catch (err) {
+        alert(err.message);
+      }
+      renderLeadPhotos(leadId);
+    });
+    gallery.appendChild(item);
+  });
 }
 
 // Shows a small "linked estimate" readout on the Lead detail screen when

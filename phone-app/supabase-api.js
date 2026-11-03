@@ -516,6 +516,16 @@ window.api = {
     delete: async (id) => { await sb.from('employees').delete().eq('id', id); return { id }; },
   },
 
+  // LEAD-PHOTOS-PATCH: photos customers attach on the public estimate form.
+  leadPhotos: {
+    list: async (leadId) => unwrap(await sb.from('lead_photos').select('*').eq('lead_id', leadId).order('created_at')),
+    delete: async (id) => {
+      const row = unwrap(await sb.from('lead_photos').select('*').eq('id', id).single());
+      await deleteFromStorage(row.file_url);
+      await sb.from('lead_photos').delete().eq('id', id);
+    },
+  },
+
   leads: {
     list: async () => unwrap(await sb.from('leads').select('*').order('created_at', { ascending: false })),
     create: async (l) => unwrap(await sb.from('leads').insert(cleanLead(l)).select().single()),
