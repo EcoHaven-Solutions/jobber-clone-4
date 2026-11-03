@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Decline Estimate — EcoHaven Solutions LLC</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Helvetica, Arial, sans-serif;
+      background:
+        linear-gradient(180deg, rgba(26,28,24,0.75), rgba(26,28,24,0.9)),
+        url('https://images.unsplash.com/photo-1770664945615-52203ab54c88?q=80&w=1654&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')
+        center / cover no-repeat;
+      color: #EAEAE4;
+      display: flex;
+      justify-content: center;
+      padding: 40px 16px;
+      min-height: 100vh;
+    }
+    .card {
+      max-width: 460px;
+      width: 100%;
+      background: #3E7C98;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      border: 1px solid #2E6178;
+      align-self: flex-start;
+      margin-top: 40px;
+    }
+    .header {
+      background: linear-gradient(160deg, #454542, #2E2E2C);
+      color: #fff;
+      padding: 28px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      text-align: left;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      line-height: 1.15;
+    }
+    .header p {
+      margin: 6px 0 0;
+      font-size: 13px;
+      color: #D6E9F1;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+    }
+    .body {
+      padding: 32px 26px 28px;
+      background: #2E2E2C;
+      text-align: center;
+    }
+    .body h2 {
+      margin: 0 0 12px;
+      font-size: 21px;
+      font-weight: 700;
+    }
+    .body p {
+      margin: 0;
+      font-size: 15px;
+      color: #D8D8D2;
+      line-height: 1.55;
+    }
+    .footer {
+      background: #23261F;
+      padding: 16px 24px;
+      text-align: center;
+      font-size: 12px;
+      color: #A9AC9E;
+    }
+    .footer a { color: #8FDB74; text-decoration: none; }
+    textarea {
+      width: 100%;
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #5A5A55;
+      background: #3A3A38;
+      color: #EAEAE4;
+      font-family: inherit;
+      font-size: 15px;
+    }
+    .actions { margin-top: 18px; display: flex; flex-direction: column; gap: 10px; }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 13px 18px;
+      border-radius: 8px;
+      border: none;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      font-family: inherit;
+    }
+    .btn-decline { background: #B5533A; color: #fff; }
+    .btn-keep { background: transparent; color: #D8D8D2; border: 1px solid #5A5A55; }
+    .btn:disabled { opacity: 0.6; cursor: default; }
+    #error { color: #E08A6B; font-size: 14px; margin-top: 12px; min-height: 18px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex:none;">
+        <path d="M12 2C12 2 8 6.5 8 10.5C8 12.9853 9.79086 15 12 15C14.2091 15 16 12.9853 16 10.5C16 6.5 12 2 12 2Z" fill="#4F9FD6"/>
+        <path d="M12 22C12 22 5 19 5 13C8 13 10.5 14.5 12 17C13.5 14.5 16 13 19 13C19 19 12 22 12 22Z" fill="#5FBF3E"/>
+      </svg>
+      <div>
+        <h1>EcoHaven Solutions LLC</h1>
+        <p>SPRINKLER INSTALLS &middot; REPAIRS &middot; UPGRADES</p>
+      </div>
+    </div>
+    <div class="body">
+      <div id="ask">
+        <h2>Decline this estimate?</h2>
+        <p>If you're not interested, tap the button below and we'll close it out &mdash; no more follow-up emails. Changed your mind? Just close this page.</p>
+        <textarea id="reason" rows="3" maxlength="500" placeholder="Optional: anything you'd like us to know (price, timing, went another way...)"></textarea>
+        <div class="actions">
+          <button type="button" class="btn btn-decline" id="btn-decline">Yes, decline this estimate</button>
+          <a class="btn btn-keep" href="https://ecohavenpro.com">Never mind</a>
+        </div>
+        <div id="error"></div>
+      </div>
+      <div id="done" hidden>
+        <h2 id="done-heading"></h2>
+        <p id="done-message"></p>
+      </div>
+    </div>
+    <div class="footer">
+      Call/Text <a href="tel:5098666388">509-866-6388</a> &middot; ecohavenpro.com
+    </div>
+  </div>
+
+  <script>
+    // The email link brings customers here (a real page with a real button, so
+    // email security scanners that "click" links can't decline for them).
+    // The button tells the public-lead-intake Edge Function to mark the
+    // estimate Declined.
+    var FN_URL = 'https://tudyqzbmlfkgcdfjdhej.supabase.co/functions/v1/public-lead-intake';
+    var token = new URLSearchParams(window.location.search).get('token');
+
+    function showDone(heading, message) {
+      document.getElementById('ask').hidden = true;
+      document.getElementById('done').hidden = false;
+      document.getElementById('done-heading').textContent = heading;
+      document.getElementById('done-message').textContent = message;
+    }
+
+    if (!token) {
+      showDone('Link Not Found', 'This estimate link is invalid or has expired. Please call/text 509-866-6388 and we\'ll help sort it out.');
+    }
+
+    document.getElementById('btn-decline').addEventListener('click', async function () {
+      var btn = this;
+      var err = document.getElementById('error');
+      err.textContent = '';
+      btn.disabled = true;
+      btn.textContent = 'Working...';
+      try {
+        var res = await fetch(FN_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ declineEstimate: token, reason: document.getElementById('reason').value })
+        });
+        var data = await res.json();
+        if (data.ok && data.status === 'declined') {
+          showDone('Estimate Declined', "Thanks for letting us know. If anything changes, just call/text 509-866-6388 and we'll be happy to help.");
+        } else if (data.ok && data.status === 'already') {
+          showDone('Already Declined', 'This estimate was already declined. If anything changes, call/text 509-866-6388.');
+        } else if (data.ok && data.status === 'accepted') {
+          showDone('Already Accepted', 'This estimate was already accepted, so we left it as is. To change that, please call/text 509-866-6388.');
+        } else if (data.status === 'notfound') {
+          showDone('Link Not Found', "This estimate link is invalid or has expired. Please call/text 509-866-6388 and we'll help sort it out.");
+        } else {
+          throw new Error('failed');
+        }
+      } catch (e) {
+        err.textContent = "We couldn't process that right now. Please call/text 509-866-6388.";
+        btn.disabled = false;
+        btn.textContent = 'Yes, decline this estimate';
+      }
+    });
+  </script>
+</body>
+</html>
