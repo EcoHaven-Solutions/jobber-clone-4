@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-  <link rel="stylesheet" href="style.css?v=20261112a" />
+  <link rel="stylesheet" href="style.css?v=20261120a" />
 </head>
 <body>
   <div class="shell">
@@ -37,6 +37,9 @@
         </div>
       </div>
       <nav class="nav">
+        <button class="nav-item" data-view="today">
+          <span class="nav-tag">00</span> Today
+        </button>
         <button class="nav-item is-active" data-view="schedule">
           <span class="nav-tag">01</span> Schedule
         </button>
@@ -88,6 +91,24 @@
     </aside>
 
     <main class="content">
+
+      <!-- TODAY-PATCH: Today screen -->
+      <section class="view" id="view-today" hidden>
+        <header class="content-header">
+          <div>
+            <h1>Today</h1>
+            <p class="subtitle" id="today-date"></p>
+          </div>
+          <button class="btn btn-ghost" id="btn-today-refresh" type="button">Refresh</button>
+        </header>
+        <div class="today-grid">
+          <div class="today-card"><h2>Today's jobs</h2><div id="today-jobs"></div></div>
+          <div class="today-card"><h2>Waiting for your OK</h2><div id="today-approvals"></div></div>
+          <div id="today-missed-wrap" style="display:contents;"></div>
+          <div class="today-card"><h2>Unpaid invoices</h2><div id="today-invoices"></div></div>
+          <div class="today-card"><h2>Needs attention</h2><div id="today-attention"></div></div>
+        </div>
+      </section>
 
       <!-- ===== Schedule view (home) ===== -->
       <section class="view" id="view-schedule">
@@ -2218,9 +2239,9 @@
   <script src="https://cdn.jsdelivr.net/npm/konva@9/konva.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="supabase-api.js?v=20261112a"></script>
-  <script src="design-data.js?v=20261112a"></script>
-  <script src="app.js?v=20261112a"></script>
-  <script src="design.js?v=20261112a"></script>
+  <script src="supabase-api.js?v=20261120a"></script>
+  <script src="design-data.js?v=20261120a"></script>
+  <script src="app.js?v=20261120a"></script>
+  <script src="design.js?v=20261120a"></script>
 </body>
 </html>

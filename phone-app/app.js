@@ -4504,6 +4504,117 @@ document.addEventListener('click', async (e) => {
 
 setInterval(() => { loadOutbox().catch(() => {}); }, 120000);
 
+// TODAY-PATCH: the Today screen (home page)
+function todayDateStr(offsetDays) {
+  const d = new Date();
+  d.setDate(d.getDate() + (offsetDays || 0));
+  return dateStr(d);
+}
+
+function renderToday() {
+  const root = document.getElementById('view-today');
+  if (!root) return;
+  const today = todayDateStr(0);
+  const tomorrow = todayDateStr(1);
+  document.getElementById('today-date').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+
+  // ---- Today's jobs ----
+  const todays = (jobs || [])
+    .filter((j) => j.scheduled_date === today && j.status !== 'cancelled')
+    .sort((a, b) => String(a.scheduled_time || '99').localeCompare(String(b.scheduled_time || '99')));
+  const tomorrowCount = (jobs || []).filter((j) => j.scheduled_date === tomorrow && j.status !== 'cancelled').length;
+  let html = '';
+  if (!todays.length) html += '<p class="today-empty">No jobs scheduled today.</p>';
+  todays.forEach((j) => {
+    html += `<div class="today-row" data-job="${j.id}">` +
+      `<div class="today-time">${escapeHtml(formatTimeRange(j.scheduled_time, j.scheduled_time_end) || 'Any time')}</div>` +
+      `<div class="today-main"><div class="today-title">${escapeHtml(j.title || 'Job')}</div>` +
+      `<div class="today-sub">${escapeHtml(j.customer_name || '')} &middot; ${escapeHtml(STATUS_LABELS[j.status] || j.status || '')}</div></div>` +
+      `<span class="today-arrow">&rsaquo;</span></div>`;
+  });
+  html += `<p class="today-foot">Tomorrow: ${tomorrowCount} job${tomorrowCount === 1 ? '' : 's'}</p>`;
+  document.getElementById('today-jobs').innerHTML = html;
+
+  // ---- Waiting for your OK ----
+  const pending = typeof outboxPending !== 'undefined' ? outboxPending : [];
+  let ap = '';
+  if (!pending.length) {
+    ap = '<p class="today-empty">Nothing waiting for you.</p>';
+  } else {
+    const counts = {};
+    pending.forEach((r) => { counts[r.kind] = (counts[r.kind] || 0) + 1; });
+    Object.keys(counts).forEach((k) => {
+      const label = (typeof OUTBOX_KIND_LABELS !== 'undefined' && OUTBOX_KIND_LABELS[k]) || k;
+      ap += `<div class="today-line"><strong>${counts[k]}</strong> ${escapeHtml(label)}</div>`;
+    });
+    ap += '<button class="btn btn-primary today-btn" type="button" data-goto="reminders">Review now</button>';
+  }
+  document.getElementById('today-approvals').innerHTML = ap;
+
+  // ---- Unpaid invoices ----
+  const unpaid = (invoices || []).filter((i) => i.status === 'unpaid');
+  const overdue = unpaid.filter((i) => i.due_date && i.due_date < today);
+  const sum = unpaid.reduce((s, i) => s + Number(i.total || 0), 0);
+  let inv = `<p class="today-big">${formatCurrency(sum)}</p><p class="today-sub">${unpaid.length} unpaid${overdue.length ? ` &middot; <span class="today-bad">${overdue.length} overdue</span>` : ''}</p>`;
+  unpaid
+    .slice()
+    .sort((a, b) => String(a.due_date || '9999').localeCompare(String(b.due_date || '9999')))
+    .slice(0, 5)
+    .forEach((i) => {
+      const late = i.due_date && i.due_date < today;
+      inv += `<div class="today-row" data-invoice="${i.id}"><div class="today-main"><div class="today-title">I-${escapeHtml(i.number)} &middot; ${escapeHtml(i.customer_name || '')}</div>` +
+        `<div class="today-sub ${late ? 'today-bad' : ''}">${i.due_date ? (late ? 'Overdue since ' : 'Due ') + escapeHtml(i.due_date) : 'No due date'}</div></div>` +
+        `<div class="today-amt">${formatCurrency(i.total)}</div></div>`;
+    });
+  if (unpaid.length > 5) inv += '<button class="btn btn-ghost today-btn" type="button" data-goto="invoices">See all invoices</button>';
+  document.getElementById('today-invoices').innerHTML = inv;
+
+  // ---- Needs attention ----
+  const newLeads = (leads || []).filter((l) => l.status === 'new').length;
+  const waiting = (typeof quotes !== 'undefined' ? quotes : []).filter((q) => q.status === 'sent').length;
+  document.getElementById('today-attention').innerHTML =
+    `<div class="today-row" data-goto="leads"><div class="today-main"><div class="today-title">${newLeads} new lead${newLeads === 1 ? '' : 's'}</div><div class="today-sub">Not contacted yet</div></div><span class="today-arrow">&rsaquo;</span></div>` +
+    `<div class="today-row" data-goto="quotes"><div class="today-main"><div class="today-title">${waiting} estimate${waiting === 1 ? '' : 's'} waiting for an answer</div><div class="today-sub">Sent, not accepted or declined</div></div><span class="today-arrow">&rsaquo;</span></div>`;
+
+  if (typeof window.renderTodayMissed === 'function') window.renderTodayMissed();
+}
+
+document.getElementById('view-today').addEventListener('click', async (e) => {
+  const go = e.target.closest('[data-goto]');
+  if (go) {
+    const nav = document.querySelector(`.nav-item[data-view="${go.dataset.goto}"]`);
+    if (nav) nav.click();
+    return;
+  }
+  const jobRow = e.target.closest('[data-job]');
+  if (jobRow) {
+    const job = jobs.find((j) => String(j.id) === jobRow.dataset.job);
+    if (job) openJobDrawer(job);
+    return;
+  }
+  const invRow = e.target.closest('[data-invoice]');
+  if (invRow) {
+    const full = await window.api.invoices.get(invRow.dataset.invoice);
+    openInvoiceDrawer(full);
+  }
+});
+document.getElementById('btn-today-refresh').addEventListener('click', async () => {
+  try { await Promise.all([loadJobs(), loadInvoices(), loadQuotes(), loadLeads(), loadOutbox()]); } catch (err) { /* ignore */ }
+  renderToday();
+});
+document.querySelector('.nav-item[data-view="today"]').addEventListener('click', renderToday);
+
+// Keep Today fresh whenever the underlying lists reload.
+['loadJobs', 'loadInvoices', 'loadQuotes', 'loadLeads', 'loadOutbox'].forEach((name) => {
+  const original = globalThis[name];
+  if (typeof original !== 'function') return;
+  globalThis[name] = async function (...args) {
+    const result = await original.apply(this, args);
+    try { renderToday(); } catch (err) { /* ignore */ }
+    return result;
+  };
+});
+
 // ===================== Init =====================
 
 (async function init() {
@@ -4548,4 +4659,6 @@ setInterval(() => { loadOutbox().catch(() => {}); }, 120000);
   }
 
   if (window.initRouteMap) window.initRouteMap();
+  // TODAY-PATCH: open on the Today screen
+  try { document.querySelector('.nav-item[data-view="today"]').click(); } catch (err) { /* ignore */ }
 })();
