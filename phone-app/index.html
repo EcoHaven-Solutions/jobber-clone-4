@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-  <link rel="stylesheet" href="style.css?v=20261121a" />
+  <link rel="stylesheet" href="style.css?v=20261122a" />
 </head>
 <body>
   <div class="shell">
@@ -37,11 +37,8 @@
         </div>
       </div>
       <nav class="nav">
-        <button class="nav-item" data-view="today">
-          <span class="nav-tag">00</span> Today
-        </button>
-        <button class="nav-item is-active" data-view="schedule">
-          <span class="nav-tag">01</span> Schedule
+        <button class="nav-item is-active" data-view="today">
+          <span class="nav-tag">01</span> Today &amp; Schedule
         </button>
         <button class="nav-item" data-view="leads">
           <span class="nav-tag">02</span> Leads
@@ -93,7 +90,7 @@
     <main class="content">
 
       <!-- TODAY-PATCH: Today screen -->
-      <section class="view" id="view-today" hidden>
+      <section class="view" id="view-today">
         <header class="content-header">
           <div>
             <h1>Today</h1>
@@ -108,10 +105,8 @@
           <div class="today-card"><h2>Unpaid invoices</h2><div id="today-invoices"></div></div>
           <div class="today-card"><h2>Needs attention</h2><div id="today-attention"></div></div>
         </div>
-      </section>
-
-      <!-- ===== Schedule view (home) ===== -->
-      <section class="view" id="view-schedule">
+      <!-- MERGE-SCHEDULE-PATCH: schedule now lives under the Today cards -->
+      <div class="schedule-block" id="view-schedule" style="margin-top:36px;">
         <header class="content-header">
           <div>
             <h1>Schedule</h1>
@@ -150,7 +145,9 @@
           <div class="drawer-section-label" style="border-top:none;padding-top:0;">Needs a date</div>
           <div id="unscheduled-jobs-list" class="unscheduled-jobs-list"></div>
         </div>
+      </div>
       </section>
+
 
       <!-- ===== Leads view ===== -->
       <section class="view" id="view-leads" hidden>
@@ -2243,9 +2240,9 @@
   <script src="https://cdn.jsdelivr.net/npm/konva@9/konva.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="supabase-api.js?v=20261121a"></script>
-  <script src="design-data.js?v=20261121a"></script>
-  <script src="app.js?v=20261121a"></script>
-  <script src="design.js?v=20261121a"></script>
+  <script src="supabase-api.js?v=20261122a"></script>
+  <script src="design-data.js?v=20261122a"></script>
+  <script src="app.js?v=20261122a"></script>
+  <script src="design.js?v=20261122a"></script>
 </body>
 </html>

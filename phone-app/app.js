@@ -49,7 +49,7 @@ navItems.forEach((btn) => {
     views.forEach((v) => {
       v.hidden = v.id !== `view-${target}`;
     });
-    if (target === 'schedule' && window.initRouteMap) window.initRouteMap();
+    if ((target === 'schedule' || target === 'today') && window.initRouteMap) window.initRouteMap(); // MERGE-SCHEDULE-PATCH
     if (target === 'reports' && reportYearSelect.value) loadReportForYear(reportYearSelect.value);
     if (target === 'reminders') loadOutbox(); // OUTBOX-MOVE
   });
