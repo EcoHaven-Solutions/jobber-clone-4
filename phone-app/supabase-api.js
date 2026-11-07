@@ -631,6 +631,8 @@ window.api = {
     sendJobReminder: (id) => invokeFunction('send-notifications', { type: 'job-reminder', id }),
     sendReviewRequest: (id) => invokeFunction('send-notifications', { type: 'review-request', id }),
     sendAnnouncement: (subject, message, customerIds) => invokeFunction('send-announcement', { subject, heading: subject, message, customerIds }),
+    // REVIEW-CAMPAIGN-PATCH
+    sendReviewCampaign: (customerIds, message, test) => invokeFunction('send-notifications', { type: 'review-campaign', customerIds, message, test: !!test }),
   },
 
   sms: {

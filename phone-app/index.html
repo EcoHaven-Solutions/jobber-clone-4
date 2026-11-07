@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-  <link rel="stylesheet" href="style.css?v=20261103a" />
+  <link rel="stylesheet" href="style.css?v=20261107a" />
 </head>
 <body>
   <div class="shell">
@@ -182,6 +182,7 @@
           </div>
           <div style="display:flex; gap:8px;">
             <button class="btn btn-ghost" id="btn-send-announcement">Send announcement</button>
+            <button class="btn btn-ghost" id="btn-review-campaign">Review campaign</button>
             <button class="btn btn-ghost" id="btn-import-csv">Import CSV/Excel</button>
             <button class="btn btn-primary" id="btn-new-customer">+ New customer</button>
           </div>
@@ -1890,6 +1891,50 @@
     </form>
   </div>
 
+  <!-- Review campaign (REVIEW-CAMPAIGN-PATCH) -->
+  <div class="overlay" id="review-overlay" hidden></div>
+  <div class="drawer drawer-wide" id="review-drawer" hidden>
+    <div class="drawer-header">
+      <h2>Review campaign</h2>
+      <button class="icon-btn" id="btn-close-review-drawer" aria-label="Close">&times;</button>
+    </div>
+    <form id="review-form" class="drawer-body">
+      <p class="empty-sub" style="margin-top:0;">
+        Each customer gets their own personal email ("Hi Nick, thanks for choosing us...") with a
+        "Leave a Review" button that goes to your Google review link (set in Settings).
+        Customers marked "exclude from mass communications" are always skipped.
+      </p>
+      <label>Optional personal line (added under the thank-you)
+        <textarea id="review-message" rows="3" maxlength="1000" placeholder="e.g. It was a pleasure working on your yard this year."></textarea>
+      </label>
+      <label style="flex-direction:row; align-items:center; gap:8px;">
+        <input type="checkbox" id="review-only-completed" style="width:auto;" checked />
+        Only customers with a completed job
+      </label>
+      <label style="flex-direction:row; align-items:center; gap:8px;">
+        <input type="checkbox" id="review-skip-asked" style="width:auto;" checked />
+        Skip anyone already asked for a review in the last 6 months
+      </label>
+
+      <div class="drawer-section-label">Recipients</div>
+      <div class="toolbar" style="margin-bottom:8px;">
+        <input type="text" id="review-search" placeholder="Search customers…" style="flex:1;" />
+        <button type="button" class="btn btn-ghost btn-small" id="btn-review-select-all">Select all</button>
+        <button type="button" class="btn btn-ghost btn-small" id="btn-review-select-none">Select none</button>
+      </div>
+      <div id="review-customer-list" class="batch-customer-list" style="width:100%; max-height:280px;"></div>
+      <p class="empty-sub" id="review-recipient-count">0 recipients selected</p>
+
+      <div class="drawer-actions">
+        <button type="button" class="btn btn-ghost" id="btn-review-test">Send a test to myself</button>
+        <div class="drawer-actions-right">
+          <button type="button" class="btn btn-ghost" id="btn-cancel-review-drawer">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-send-review-submit">Send review requests</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
   <!-- Send Announcement (BCC'd group email) -->
   <div class="overlay" id="announcement-overlay" hidden></div>
   <div class="drawer drawer-wide" id="announcement-drawer" hidden>
@@ -2173,9 +2218,9 @@
   <script src="https://cdn.jsdelivr.net/npm/konva@9/konva.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="supabase-api.js?v=20261103a"></script>
-  <script src="design-data.js?v=20261103a"></script>
-  <script src="app.js?v=20261103a"></script>
-  <script src="design.js?v=20261103a"></script>
+  <script src="supabase-api.js?v=20261107a"></script>
+  <script src="design-data.js?v=20261107a"></script>
+  <script src="app.js?v=20261107a"></script>
+  <script src="design.js?v=20261107a"></script>
 </body>
 </html>

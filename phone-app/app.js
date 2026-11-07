@@ -2620,6 +2620,153 @@ document.getElementById('btn-close-announcement-drawer').addEventListener('click
 document.getElementById('btn-cancel-announcement-drawer').addEventListener('click', closeAnnouncementDrawer);
 document.getElementById('announcement-overlay').addEventListener('click', closeAnnouncementDrawer);
 
+// ===================== Review campaign =====================
+// REVIEW-CAMPAIGN-PATCH
+
+const selectedReviewCustomerIds = new Set();
+const REVIEW_SKIP_DAYS = 180;
+const REVIEW_BATCH_SIZE = 15; // customers per server call, so nothing times out
+
+function reviewAskedInfo(c) {
+  // Returns text like "asked 3/4/2026" if this customer was already asked, else ''.
+  if (c.review_requested_at) {
+    const ageDays = (Date.now() - new Date(c.review_requested_at).getTime()) / 86400000;
+    if (ageDays < REVIEW_SKIP_DAYS) return 'asked ' + new Date(c.review_requested_at).toLocaleDateString();
+  }
+  const askedOnJob = jobs.some((j) => j.customer_id === c.id && Number(j.review_requested) === 1);
+  return askedOnJob ? 'asked on a job' : '';
+}
+
+function reviewEligibleCustomers() {
+  const onlyCompleted = document.getElementById('review-only-completed').checked;
+  const skipAsked = document.getElementById('review-skip-asked').checked;
+  const query = document.getElementById('review-search').value.trim().toLowerCase();
+  return customers.filter((c) => {
+    if (!c.email || c.exclude_from_mass_comms) return false;
+    if (onlyCompleted && !jobs.some((j) => j.customer_id === c.id && j.status === 'completed')) return false;
+    if (skipAsked && reviewAskedInfo(c)) return false;
+    if (query && !c.name.toLowerCase().includes(query)) return false;
+    return true;
+  });
+}
+
+function updateReviewRecipientCount() {
+  document.getElementById('review-recipient-count').textContent = `${selectedReviewCustomerIds.size} recipient(s) selected`;
+}
+
+function renderReviewCustomerList() {
+  const wrap = document.getElementById('review-customer-list');
+  const list = reviewEligibleCustomers();
+  // Anyone no longer shown (filters changed) is dropped from the selection.
+  const shownIds = new Set(list.map((c) => c.id));
+  Array.from(selectedReviewCustomerIds).forEach((id) => { if (!shownIds.has(id)) selectedReviewCustomerIds.delete(id); });
+
+  if (!list.length) {
+    wrap.innerHTML = '<p class="empty-sub" style="margin:0;">No matching customers (they need an email on file, not opted out, and match the checkboxes above).</p>';
+    updateReviewRecipientCount();
+    return;
+  }
+  wrap.innerHTML = list
+    .map((c) => {
+      const asked = reviewAskedInfo(c);
+      return `
+      <label class="batch-customer-row">
+        <input type="checkbox" class="review-customer-checkbox" value="${c.id}" ${selectedReviewCustomerIds.has(c.id) ? 'checked' : ''} />
+        ${escapeHtml(c.name)}${asked ? ` <span style="color:#A9AC9E;font-size:12px;">(${escapeHtml(asked)})</span>` : ''}
+      </label>`;
+    })
+    .join('');
+  wrap.querySelectorAll('.review-customer-checkbox').forEach((cb) => {
+    cb.addEventListener('change', (e) => {
+      const id = Number(e.target.value);
+      if (e.target.checked) selectedReviewCustomerIds.add(id);
+      else selectedReviewCustomerIds.delete(id);
+      updateReviewRecipientCount();
+    });
+  });
+  updateReviewRecipientCount();
+}
+
+function openReviewDrawer() {
+  document.getElementById('review-form').reset();
+  document.getElementById('review-message').value = '';
+  document.getElementById('review-search').value = '';
+  selectedReviewCustomerIds.clear();
+  renderReviewCustomerList();
+  document.getElementById('review-overlay').hidden = false;
+  document.getElementById('review-drawer').hidden = false;
+}
+
+function closeReviewDrawer() {
+  document.getElementById('review-overlay').hidden = true;
+  document.getElementById('review-drawer').hidden = true;
+}
+
+['review-only-completed', 'review-skip-asked'].forEach((id) => document.getElementById(id).addEventListener('change', renderReviewCustomerList));
+document.getElementById('review-search').addEventListener('input', renderReviewCustomerList);
+document.getElementById('btn-review-select-all').addEventListener('click', () => {
+  document.querySelectorAll('.review-customer-checkbox').forEach((cb) => { cb.checked = true; selectedReviewCustomerIds.add(Number(cb.value)); });
+  updateReviewRecipientCount();
+});
+document.getElementById('btn-review-select-none').addEventListener('click', () => {
+  document.querySelectorAll('.review-customer-checkbox').forEach((cb) => (cb.checked = false));
+  selectedReviewCustomerIds.clear();
+  updateReviewRecipientCount();
+});
+
+document.getElementById('btn-review-test').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  try {
+    const result = await window.api.email.sendReviewCampaign([], document.getElementById('review-message').value, true);
+    if (result && result.ok) alert('Test sent to your own email. Check your inbox (and spam folder).');
+    else alert("Couldn't send the test: " + ((result && result.error) || 'unknown error'));
+  } catch (err) { alert('Something went wrong: ' + (err && err.message ? err.message : err)); }
+  btn.disabled = false;
+  btn.textContent = 'Send a test to myself';
+});
+
+document.getElementById('review-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const ids = Array.from(selectedReviewCustomerIds);
+  if (!ids.length) { alert('Select at least one customer first.'); return; }
+  if (!confirm(`Send a review request to ${ids.length} customer(s)? Each gets their own email. This can't be undone.`)) return;
+
+  const btn = document.getElementById('btn-send-review-submit');
+  const message = document.getElementById('review-message').value;
+  btn.disabled = true;
+  let sent = 0;
+  const failed = [];
+  let skipped = 0;
+  let stopError = '';
+  for (let i = 0; i < ids.length; i += REVIEW_BATCH_SIZE) {
+    btn.textContent = `Sending ${Math.min(i + REVIEW_BATCH_SIZE, ids.length)}/${ids.length}…`;
+    try {
+      const result = await window.api.email.sendReviewCampaign(ids.slice(i, i + REVIEW_BATCH_SIZE), message, false);
+      if (!result || result.ok === false) { stopError = (result && result.error) || 'unknown error'; break; }
+      sent += result.sentCount || 0;
+      skipped += result.skipped || 0;
+      (result.failed || []).forEach((f) => failed.push(f));
+    } catch (err) { stopError = err && err.message ? err.message : String(err); break; }
+  }
+  btn.disabled = false;
+  btn.textContent = 'Send review requests';
+
+  let summary = `Sent ${sent} review request(s).`;
+  if (skipped) summary += ` Skipped ${skipped} (no email or opted out).`;
+  if (failed.length) summary += `\n\nCouldn't send to: ${failed.map((f) => f.name).join(', ')}.`;
+  if (stopError) summary += `\n\nStopped early: ${stopError}`;
+  alert(summary);
+  if (typeof loadCustomers === 'function') await loadCustomers();
+  if (!stopError) closeReviewDrawer(); else renderReviewCustomerList();
+});
+
+document.getElementById('btn-review-campaign').addEventListener('click', openReviewDrawer);
+document.getElementById('btn-close-review-drawer').addEventListener('click', closeReviewDrawer);
+document.getElementById('btn-cancel-review-drawer').addEventListener('click', closeReviewDrawer);
+document.getElementById('review-overlay').addEventListener('click', closeReviewDrawer);
+
 // ===================== Leads =====================
 
 let leads = [];
