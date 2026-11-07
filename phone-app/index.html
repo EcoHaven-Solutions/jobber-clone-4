@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-  <link rel="stylesheet" href="style.css?v=20261123a" />
+  <link rel="stylesheet" href="style.css?v=20261124a" />
 </head>
 <body>
   <div class="shell">
@@ -96,7 +96,7 @@
             <h1>Today</h1>
             <p class="subtitle" id="today-date"></p>
           </div>
-          <button class="btn btn-ghost" id="btn-today-refresh" type="button">Refresh</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-primary" id="btn-my-qr" type="button">My QR</button><button class="btn btn-ghost" id="btn-today-refresh" type="button">Refresh</button></div>
         </header>
         <div class="today-grid">
           <div class="today-card"><h2>Today's jobs</h2><div id="today-jobs"></div></div>
@@ -2240,9 +2240,22 @@
   <script src="https://cdn.jsdelivr.net/npm/konva@9/konva.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="supabase-api.js?v=20261123a"></script>
-  <script src="design-data.js?v=20261123a"></script>
-  <script src="app.js?v=20261123a"></script>
-  <script src="design.js?v=20261123a"></script>
+  
+  <!-- MYQR-PATCH -->
+  <div id="myqr-overlay" class="myqr-overlay" hidden>
+    <div class="myqr-card">
+      <div class="myqr-head">EcoHaven Solutions LLC</div>
+      <div class="myqr-sub">Sprinklers &nbsp;|&nbsp; Xeriscaping &nbsp;|&nbsp; Exterior Maintenance</div>
+      <div class="myqr-title">Scan to save my contact</div>
+      <div class="myqr-code" id="myqr-code"></div>
+      <div class="myqr-hint">Point your phone camera at the code</div>
+      <div class="myqr-phone">Call/Text 509-866-6388</div>
+      <button class="myqr-close" id="myqr-close" type="button">Close</button>
+    </div>
+  </div>
+  <script src="supabase-api.js?v=20261124a"></script>
+  <script src="design-data.js?v=20261124a"></script>
+  <script src="app.js?v=20261124a"></script>
+  <script src="design.js?v=20261124a"></script>
 </body>
 </html>
