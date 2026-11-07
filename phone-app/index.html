@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-  <link rel="stylesheet" href="style.css?v=20261120a" />
+  <link rel="stylesheet" href="style.css?v=20261121a" />
 </head>
 <body>
   <div class="shell">
@@ -1017,6 +1017,9 @@
             <label>Google review link
               <input type="url" name="google_review_url" placeholder="https://g.page/r/..." />
             </label>
+            <label>Facebook review link
+              <input type="url" name="facebook_review_url" placeholder="https://www.facebook.com/yourpage/reviews" />
+            </label>
             <div class="drawer-actions" style="border-top:none;">
               <div></div>
               <div class="drawer-actions-right">
@@ -1649,6 +1652,7 @@
           <button type="button" class="btn btn-ghost" id="btn-next-occurrence" hidden>Create next occurrence</button>
           <button type="button" class="btn btn-ghost" id="btn-send-reminder" hidden>Send reminder</button>
           <button type="button" class="btn btn-ghost" id="btn-request-review" hidden>Request review</button>
+          <button type="button" class="btn btn-ghost" id="btn-text-review" hidden>Text review request</button>
           <button type="button" class="btn btn-ghost" id="btn-cancel-job-drawer">Cancel</button>
           <button type="submit" class="btn btn-primary">Save job</button>
         </div>
@@ -2239,9 +2243,9 @@
   <script src="https://cdn.jsdelivr.net/npm/konva@9/konva.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="supabase-api.js?v=20261120a"></script>
-  <script src="design-data.js?v=20261120a"></script>
-  <script src="app.js?v=20261120a"></script>
-  <script src="design.js?v=20261120a"></script>
+  <script src="supabase-api.js?v=20261121a"></script>
+  <script src="design-data.js?v=20261121a"></script>
+  <script src="app.js?v=20261121a"></script>
+  <script src="design.js?v=20261121a"></script>
 </body>
 </html>

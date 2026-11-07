@@ -1709,3 +1709,9 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
 .today-foot { color: var(--ink-soft); font-size: 13px; margin: 10px 0 0; }
 .today-line { padding: 4px 0; font-size: 15px; }
 .today-btn { margin-top: 12px; width: 100%; }
+
+/* CALLS-REVIEWS-PATCH */
+.missed-row { padding: 12px 0; border-top: 1px solid var(--line); }
+.today-card h2 + .missed-row { border-top: none; }
+.missed-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.missed-actions .btn { flex: 0 0 auto; text-decoration: none; }

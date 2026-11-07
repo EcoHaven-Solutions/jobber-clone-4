@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <title>How did we do? - EcoHaven Solutions LLC</title>
+  <meta property="og:title" content="How did we do? - EcoHaven Solutions LLC" />
+  <meta property="og:description" content="Write your review once, then post it on Google and Facebook in two taps." />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #262624; font-family: Helvetica, Arial, sans-serif; color: #F5F5F0; padding: 20px 12px 40px; }
+    .card { max-width: 580px; margin: 0 auto; background: #3A3A38; border-radius: 12px; overflow: hidden; border: 1px solid #5A5A55; }
+    .top { background: #3E7C98; padding: 24px; text-align: center; color: #fff; }
+    .top .n { font-size: 18px; font-weight: 700; }
+    .top .t { font-size: 13px; color: #CFE4EE; margin-top: 2px; }
+    .inner { padding: 24px; }
+    h2 { margin: 0 0 12px; font-size: 24px; }
+    p { margin: 0 0 14px; font-size: 15px; line-height: 1.5; }
+    textarea { width: 100%; min-height: 150px; padding: 12px; border-radius: 8px; border: 1px solid #5A5A55; background: #2E2E2C; color: #F5F5F0; font-family: inherit; font-size: 16px; }
+    textarea.err { border-color: #D9694A; }
+    .btn { display: block; width: 100%; margin-top: 12px; padding: 14px 18px; border: none; border-radius: 8px; font-size: 16px; font-weight: 700; color: #fff; cursor: pointer; font-family: inherit; }
+    .google { background: #5FBF3E; } .facebook { background: #3E7C98; }
+    .hint { font-size: 13px; color: #C4C4BC; margin-top: 14px; }
+    .ok { background: #2F5A2A; color: #CFF2C4; border-radius: 8px; padding: 12px; font-weight: 700; margin-top: 14px; display: none; }
+    .foot { background: #2E2E2C; padding: 14px; text-align: center; font-size: 12px; color: #C4C4BC; }
+    .foot a { color: #C4C4BC; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="top">
+      <div class="n">EcoHaven Solutions LLC</div>
+      <div class="t">High-Efficiency Sprinklers | Low-Maintenance Landscaping</div>
+    </div>
+    <div class="inner">
+      <h2 id="hello">How did we do?</h2>
+      <p>Thank you for choosing EcoHaven Solutions LLC! We're a small local business, and reviews from customers like you make a huge difference.</p>
+      <p><strong>Write your review once</strong> below. Then tap a button: we copy it for you, and you just paste it on the next page.</p>
+      <textarea id="review" placeholder="Tell us about your experience..."></textarea>
+      <button class="btn google" id="btn-google" type="button" hidden>Copy &amp; post on Google</button>
+      <button class="btn facebook" id="btn-facebook" type="button" hidden>Copy &amp; post on Facebook</button>
+      <div class="ok" id="ok">Copied! Paste it on the next page (press and hold, then Paste), then come back here for the other site.</div>
+      <p class="hint" id="nolinks" hidden>Review links aren't set up yet. Please call/text 509-866-6388 and we'll be happy to help.</p>
+      <p class="hint">You'll pick your star rating on each site. Thank you so much!</p>
+    </div>
+    <div class="foot">Call/Text <a href="tel:5098666388">509-866-6388</a> &middot; <a href="https://ecohavenpro.com">ecohavenpro.com</a></div>
+  </div>
+
+  <script>
+    var FN_URL = 'https://tudyqzbmlfkgcdfjdhej.supabase.co/functions/v1/public-lead-intake';
+    var params = new URLSearchParams(window.location.search);
+    var name = (params.get('n') || '').trim().slice(0, 40);
+    if (name) document.getElementById('hello').textContent = 'How did we do, ' + name + '?';
+
+    var links = { google: '', facebook: '' };
+    function safe(u) { return /^https?:\/\//i.test(u || '') ? u : ''; }
+
+    fetch(FN_URL + '?reviewlinks=1')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        links.google = safe(d.google);
+        links.facebook = safe(d.facebook);
+        document.getElementById('btn-google').hidden = !links.google;
+        document.getElementById('btn-facebook').hidden = !links.facebook;
+        document.getElementById('nolinks').hidden = !!(links.google || links.facebook);
+      })
+      .catch(function () { document.getElementById('nolinks').hidden = false; });
+
+    function copyText(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).catch(function () { return fallbackCopy(text); });
+      }
+      return Promise.resolve(fallbackCopy(text));
+    }
+    function fallbackCopy(text) {
+      var ta = document.getElementById('review');
+      ta.focus(); ta.select();
+      try { document.execCommand('copy'); } catch (e) { /* ignore */ }
+    }
+
+    function post(which) {
+      var ta = document.getElementById('review');
+      var text = ta.value.trim();
+      if (!text) { ta.classList.add('err'); ta.focus(); return; }
+      ta.classList.remove('err');
+      copyText(text).then(function () {
+        document.getElementById('ok').style.display = 'block';
+        window.open(links[which], '_blank');
+      });
+    }
+    document.getElementById('btn-google').addEventListener('click', function () { post('google'); });
+    document.getElementById('btn-facebook').addEventListener('click', function () { post('facebook'); });
+  </script>
+</body>
+</html>

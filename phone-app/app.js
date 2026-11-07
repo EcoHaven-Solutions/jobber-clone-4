@@ -698,6 +698,7 @@ async function openJobDrawer(job = null) {
     jobNextOccurrenceBtn.hidden = !job.scheduled_date || job.repeat_interval === 'none';
     jobSendReminderBtn.hidden = false;
     jobRequestReviewBtn.hidden = job.status !== 'completed';
+    document.getElementById('btn-text-review').hidden = job.status !== 'completed';
     jobForm.elements.customer_id.value = job.customer_id;
     jobForm.elements.title.value = job.title || '';
     jobForm.elements.scheduled_date.value = job.scheduled_date || '';
@@ -721,6 +722,7 @@ async function openJobDrawer(job = null) {
     jobNextOccurrenceBtn.hidden = true;
     jobSendReminderBtn.hidden = true;
     jobRequestReviewBtn.hidden = true;
+    document.getElementById('btn-text-review').hidden = true;
     addJobLineItemRow();
     updateJobTotal();
     renderJobEmployeeCheckboxes([]);
@@ -3276,6 +3278,9 @@ async function loadSettings() {
   if (settings.google_review_url) {
     reviewSettingsForm.elements.google_review_url.value = settings.google_review_url;
   }
+  if (settings.facebook_review_url) {
+    reviewSettingsForm.elements.facebook_review_url.value = settings.facebook_review_url;
+  }
   if (settings.mapbox_access_token) {
     mapboxSettingsForm.elements.mapbox_access_token.value = settings.mapbox_access_token;
     mapboxAccessToken = settings.mapbox_access_token;
@@ -3299,7 +3304,8 @@ reviewSettingsForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const data = Object.fromEntries(new FormData(reviewSettingsForm).entries());
   await window.api.settings.set('google_review_url', data.google_review_url || '');
-  alert('Review link saved.');
+  await window.api.settings.set('facebook_review_url', data.facebook_review_url || '');
+  alert('Review links saved.');
 });
 
 const mapboxSettingsForm = document.getElementById('mapbox-settings-form');
@@ -4614,6 +4620,154 @@ document.querySelector('.nav-item[data-view="today"]').addEventListener('click',
     return result;
   };
 });
+
+// CALLS-REVIEWS-PATCH: missed-call list + review request texts
+const REVIEW_PAGE_URL = 'https://ecohaven-solutions.github.io/jobber-clone-4/quote-page/review.html';
+const ESTIMATE_FORM_URL = 'https://ecohaven-solutions.github.io/jobber-clone-4/quote-page/';
+
+function crFirstName(name) {
+  const full = String(name || '').trim();
+  if (!full) return '';
+  return /llc|inc\b|corp|company|\bco\b|&|\band\b/i.test(full) ? full : full.split(/\s+/)[0];
+}
+
+// ---- Text review request (completed jobs) ----
+document.getElementById('btn-text-review').addEventListener('click', async () => {
+  if (!editingJobId) return;
+  const customer = customers.find((c) => c.id === Number(jobForm.elements.customer_id.value));
+  if (!customer || !customer.phone) {
+    alert('This customer has no phone number on file.');
+    return;
+  }
+  const first = crFirstName(customer.name);
+  const link = REVIEW_PAGE_URL + (first ? '?n=' + encodeURIComponent(first) : '');
+  const text = `Hi ${first || 'there'}, thank you for choosing EcoHaven Solutions LLC! If you have a minute, would you mind sharing how we did? It only takes a moment: ${link}`;
+  try { await navigator.clipboard.writeText(text); } catch (err) { /* optional */ }
+  // Remember we asked, so the review email campaign skips them (quietly ignored if it fails).
+  try { await sb.from('jobs').update({ review_requested: 1 }).eq('id', editingJobId); } catch (err) { /* ignore */ }
+  try { await sb.from('customers').update({ review_requested_at: new Date().toISOString() }).eq('id', customer.id); } catch (err) { /* ignore */ }
+  openTextCompose(customer.phone, text);
+});
+
+// ---- Missed calls (shown on the Today screen) ----
+let missedCalls = [];
+
+function missedTimeAgo(iso) {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 2) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hr ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function updateTodayBadge() {
+  const nav = document.querySelector('.nav-item[data-view="today"]');
+  if (!nav) return;
+  let badge = document.getElementById('today-badge');
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'nav-badge';
+    badge.id = 'today-badge';
+    nav.appendChild(badge);
+  }
+  badge.textContent = String(missedCalls.length);
+  badge.hidden = missedCalls.length === 0;
+}
+
+function renderMissedCalls() {
+  updateTodayBadge();
+  const wrap = document.getElementById('today-missed-wrap');
+  if (!wrap) return;
+  if (!missedCalls.length) {
+    wrap.innerHTML = '<div class="today-card"><h2>Missed calls</h2><p class="today-empty">No missed calls to return.</p></div>';
+    return;
+  }
+  let html = '<div class="today-card"><h2>Missed calls</h2>';
+  missedCalls.forEach((m) => {
+    const known = m.customer_id ? 'Customer' : (m.name ? 'Lead' : 'New caller');
+    const digits = String(m.phone_digits || '');
+    const tel = digits.length === 10 ? `+1${digits}` : digits;
+    html += `<div class="missed-row" data-id="${m.id}">` +
+      `<div class="today-title">${escapeHtml(m.name || m.phone)}${m.call_count > 1 ? ` <span class="today-bad">&times;${m.call_count}</span>` : ''}</div>` +
+      `<div class="today-sub">${escapeHtml(m.phone)} &middot; ${escapeHtml(missedTimeAgo(m.created_at))} &middot; ${known}</div>` +
+      `<div class="missed-actions">` +
+      `<a class="btn btn-primary" data-act="call" href="tel:${escapeHtml(tel)}">Call back</a>` +
+      `<button class="btn btn-ghost" type="button" data-act="text">Text estimate form</button>` +
+      `<button class="btn btn-ghost" type="button" data-act="open">Details</button>` +
+      `<button class="btn btn-ghost" type="button" data-act="done">Done</button>` +
+      `<button class="btn btn-ghost" type="button" data-act="dismiss">Dismiss</button>` +
+      `</div></div>`;
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+window.renderTodayMissed = renderMissedCalls;
+
+async function loadMissedCalls() {
+  try {
+    const r = await sb.from('missed_calls').select('*').eq('status', 'new').order('created_at', { ascending: false }).limit(30);
+    missedCalls = r.error ? [] : (r.data || []);
+  } catch (err) {
+    missedCalls = [];
+  }
+  renderMissedCalls();
+}
+
+async function setMissedStatus(id, status) {
+  try {
+    await sb.from('missed_calls').update({ status, handled_at: new Date().toISOString() }).eq('id', id);
+  } catch (err) { /* ignore */ }
+  setTimeout(() => {
+    missedCalls = missedCalls.filter((m) => String(m.id) !== String(id));
+    renderMissedCalls();
+  }, 400);
+}
+
+document.getElementById('today-missed-wrap').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  const row = btn.closest('.missed-row');
+  const m = missedCalls.find((x) => String(x.id) === row.dataset.id);
+  if (!m) return;
+  const act = btn.dataset.act;
+  if (act === 'call') {
+    setMissedStatus(m.id, 'handled'); // the phone dialer opens through the link itself
+  } else if (act === 'text') {
+    const first = crFirstName(m.customer_id ? m.name : (m.name && !/^Missed call/i.test(m.name) ? m.name : ''));
+    const text = `Hi${first ? ' ' + first : ''}, this is EcoHaven Solutions LLC returning your call. If you'd like a quick estimate, you can request one here: ${ESTIMATE_FORM_URL}`;
+    try { navigator.clipboard.writeText(text).catch(() => {}); } catch (err) { /* optional */ }
+    openTextCompose(m.phone, text);
+    setMissedStatus(m.id, 'handled');
+  } else if (act === 'open') {
+    if (m.customer_id) {
+      const c = customers.find((x) => x.id === m.customer_id);
+      if (c) { document.querySelector('.nav-item[data-view="customers"]').click(); openCustomerDrawer(c); }
+    } else if (m.lead_id) {
+      const l = leads.find((x) => x.id === m.lead_id);
+      if (l) { document.querySelector('.nav-item[data-view="leads"]').click(); openLeadDrawer(l); }
+    }
+  } else if (act === 'done') {
+    setMissedStatus(m.id, 'handled');
+  } else if (act === 'dismiss') {
+    // Spam / wrong number: also remove the lead we auto-created for it (only if untouched).
+    if (m.lead_id && /^Missed call/i.test(m.name || '')) {
+      sb.from('leads').delete().eq('id', m.lead_id).eq('source', 'Missed call').eq('status', 'new')
+        .then(() => { if (typeof loadLeads === 'function') loadLeads(); })
+        .catch(() => {});
+    }
+    setMissedStatus(m.id, 'dismissed');
+  }
+});
+
+// Keep the list fresh.
+setTimeout(loadMissedCalls, 2000);
+setInterval(loadMissedCalls, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) loadMissedCalls(); });
+const _todayNav = document.querySelector('.nav-item[data-view="today"]');
+if (_todayNav) _todayNav.addEventListener('click', loadMissedCalls);
+const _todayRefresh = document.getElementById('btn-today-refresh');
+if (_todayRefresh) _todayRefresh.addEventListener('click', loadMissedCalls);
 
 // ===================== Init =====================
 
