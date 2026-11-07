@@ -837,8 +837,15 @@ function openTextCompose(phone, text) {
   if (isMobile && digits) {
     window.open(`sms:${digits}?&body=${encodeURIComponent(text)}`, '_blank');
   } else {
-    window.open('https://voice.google.com/u/0/messages', '_blank');
-    alert("Opened Google Voice. The message is copied -- just paste it (Cmd+V) into a new text.");
+    // MESSAGES-WEB-PATCH: send from the computer through Google Messages for web
+    // (paired with your Pixel, so it goes out from your Pixel's number).
+    window.open('https://messages.google.com/web/', '_blank');
+    alert(
+      'Opened Google Messages for web.\n\n' +
+      '1. Click "Start chat"' + (digits ? ' and type ' + phone : '') + '.\n' +
+      '2. Paste the message (Cmd+V on a Mac, Ctrl+V on Windows) -- it is already copied.\n' +
+      '3. Press Send.'
+    );
   }
 }
 
