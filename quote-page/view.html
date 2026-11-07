@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <title>Your Estimate or Invoice - EcoHaven Solutions LLC</title>
+  <meta property="og:title" content="Your estimate / invoice from EcoHaven Solutions LLC" />
+  <meta property="og:description" content="Tap to view the details and pay or accept online." />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #262624; font-family: Helvetica, Arial, sans-serif; color: #F5F5F0; padding: 20px 12px 40px; }
+    .card { max-width: 580px; margin: 0 auto; background: #3A3A38; border-radius: 12px; overflow: hidden; border: 1px solid #5A5A55; }
+    .top { background: #3E7C98; padding: 24px; text-align: center; color: #fff; }
+    .top .n { font-size: 18px; font-weight: 700; }
+    .top .t { font-size: 13px; color: #CFE4EE; margin-top: 2px; }
+    .inner { padding: 24px; }
+    h2 { margin: 0 0 14px; font-size: 22px; font-weight: 700; }
+    p { margin: 0 0 14px; font-size: 15px; line-height: 1.5; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { background: #5FBF3E; color: #fff; padding: 6px; font-weight: 700; text-align: center; }
+    th.l { text-align: left; } th.r { text-align: right; }
+    td { padding: 6px; vertical-align: top; }
+    td.c { text-align: center; } td.r { text-align: right; }
+    .sub { font-size: 12px; color: #A9AC9E; margin-top: 2px; }
+    .totals { margin-top: 12px; font-size: 15px; }
+    .totals td { padding: 4px 6px; text-align: right; }
+    .totals td.lab { color: #C4C4BC; }
+    .totals td.v { width: 110px; }
+    .totals tr.tot td { padding-top: 8px; border-top: 1px solid #5A5A55; font-size: 17px; font-weight: 700; color: #F5F5F0; }
+    .notes { font-size: 13px; color: #C4C4BC; margin-top: 14px; white-space: pre-wrap; }
+    .btnwrap { text-align: center; margin: 22px 0 6px; }
+    .btn { display: inline-block; color: #fff; text-decoration: none; font-weight: 700; padding: 14px 28px; border-radius: 8px; font-size: 16px; }
+    .accept { background: #5FBF3E; } .pay { background: #3E7C98; }
+    .small { text-align: center; margin: 14px 0 0; font-size: 13px; }
+    .small a { color: #A9AC9E; text-decoration: underline; }
+    .badge { text-align: center; border-radius: 8px; padding: 12px; font-weight: 700; margin: 0 0 16px; }
+    .ok { background: #2F5A2A; color: #CFF2C4; } .muted { background: #4a4a47; color: #D8D8D2; }
+    .att { margin-top: 18px; font-size: 14px; } .att b { display: block; font-size: 13px; margin-bottom: 6px; }
+    .att a { color: #8CC9E6; }
+    .foot { background: #2E2E2C; padding: 14px; text-align: center; font-size: 12px; color: #C4C4BC; }
+    .foot a { color: #C4C4BC; text-decoration: none; }
+    .msg { text-align: center; padding: 30px 10px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="top">
+      <div class="n">EcoHaven Solutions LLC</div>
+      <div class="t">High-Efficiency Sprinklers | Low-Maintenance Landscaping</div>
+    </div>
+    <div class="inner" id="content"><p class="msg">Loading&hellip;</p></div>
+    <div class="foot">Call/Text <a href="tel:5098666388">509-866-6388</a> &middot; <a href="https://ecohavenpro.com">ecohavenpro.com</a></div>
+  </div>
+
+  <script>
+    var FN_URL = 'https://tudyqzbmlfkgcdfjdhej.supabase.co/functions/v1/public-lead-intake';
+    var DECLINE_PAGE = 'decline.html';
+    var token = new URLSearchParams(window.location.search).get('t');
+    var el = document.getElementById('content');
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+    function money(n) {
+      n = Number(n || 0);
+      var t = '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return n < 0 ? '-' + t : t;
+    }
+    function safeUrl(u) { return /^https?:\/\//i.test(u || '') ? u : ''; }
+    function showMsg(text) {
+      el.innerHTML = '<p class="msg">' + esc(text) + ' Please call/text 509-866-6388 and we\'ll help.</p>';
+    }
+
+    function render(d) {
+      var isInv = d.kind === 'invoice';
+      var label = isInv ? 'Invoice' : 'Estimate';
+      document.title = label + ' - EcoHaven Solutions LLC';
+      var items = d.items || [];
+      var gross = 0, disc = 0;
+      items.forEach(function (i) {
+        var a = Number(i.quantity || 0) * Number(i.unit_price || 0);
+        if (a > 0) gross += a; else disc += -a;
+      });
+      var net = gross - disc;
+      var tax = net * (Number(d.tax_rate || 0) / 100);
+      var total = net + tax;
+      var rateText = parseFloat(Number(d.tax_rate || 0).toFixed(3)) + '%';
+
+      var status = String(d.status || '').toLowerCase();
+      var justPaid = isInv && new URLSearchParams(window.location.search).get('paid') === '1';
+      var isPaid = isInv && (status === 'paid' || justPaid);
+      var html = '';
+      if (isPaid) {
+        html += '<div class="badge ok">Payment received &mdash; thank you!</div>';
+        html += '<p>Thank you so much for your business. We really appreciate it!</p>';
+        var rv = safeUrl(d.review_url);
+        if (rv) {
+          html += '<p>If you have a minute, would you mind sharing how we did? Reviews from customers like you make a huge difference for a small local business.</p>';
+          html += '<div class="btnwrap" style="margin:6px 0 22px;"><a class="btn accept" href="' + esc(rv) + '">Leave a Review</a></div>';
+        }
+      }
+      if (!isInv && (status === 'approved' || status === 'accepted')) html += '<div class="badge ok">You accepted this estimate &mdash; thank you!</div>';
+      if (!isInv && status === 'declined') html += '<div class="badge muted">This estimate was declined.</div>';
+
+      html += '<h2>' + label + (d.title ? ': ' + esc(d.title) : '') + '</h2>';
+      html += '<p>Hi ' + esc(d.name || 'there') + ', here is your ' + label.toLowerCase() + ' from EcoHaven Solutions LLC.</p>';
+
+      html += '<table><thead><tr><th class="l">Item</th><th>Qty</th><th class="r">Price</th><th class="r">Total</th></tr></thead><tbody>';
+      items.forEach(function (i) {
+        html += '<tr><td>' + esc(i.description) + (i.notes ? '<div class="sub">' + esc(i.notes) + '</div>' : '') +
+          '</td><td class="c">' + esc(i.quantity) + '</td><td class="r">' + money(i.unit_price) +
+          '</td><td class="r">' + money(Number(i.quantity || 0) * Number(i.unit_price || 0)) + '</td></tr>';
+      });
+      html += '</tbody></table>';
+
+      html += '<table class="totals"><tbody>' +
+        '<tr><td class="lab">Subtotal:</td><td class="v">' + money(gross) + '</td></tr>' +
+        (disc > 0 ? '<tr><td class="lab">Discount:</td><td class="v">' + money(-disc) + '</td></tr>' : '') +
+        '<tr><td class="lab">Tax (' + rateText + '):</td><td class="v">' + money(tax) + '</td></tr>' +
+        '<tr class="tot"><td>Total:</td><td class="v">' + money(total) + '</td></tr></tbody></table>';
+
+      if (isInv && d.due_date && !isPaid) html += '<p class="notes">Due: ' + esc(d.due_date) + '</p>';
+      if (d.notes) html += '<div class="notes">' + esc(d.notes) + '</div>';
+
+      var atts = d.attachments || [];
+      if (atts.length) {
+        html += '<div class="att"><b>Attachments</b>';
+        atts.forEach(function (a) {
+          var u = safeUrl(a.file_url);
+          if (u) html += '<div style="margin:4px 0;"><a href="' + esc(encodeURI(u)) + '">' + esc(a.name) + '</a></div>';
+        });
+        html += '</div>';
+      }
+
+      var pay = safeUrl(d.payment_link_url);
+      if (isInv) {
+        if (!isPaid) {
+          if (pay) html += '<div class="btnwrap"><a class="btn pay" href="' + esc(pay) + '">Pay now</a></div>';
+          else html += '<p class="notes" style="text-align:center;">To pay, call/text 509-866-6388.</p>';
+        }
+      } else {
+        var open = status !== 'approved' && status !== 'accepted' && status !== 'declined';
+        if (open) {
+          html += '<div class="btnwrap"><a class="btn accept" href="' + esc(FN_URL + '?accept=' + encodeURIComponent(token)) + '">Accept This Estimate</a></div>';
+          html += '<div class="small"><a href="' + DECLINE_PAGE + '?token=' + encodeURIComponent(token) + '">Not interested? Decline this estimate</a></div>';
+        }
+        if (pay && status !== 'declined') html += '<div class="btnwrap"><a class="btn pay" href="' + esc(pay) + '">Pay now</a></div>';
+      }
+      el.innerHTML = html;
+    }
+
+    if (!token) {
+      showMsg('This link is missing something.');
+    } else {
+      fetch(FN_URL + '?view=' + encodeURIComponent(token))
+        .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+        .then(function (res) {
+          if (res.body && res.body.ok) render(res.body);
+          else if (res.status === 404) showMsg('We couldn\'t find that link, or it has expired.');
+          else showMsg('Something went wrong loading this page.');
+        })
+        .catch(function () { showMsg('Something went wrong loading this page.'); });
+    }
+  </script>
+</body>
+</html>
