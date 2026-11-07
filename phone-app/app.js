@@ -4676,24 +4676,30 @@ function updateTodayBadge() {
 }
 
 function renderMissedCalls() {
+  // TEXTS-PATCH: shows missed calls AND incoming texts
   updateTodayBadge();
   const wrap = document.getElementById('today-missed-wrap');
   if (!wrap) return;
   if (!missedCalls.length) {
-    wrap.innerHTML = '<div class="today-card"><h2>Missed calls</h2><p class="today-empty">No missed calls to return.</p></div>';
+    wrap.innerHTML = '<div class="today-card"><h2>Missed calls &amp; texts</h2><p class="today-empty">Nothing to answer.</p></div>';
     return;
   }
-  let html = '<div class="today-card"><h2>Missed calls</h2>';
+  let html = '<div class="today-card"><h2>Missed calls &amp; texts</h2>';
   missedCalls.forEach((m) => {
-    const known = m.customer_id ? 'Customer' : (m.name ? 'Lead' : 'New caller');
+    const isText = m.kind === 'text';
+    const known = m.customer_id ? 'Customer' : (m.name ? 'Lead' : 'New number');
     const digits = String(m.phone_digits || '');
     const tel = digits.length === 10 ? `+1${digits}` : digits;
+    const old = Date.now() - new Date(m.created_at).getTime() > 24 * 3600 * 1000;
     html += `<div class="missed-row" data-id="${m.id}">` +
-      `<div class="today-title">${escapeHtml(m.name || m.phone)}${m.call_count > 1 ? ` <span class="today-bad">&times;${m.call_count}</span>` : ''}</div>` +
-      `<div class="today-sub">${escapeHtml(m.phone)} &middot; ${escapeHtml(missedTimeAgo(m.created_at))} &middot; ${known}</div>` +
+      `<div class="today-title">${isText ? 'Text from ' : ''}${escapeHtml(m.name || m.phone)}${m.call_count > 1 ? ` <span class="today-bad">&times;${m.call_count}</span>` : ''}</div>` +
+      `<div class="today-sub">${escapeHtml(m.phone)} &middot; ${escapeHtml(missedTimeAgo(m.created_at))} &middot; ${known}${old ? ' &middot; <span class="today-bad">over 24 hours</span>' : ''}</div>` +
+      (isText && m.body ? `<div class="missed-body">&ldquo;${escapeHtml(m.body)}&rdquo;</div>` : '') +
       `<div class="missed-actions">` +
       `<a class="btn btn-primary" data-act="call" href="tel:${escapeHtml(tel)}">Call back</a>` +
-      `<button class="btn btn-ghost" type="button" data-act="text">Text estimate form</button>` +
+      (isText
+        ? `<button class="btn btn-ghost" type="button" data-act="reply">Reply</button>`
+        : `<button class="btn btn-ghost" type="button" data-act="text">Text estimate form</button>`) +
       `<button class="btn btn-ghost" type="button" data-act="open">Details</button>` +
       `<button class="btn btn-ghost" type="button" data-act="done">Done</button>` +
       `<button class="btn btn-ghost" type="button" data-act="dismiss">Dismiss</button>` +
@@ -4738,6 +4744,9 @@ document.getElementById('today-missed-wrap').addEventListener('click', (e) => {
     const text = `Hi${first ? ' ' + first : ''}, this is EcoHaven Solutions LLC returning your call. If you'd like a quick estimate, you can request one here: ${ESTIMATE_FORM_URL}`;
     try { navigator.clipboard.writeText(text).catch(() => {}); } catch (err) { /* optional */ }
     openTextCompose(m.phone, text);
+    setMissedStatus(m.id, 'handled');
+  } else if (act === 'reply') {
+    openTextCompose(m.phone, '');
     setMissedStatus(m.id, 'handled');
   } else if (act === 'open') {
     if (m.customer_id) {

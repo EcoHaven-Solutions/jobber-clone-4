@@ -1715,3 +1715,6 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
 .today-card h2 + .missed-row { border-top: none; }
 .missed-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .missed-actions .btn { flex: 0 0 auto; text-decoration: none; }
+
+/* TEXTS-PATCH */
+.missed-body { margin: 6px 0 0; padding: 8px 10px; background: var(--paper); border-radius: 6px; font-size: 14px; color: var(--ink); }
