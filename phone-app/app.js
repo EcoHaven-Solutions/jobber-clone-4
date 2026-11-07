@@ -1632,38 +1632,45 @@ quoteConvertBtn.addEventListener('click', async () => {
   alert('Job created. Open the Jobs tab to set a date and time.');
 });
 
-function buildQuoteCopyText() {
-  const customerId = quoteForm.elements.customer_id.value;
-  const customer = customers.find((c) => c.id === Number(customerId));
-  const title = quoteForm.elements.title.value || 'Estimate';
-  const items = collectLineItems();
-  const { gross: subtotal, discount, net } = lineItemRowsSummary(lineItemRowsEl);
-  const rate = parseFloat(quoteForm.elements.tax_rate.value) || 0;
-  const tax = net * (rate / 100);
-  const total = net + tax;
-  const idTag = editingQuoteId ? `E-${currentQuoteNumber || editingQuoteId}` : 'NEW';
+// VIEW-LINK-TEXT: estimate/invoice texts are a short message + a link to quote-page/view.html
+const VIEW_PAGE_BASE = 'https://ecohaven-solutions.github.io/jobber-clone-4/quote-page/view.html';
+function viewLinkFirstName(customer) {
+  if (!customer || !customer.name) return 'there';
+  const full = String(customer.name).trim();
+  return /llc|inc\b|corp|company|\bco\b|&|\band\b/i.test(full) ? full : full.split(/\s+/)[0];
+}
+// Returns the private link code for a saved estimate/invoice, making one if it has none yet.
+async function ensureViewToken(table, id, cached) {
+  if (cached) return cached;
+  const got = await sb.from(table).select('public_token').eq('id', id).single();
+  if (!got.error && got.data && got.data.public_token) return got.data.public_token;
+  if (got.error) throw new Error(table === 'invoices'
+    ? 'Invoices are missing their link code. Run add_invoice_token.sql in Supabase first.'
+    : got.error.message);
+  const fresh = crypto.randomUUID();
+  const upd = await sb.from(table).update({ public_token: fresh }).eq('id', id);
+  if (upd.error) throw new Error(upd.error.message);
+  return fresh;
+}
 
-  const lines = [];
-  lines.push(`EcoHaven Solutions LLC — Estimate ${idTag}`);
-  lines.push(title);
-  if (customer) lines.push(`For: ${customer.name}`);
-  lines.push('');
-  items.forEach((item) => {
-    lines.push(`${item.description || 'Item'} x${item.quantity} — ${formatCurrency(item.quantity * item.unit_price)}`);
-    if (item.notes) lines.push(`  (${item.notes})`);
-  });
-  lines.push('');
-  lines.push(`Subtotal: ${formatCurrency(subtotal)}`);
-  if (discount) lines.push(`Discount: ${formatCurrency(-discount)}`);
-  if (rate) lines.push(`Tax (${rate}%): ${formatCurrency(tax)}`);
-  lines.push(`Total: ${formatCurrency(total)}`);
-  lines.push('');
-  lines.push('Questions? Call/text 509-866-6388 or visit ecohavenpro.com');
-  return lines.join('\n');
+async function buildQuoteCopyText() {
+  const customer = customers.find((c) => c.id === Number(quoteForm.elements.customer_id.value));
+  const saved = await saveCurrentQuote(); // the page shows what's saved, so save first
+  if (!saved || !editingQuoteId) throw new Error('Add a title and choose a customer first.');
+  const q = quotes.find((x) => String(x.id) === String(editingQuoteId));
+  const token = await ensureViewToken('quotes', editingQuoteId, q && q.public_token);
+  if (q) q.public_token = token;
+  return `Hi ${viewLinkFirstName(customer)}, thank you for the opportunity! Here's your estimate from EcoHaven Solutions LLC, with a button to accept it online:\n${VIEW_PAGE_BASE}?t=${token}`;
 }
 
 document.getElementById('btn-copy-quote-text').addEventListener('click', async () => {
-  const text = buildQuoteCopyText();
+  let text;
+  try {
+    text = await buildQuoteCopyText();
+  } catch (err) {
+    if (err.message !== 'Cancelled') alert(err.message || err);
+    return;
+  }
   const customerId = quoteForm.elements.customer_id.value;
   const customer = customers.find((c) => c.id === Number(customerId));
   try {
@@ -2088,45 +2095,29 @@ invoicePaymentLinkBtn.addEventListener('click', async () => {
   }
 });
 
-function buildInvoiceCopyText() {
-  const customerId = invoiceForm.elements.customer_id.value;
-  const customer = customers.find((c) => c.id === Number(customerId));
-  const title = invoiceForm.elements.title.value || 'Invoice';
-  const dueDate = invoiceForm.elements.due_date.value;
-  const items = collectLineItemsFrom(invoiceLineItemRowsEl);
-  const { gross: subtotal, discount, net } = lineItemRowsSummary(invoiceLineItemRowsEl);
-  const rate = parseFloat(invoiceForm.elements.tax_rate.value) || 0;
-  const tax = net * (rate / 100);
-  const total = net + tax;
-  const idTag = currentInvoiceNumber ? `I-${currentInvoiceNumber}` : 'NEW';
-  const payLink = invoicePaymentLinkWrap.hidden ? null : invoicePaymentLinkDisplay.value;
-
-  const lines = [];
-  lines.push(`EcoHaven Solutions LLC — Invoice ${idTag}`);
-  lines.push(title);
-  if (customer) lines.push(`For: ${customer.name}`);
-  lines.push('');
-  items.forEach((item) => {
-    lines.push(`${item.description || 'Item'} x${item.quantity} — ${formatCurrency(item.quantity * item.unit_price)}`);
-    if (item.notes) lines.push(`  (${item.notes})`);
-  });
-  lines.push('');
-  lines.push(`Subtotal: ${formatCurrency(subtotal)}`);
-  if (discount) lines.push(`Discount: ${formatCurrency(-discount)}`);
-  if (rate) lines.push(`Tax (${rate}%): ${formatCurrency(tax)}`);
-  lines.push(`Total: ${formatCurrency(total)}`);
-  if (dueDate) lines.push(`Due: ${dueDate}`);
-  if (payLink) {
-    lines.push('');
-    lines.push(`Pay online: ${payLink}`);
+async function buildInvoiceCopyText() {
+  const customer = customers.find((c) => c.id === Number(invoiceForm.elements.customer_id.value));
+  const hasPayLink = !invoicePaymentLinkWrap.hidden && invoicePaymentLinkDisplay.value;
+  if (!hasPayLink && !confirm("This invoice has no payment link yet, so the page won't have a Pay now button.\n\nPress OK to send it anyway, or Cancel and tap \"Create payment link\" first.")) {
+    throw new Error('Cancelled');
   }
-  lines.push('');
-  lines.push('Questions? Call/text 509-866-6388 or visit ecohavenpro.com');
-  return lines.join('\n');
+  const saved = await saveCurrentInvoice(); // the page shows what's saved, so save first
+  if (!saved || !editingInvoiceId) throw new Error('Add a title and choose a customer first.');
+  const inv = invoices.find((x) => String(x.id) === String(editingInvoiceId));
+  const token = await ensureViewToken('invoices', editingInvoiceId, inv && inv.public_token);
+  if (inv) inv.public_token = token;
+  const lead = hasPayLink ? "Here's your invoice, with a link to pay online:" : "Here's your invoice:";
+  return `Hi ${viewLinkFirstName(customer)}, thank you for choosing EcoHaven Solutions LLC! ${lead}\n${VIEW_PAGE_BASE}?t=${token}`;
 }
 
 document.getElementById('btn-copy-invoice-text').addEventListener('click', async () => {
-  const text = buildInvoiceCopyText();
+  let text;
+  try {
+    text = await buildInvoiceCopyText();
+  } catch (err) {
+    if (err.message !== 'Cancelled') alert(err.message || err);
+    return;
+  }
   const customerId = invoiceForm.elements.customer_id.value;
   const customer = customers.find((c) => c.id === Number(customerId));
   try {
