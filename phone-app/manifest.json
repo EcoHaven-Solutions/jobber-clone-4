@@ -1,8 +1,10 @@
 {
+  "id": "./index.html",
   "name": "EcoHaven Solutions LLC",
   "short_name": "EcoHaven",
   "description": "Field service management for EcoHaven Solutions LLC",
-  "start_url": "/",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#F7F6F1",
   "theme_color": "#16160F",
