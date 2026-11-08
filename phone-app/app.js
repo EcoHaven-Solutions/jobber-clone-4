@@ -4887,7 +4887,9 @@ function renderRadar() {
       `<div class="today-sub">${escapeHtml(p.source || '')} &middot; ${escapeHtml(radarAge(p.posted_at || p.created_at))}${p.why ? ' &middot; ' + escapeHtml(p.why) : ''}</div>` +
       (p.snippet ? `<div class="missed-body">${escapeHtml(String(p.snippet).slice(0, 220))}${String(p.snippet).length > 220 ? '...' : ''}</div>` : '') +
       `<div class="missed-actions">` +
-      `<a class="btn btn-primary" data-act="open" href="${escapeHtml(p.url)}" target="_blank" rel="noopener">Open post</a>` +
+      (String(p.url || '').startsWith('note:')
+        ? `<a class="btn btn-primary" data-act="open" href="${/next/i.test(p.source || '') ? 'https://nextdoor.com/' : 'https://www.facebook.com/'}" target="_blank" rel="noopener">Open ${escapeHtml(/next/i.test(p.source || '') ? 'Nextdoor' : 'Facebook')}</a>`
+        : `<a class="btn btn-primary" data-act="open" href="${escapeHtml(p.url)}" target="_blank" rel="noopener">Open post</a>`) +  /* RADAR-NOTES-PATCH */
       `<button class="btn btn-ghost" type="button" data-act="copy">Copy reply</button>` +
       `<button class="btn btn-ghost" type="button" data-act="add">Add as lead</button>` +
       `<button class="btn btn-ghost" type="button" data-act="dismiss">Dismiss</button>` +
