@@ -4375,6 +4375,9 @@ const OUTBOX_KIND_LABELS = {
   'job-reminder': 'Job reminder (tomorrow)',
   'web-estimate': 'Website estimate confirmation',
   autocharge: 'Automatic card charge (needs your OK)',
+  'plan-sprinkler': 'Full Season Sprinkler Plan reminder',
+  'plan-exterior': 'Full Exterior Maintenance Plan reminder',
+  'backflow-reminder': 'Backflow test reminder',
 };
 
 let outboxPending = [];
@@ -4848,4 +4851,120 @@ if (_todayRefresh) _todayRefresh.addEventListener('click', loadMissedCalls);
     if (e.target.id === 'myqr-overlay') closeMyQr();
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMyQr(); });
+})();
+
+/* RADAR-PATCH: "Possible leads nearby" on the Today screen */
+let radarPosts = [];
+const RADAR_SCAN_URL = 'https://tudyqzbmlfkgcdfjdhej.supabase.co/functions/v1/scheduled-tasks?only=radar';
+let radarScanning = false;
+let radarNote = '';
+
+function radarAge(iso) {
+  if (!iso) return '';
+  const h = (Date.now() - new Date(iso).getTime()) / 3600000;
+  if (h < 1) return 'just now';
+  if (h < 24) return Math.round(h) + 'h ago';
+  return Math.round(h / 24) + 'd ago';
+}
+
+function radarDraftReply(p) {
+  if (p.draft_reply) return p.draft_reply;
+  const url = (typeof ESTIMATE_FORM_URL !== 'undefined') ? ESTIMATE_FORM_URL : 'https://ecohaven-solutions.github.io/jobber-clone-4/quote-page/';
+  return "Hi! I run EcoHaven Solutions here in the Spokane area - sprinklers, xeriscaping and exterior maintenance. Happy to take a look and give you a free estimate. You can request one here: " + url + " or call/text me at 509-866-6388.";
+}
+
+function renderRadar() {
+  const wrap = document.getElementById('today-radar-wrap');
+  if (!wrap) return;
+  const scanBtn = `<button class="btn btn-ghost" type="button" data-act="scan"${radarScanning ? ' disabled' : ''}>${radarScanning ? 'Scanning...' : 'Scan now'}</button>`;
+  let html = '<div class="today-card"><h2>Possible leads nearby</h2>';
+  if (!radarPosts.length) {
+    html += '<p class="today-empty">No new posts yet. The app looks every morning, or you can scan now.</p>';
+  }
+  radarPosts.forEach((p) => {
+    html += `<div class="radar-row" data-id="${p.id}">` +
+      `<div class="today-title">${escapeHtml(p.title || 'Post')}</div>` +
+      `<div class="today-sub">${escapeHtml(p.source || '')} &middot; ${escapeHtml(radarAge(p.posted_at || p.created_at))}${p.why ? ' &middot; ' + escapeHtml(p.why) : ''}</div>` +
+      (p.snippet ? `<div class="missed-body">${escapeHtml(String(p.snippet).slice(0, 220))}${String(p.snippet).length > 220 ? '...' : ''}</div>` : '') +
+      `<div class="missed-actions">` +
+      `<a class="btn btn-primary" data-act="open" href="${escapeHtml(p.url)}" target="_blank" rel="noopener">Open post</a>` +
+      `<button class="btn btn-ghost" type="button" data-act="copy">Copy reply</button>` +
+      `<button class="btn btn-ghost" type="button" data-act="add">Add as lead</button>` +
+      `<button class="btn btn-ghost" type="button" data-act="dismiss">Dismiss</button>` +
+      `</div></div>`;
+  });
+  html += `<div class="missed-actions" style="margin-top:10px;">${scanBtn}</div>`;
+  if (radarNote) html += `<p class="today-sub" style="margin-top:8px;">${escapeHtml(radarNote)}</p>`;
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+async function loadRadar() {
+  try {
+    const r = await sb.from('radar_posts').select('*').eq('status', 'new').order('score', { ascending: false }).order('created_at', { ascending: false }).limit(15);
+    radarPosts = r.error ? [] : (r.data || []);
+  } catch (err) {
+    radarPosts = [];
+  }
+  renderRadar();
+}
+
+async function setRadarStatus(id, status) {
+  try { await sb.from('radar_posts').update({ status }).eq('id', id); } catch (err) { /* ignore */ }
+  radarPosts = radarPosts.filter((p) => String(p.id) !== String(id));
+  renderRadar();
+}
+
+async function radarScanNow() {
+  radarScanning = true;
+  radarNote = '';
+  renderRadar();
+  try {
+    const res = await fetch(RADAR_SCAN_URL);
+    const j = await res.json();
+    const rd = j.radar || {};
+    radarNote = j.ok
+      ? `Checked ${rd.checked || 0} posts, found ${rd.added || 0} new possible lead${rd.added === 1 ? '' : 's'}.` + ((j.errors && j.errors.length) ? ' Note: ' + j.errors[0] : '')
+      : 'The scan did not finish.';
+  } catch (err) {
+    radarNote = 'Could not reach the scanner. Check your connection and try again.';
+  }
+  radarScanning = false;
+  await loadRadar();
+}
+
+(function () {
+  const wrap = document.getElementById('today-radar-wrap');
+  if (!wrap) return;
+  wrap.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const act = btn.dataset.act;
+    if (act === 'scan') { radarScanNow(); return; }
+    if (act === 'open') return; // plain link
+    const row = btn.closest('.radar-row');
+    const p = row && radarPosts.find((x) => String(x.id) === row.dataset.id);
+    if (!p) return;
+    if (act === 'copy') {
+      try { await navigator.clipboard.writeText(radarDraftReply(p)); btn.textContent = 'Copied'; } catch (err) { prompt('Copy this reply:', radarDraftReply(p)); }
+    } else if (act === 'add') {
+      try {
+        await window.api.leads.create({ name: 'Radar: ' + String(p.title || 'post').slice(0, 60), source: 'Lead radar', notes: (p.url || '') + '\n\n' + String(p.snippet || '').slice(0, 500), status: 'new' });
+        if (typeof loadLeads === 'function') loadLeads();
+        btn.textContent = 'Added';
+        setRadarStatus(p.id, 'added');
+      } catch (err) {
+        alert('Could not add the lead: ' + (err && err.message ? err.message : err));
+      }
+    } else if (act === 'dismiss') {
+      setRadarStatus(p.id, 'dismissed');
+    }
+  });
+  setTimeout(loadRadar, 2500);
+  setInterval(loadRadar, 300000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRadar(); });
+  const nav = document.querySelector('.nav-item[data-view="today"]');
+  if (nav) nav.addEventListener('click', loadRadar);
+  const refresh = document.getElementById('btn-today-refresh');
+  if (refresh) refresh.addEventListener('click', loadRadar);
 })();
