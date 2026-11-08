@@ -4968,3 +4968,88 @@ async function radarScanNow() {
   const refresh = document.getElementById('btn-today-refresh');
   if (refresh) refresh.addEventListener('click', loadRadar);
 })();
+
+/* RADAR-BROWSER-PATCH: scan Reddit from this phone (Reddit blocks servers, not phones) */
+(function () {
+  const SERVICE = ['sprinkler', 'irrigation', 'backflow', 'blowout', 'blow out', 'winteriz', 'xeriscap', 'drip line', 'drip system', 'landscap', 'lawn care', 'lawn service', 'yard work', 'yard cleanup', 'yard clean up', 'mulch', 'sod ', 'turf', 'retaining wall', 'sprinkler head', 'rain bird', 'hunter irrigation'];
+  const INTENT = ['looking for', 'recommend', 'anyone know', 'anybody know', 'who do you', 'who should', 'who can', 'need a ', 'need someone', 'need to hire', 'can anyone', 'can somebody', 'suggest', 'reliable', 'quote', 'estimate', 'how much', 'price', 'hire', 'contractor', 'does anyone', 'any good', 'good company', 'trustworthy', 'help with', 'who does'];
+  const NOT_LEAD = ['we are hiring', "we're hiring", 'now hiring', 'job opening', 'for sale', 'free to a good home', 'my company', 'our company offers', 'we offer', 'giveaway', 'sign up for'];
+  const AREA = ['spokane', 'liberty lake', 'cheney', 'mead', 'colbert', 'airway heights', 'south hill', 'north spokane', 'valley', 'medical lake', 'deer park', 'nine mile', 'otis orchards', 'greenacres', 'millwood'];
+  const SUBS = ['Spokane', 'SpokaneValley', 'InlandNorthwest'];
+  const Q = 'sprinkler OR irrigation OR backflow OR blowout OR xeriscape OR landscaper OR "lawn care" OR "yard work"';
+
+  function score(title, body, needArea) {
+    const text = (title + ' ' + body).toLowerCase();
+    if (NOT_LEAD.some((w) => text.includes(w))) return { score: 0, why: '' };
+    const svc = SERVICE.filter((w) => text.includes(w));
+    const intent = INTENT.filter((w) => text.includes(w));
+    const area = AREA.some((w) => text.includes(w));
+    if (!svc.length || !intent.length) return { score: 0, why: '' };
+    if (needArea && !area) return { score: 0, why: '' };
+    return { score: Math.min(10, svc.length * 2 + intent.length * 2 + (area ? 1 : 0)), why: 'mentions ' + svc.slice(0, 3).map((s) => s.trim()).join(', ') + '; asks with "' + intent[0].trim() + '"' };
+  }
+
+  async function scanReddit() {
+    const cutoff = Date.now() - 21 * 86400000;
+    const urls = SUBS.map((s) => ({ label: 'r/' + s, needArea: false, url: 'https://www.reddit.com/r/' + s + '/search.json?q=' + encodeURIComponent(Q) + '&restrict_sr=1&sort=new&t=month&limit=25' }));
+    urls.push({ label: 'all of Reddit', needArea: true, url: 'https://www.reddit.com/search.json?q=' + encodeURIComponent('spokane (sprinkler OR irrigation OR backflow OR xeriscape OR landscaper)') + '&sort=new&t=month&limit=25' });
+    const found = new Map();
+    const status = [];
+    for (const u of urls) {
+      try {
+        const res = await fetch(u.url);
+        status.push(u.label + ': ' + res.status);
+        if (!res.ok) continue;
+        const j = await res.json();
+        ((j.data && j.data.children) || []).forEach((c) => {
+          const d = c.data || {};
+          if (!d.permalink || !d.title) return;
+          const ms = Number(d.created_utc || 0) * 1000;
+          if (ms && ms < cutoff) return;
+          const url = 'https://www.reddit.com' + d.permalink;
+          if (found.has(url)) return;
+          const s = score(String(d.title), String(d.selftext || ''), u.needArea);
+          if (s.score >= 4) found.set(url, { source: 'Reddit r/' + (d.subreddit || ''), url, title: String(d.title).slice(0, 300), snippet: String(d.selftext || '').slice(0, 600), posted_at: ms ? new Date(ms).toISOString() : null, score: s.score, why: s.why, status: 'new' });
+        });
+      } catch (err) {
+        status.push(u.label + ': blocked');
+      }
+    }
+    let added = 0;
+    const list = Array.from(found.values());
+    if (list.length) {
+      const ex = await sb.from('radar_posts').select('url').in('url', list.map((p) => p.url));
+      if (ex.error) throw new Error(ex.error.message);
+      const have = new Set((ex.data || []).map((r) => r.url));
+      const fresh = list.filter((p) => !have.has(p.url)).sort((a, b) => b.score - a.score).slice(0, 15);
+      if (fresh.length) {
+        const ins = await sb.from('radar_posts').insert(fresh);
+        if (ins.error) throw new Error(ins.error.message);
+        added = fresh.length;
+      }
+    }
+    return { added, status };
+  }
+
+  radarScanNow = async function () {
+    radarScanning = true;
+    radarNote = '';
+    renderRadar();
+    try {
+      const r = await scanReddit();
+      radarNote = 'Reddit scan done: ' + r.added + ' new possible lead' + (r.added === 1 ? '' : 's') + ' (' + r.status.join(', ') + ').';
+      try { localStorage.setItem('radar_last_scan', String(Date.now())); } catch (e) { /* optional */ }
+    } catch (err) {
+      radarNote = 'Scan problem: ' + (err && err.message ? err.message : err);
+    }
+    radarScanning = false;
+    await loadRadar();
+  };
+
+  // Quietly scan when the app opens, at most once every 12 hours.
+  setTimeout(() => {
+    let last = 0;
+    try { last = Number(localStorage.getItem('radar_last_scan') || 0); } catch (e) { /* optional */ }
+    if (Date.now() - last > 12 * 3600 * 1000) radarScanNow();
+  }, 6000);
+})();
