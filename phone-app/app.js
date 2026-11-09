@@ -5075,3 +5075,30 @@ function radarDetailHtml(p) {
   const body = radarParts(p).body;
   return body ? `<div class="missed-body radar-body">${escapeHtml(body)}</div>` : '';
 }
+
+/* CHECKNOW-PATCH: "Check now" asks the server to queue anything new right away */
+(function () {
+  const URL_QUEUE = 'https://tudyqzbmlfkgcdfjdhej.supabase.co/functions/v1/scheduled-tasks?only=queue';
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('#btn-outbox-checknow');
+    if (!btn) return;
+    const msg = document.getElementById('outbox-message');
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Checking...';
+    try {
+      const res = await fetch(URL_QUEUE);
+      const j = await res.json();
+      if (!j.ok) throw new Error('The check did not finish.');
+      if (typeof loadOutbox === 'function') await loadOutbox();
+      if (typeof loadInvoices === 'function') loadInvoices();
+      if (msg) {
+        const n = (j.queue && j.queue.queuedNow) || 0;
+        msg.hidden = false;
+        msg.textContent = n ? 'Checked: ' + n + ' new request' + (n === 1 ? '' : 's') + ' added below.' : 'Checked: nothing new to add right now.' + ((j.errors && j.errors.length) ? ' Note: ' + j.errors[0] : '');
+      }
+    } catch (err) {
+      if (msg) { msg.hidden = false; msg.textContent = 'Could not check right now. Check your connection and try again.'; }
+    }
+    btn.disabled = false; btn.textContent = original;
+  });
+})();
