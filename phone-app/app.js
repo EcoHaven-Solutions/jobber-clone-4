@@ -4883,9 +4883,9 @@ function renderRadar() {
   }
   radarPosts.forEach((p) => {
     html += `<div class="radar-row" data-id="${p.id}">` +
-      `<div class="today-title">${escapeHtml(p.title || 'Post')}</div>` +
+      `<div class="today-title">${escapeHtml(radarParts(p).headline)}</div>` +
       `<div class="today-sub">${escapeHtml(p.source || '')} &middot; ${escapeHtml(radarAge(p.posted_at || p.created_at))}${p.why ? ' &middot; ' + escapeHtml(p.why) : ''}</div>` +
-      (p.snippet ? `<div class="missed-body">${escapeHtml(String(p.snippet).slice(0, 220))}${String(p.snippet).length > 220 ? '...' : ''}</div>` : '') +
+      radarDetailHtml(p) + /* RADAR-DETAIL-PATCH */
       `<div class="missed-actions">` +
       (String(p.url || '').startsWith('note:')
         ? `<a class="btn btn-primary" data-act="open" href="${/next/i.test(p.source || '') ? 'https://nextdoor.com/' : 'https://www.facebook.com/'}" target="_blank" rel="noopener">Open ${escapeHtml(/next/i.test(p.source || '') ? 'Nextdoor' : 'Facebook')}</a>`
@@ -5055,3 +5055,23 @@ async function radarScanNow() {
     if (Date.now() - last > 12 * 3600 * 1000) radarScanNow();
   }, 6000);
 })();
+
+/* RADAR-DETAIL-PATCH: show a clean headline plus the whole description */
+function radarParts(p) {
+  const title = String(p.title || '').trim();
+  const text = String(p.snippet || '').trim();
+  // Posts that have their own real title (Reddit, etc.): title on top, full text below.
+  if (!text) return { headline: title || 'Post', body: '' };
+  if (title && !text.startsWith(title.slice(0, 40))) return { headline: title, body: text };
+  // Alerts / emails: the text IS the message. Split at " - " if there is one, else at a word boundary.
+  const dash = text.search(/\s[\u2014-]\s/);
+  if (dash > 0 && dash <= 140) return { headline: text.slice(0, dash).trim(), body: text.slice(dash).replace(/^\s[\u2014-]\s/, '').trim() };
+  if (text.length <= 100) return { headline: text, body: '' };
+  const cut = text.lastIndexOf(' ', 90);
+  const at = cut > 40 ? cut : 90;
+  return { headline: text.slice(0, at).trim() + '...', body: text.slice(at).trim() };
+}
+function radarDetailHtml(p) {
+  const body = radarParts(p).body;
+  return body ? `<div class="missed-body radar-body">${escapeHtml(body)}</div>` : '';
+}

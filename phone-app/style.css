@@ -1735,3 +1735,7 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
 /* RADAR-PATCH */
 .radar-row { padding: 10px 0; border-top: 1px solid var(--line); }
 .today-card h2 + .radar-row { border-top: none; }
+
+/* RADAR-DETAIL-PATCH */
+.radar-row .radar-body { white-space: pre-wrap; font-size: 15px; line-height: 1.45; margin-top: 8px; }
+.radar-row .today-title { white-space: normal; overflow-wrap: anywhere; }
