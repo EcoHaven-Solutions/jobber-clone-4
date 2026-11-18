@@ -1739,3 +1739,35 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
 /* RADAR-DETAIL-PATCH */
 .radar-row .radar-body { white-space: pre-wrap; font-size: 15px; line-height: 1.45; margin-top: 8px; }
 .radar-row .today-title { white-space: normal; overflow-wrap: anywhere; }
+
+/* DESIGN-PRO-PATCH-START */
+.design-side-tab { padding: 8px 4px; font-size: 11px; min-width: 52px; }
+.dpro-warn-list { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.dpro-warn { border: 1px solid var(--line); border-left-width: 4px; border-radius: 6px; padding: 7px 9px; font-size: 12px; cursor: pointer; background: var(--surface); }
+.dpro-warn.sev-warn { border-left-color: #E0A030; }
+.dpro-warn.sev-bad { border-left-color: #D9694A; }
+.dpro-warn.sev-ok { border-left-color: #5FBF3E; cursor: default; }
+.dpro-warn.sev-info { border-left-color: #6AA8D8; }
+.dpro-warn:hover { border-color: var(--water); }
+.dpro-mini-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 8px; }
+.dpro-mini-table th, .dpro-mini-table td { border-bottom: 1px solid var(--line); padding: 4px 3px; text-align: left; }
+.dpro-row2 { display: flex; gap: 6px; }
+.dpro-row2 > * { flex: 1; min-width: 0; }
+.dpro-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; border: 1px solid rgba(0,0,0,0.35); }
+.dpro-light-item { display: flex; align-items: center; gap: 8px; }
+.dpro-price-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 12px; }
+.dpro-price-row input { width: 70px; }
+.dpro-titleblock { display: grid; grid-template-columns: 1.2fr 1.7fr 1fr; border: 2px solid #1a1a1a; margin: 0 0 12px; color: #1a1a1a; background: #fff; }
+.dpro-tb-cell { padding: 8px 10px; border-right: 1px solid #1a1a1a; }
+.dpro-tb-cell:last-child { border-right: none; }
+.dpro-tb-company { font-weight: 700; font-size: 15px; }
+.dpro-tb-sheet { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #555; }
+.dpro-tb-proj { font-size: 18px; font-weight: 700; margin: 2px 0; }
+.dpro-tb-small { font-size: 11px; color: #444; }
+.dpro-schedule table, .dpro-takeoff table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.dpro-schedule th, .dpro-schedule td, .dpro-takeoff th, .dpro-takeoff td { border: 1px solid #bbb; padding: 4px 6px; text-align: left; }
+.dpro-schedule th, .dpro-takeoff th { background: #eee; }
+.dpro-load { font-size: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.dpro-mini-table input[type="number"], .dpro-mini-table select { width: 100%; min-width: 0; padding: 3px 4px; font-size: 11px; }
+.dpro-mini-table td:first-child { max-width: 90px; word-break: break-word; }
+/* DESIGN-PRO-PATCH-END */
