@@ -648,5 +648,25 @@
     const printBtn = $('btn-design-print'); topbar.insertBefore(b, printBtn || null);
     b.addEventListener('click', openView);
   }
-  DPRO.threeD = { open: openView, close, snapshot, setView, state, rebuild: () => { if (scene) buildScene(); }, get ready() { return !!renderer; } };
+  // Render a picture without showing the 3D window (used for customer presentations).
+  // opts: { view: 'aerial'|'front'|'top', growth, night, month, hour, w, h } -> JPEG data URL
+  async function capture(opts) {
+    opts = opts || {};
+    await loadThree(); init();
+    const prev = Object.assign({}, state); const wasOpen = open;
+    const W = opts.w || 1400, H = opts.h || 860;
+    try {
+      state.growth = opts.growth || 'mature'; state.night = !!opts.night; state.month = opts.month == null ? 5 : opts.month; state.hour = opts.hour == null ? 16 : opts.hour;
+      state.labels = !!opts.labels; state.irrigation = false;
+      computeBounds(); buildScene(); setView(opts.view || 'aerial');
+      renderer.setPixelRatio(1); renderer.setSize(W, H, false); camera.aspect = W / H; camera.updateProjectionMatrix();
+      renderer.render(scene, camera);
+      return renderer.domElement.toDataURL('image/jpeg', 0.88);
+    } finally {
+      Object.assign(state, prev);
+      if (scene) { buildScene(); setView(state.view); }
+      if (wasOpen) resize();
+    }
+  }
+  DPRO.threeD = { open: openView, close, snapshot, capture, setView, state, rebuild: () => { if (scene) buildScene(); }, get ready() { return !!renderer; } };
 })();

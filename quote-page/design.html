@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <title>Your Landscape Design - EcoHaven Solutions LLC</title>
+  <meta property="og:title" content="Your landscape design from EcoHaven Solutions LLC" />
+  <meta property="og:description" content="Tap to see your design, pick an option, and approve it online." />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #262624; font-family: Helvetica, Arial, sans-serif; color: #F5F5F0; padding: 14px 10px 50px; -webkit-text-size-adjust: 100%; }
+    .wrap { max-width: 860px; margin: 0 auto; }
+    .card { background: #3A3A38; border-radius: 12px; overflow: hidden; border: 1px solid #5A5A55; margin-bottom: 14px; }
+    .top { background: #3E7C98; padding: 20px; text-align: center; color: #fff; }
+    .top .n { font-size: 18px; font-weight: 700; } .top .t { font-size: 13px; color: #CFE4EE; margin-top: 2px; }
+    .inner { padding: 20px; }
+    h1 { margin: 0 0 6px; font-size: 24px; } h2 { margin: 0 0 12px; font-size: 19px; }
+    p { margin: 0 0 12px; font-size: 15px; line-height: 1.5; }
+    .msg { white-space: pre-wrap; background: #2E2E2C; border-radius: 10px; padding: 12px 14px; color: #E6E6DF; }
+    .badge { text-align: center; border-radius: 8px; padding: 12px; font-weight: 700; margin: 0 0 14px; }
+    .ok { background: #2F5A2A; color: #CFF2C4; } .info { background: #3b4a53; color: #D8EAF3; }
+    .stage { position: relative; background: #1d1d1c; border-radius: 10px; overflow: hidden; }
+    .stage img.main { display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain; background: #1d1d1c; cursor: zoom-in; }
+    .thumbs { display: flex; gap: 8px; overflow-x: auto; padding: 10px 2px 2px; }
+    .thumbs button { flex: none; border: 2px solid transparent; border-radius: 8px; padding: 0; background: none; cursor: pointer; opacity: .75; }
+    .thumbs button.on { border-color: #5FBF3E; opacity: 1; }
+    .thumbs img { display: block; width: 92px; height: 64px; object-fit: cover; border-radius: 6px; }
+    .cap { font-size: 13px; color: #C4C4BC; margin: 8px 2px 0; }
+    .ba { position: relative; user-select: none; -webkit-user-select: none; touch-action: pan-y; background: #1d1d1c; border-radius: 10px; overflow: hidden; }
+    .ba img { display: block; width: 100%; height: auto; pointer-events: none; }
+    .ba .before { position: absolute; left: 0; top: 0; height: 100%; overflow: hidden; }
+    .ba .before img { height: 100%; width: auto; max-width: none; object-fit: cover; }
+    .ba .bar { position: absolute; top: 0; bottom: 0; width: 44px; margin-left: -22px; cursor: ew-resize; touch-action: none; }
+    .ba .bar::before { content: ''; position: absolute; left: 21px; top: 0; bottom: 0; width: 2px; background: #fff; box-shadow: 0 0 6px rgba(0,0,0,.6); }
+    .ba .bar::after { content: '\2194'; position: absolute; left: 6px; top: 50%; margin-top: -16px; width: 32px; height: 32px; line-height: 32px; text-align: center; background: #fff; color: #222; border-radius: 50%; font-weight: 700; }
+    .ba .tag { position: absolute; top: 10px; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; padding: 3px 8px; border-radius: 6px; }
+    .seg { display: inline-flex; border: 1px solid #5A5A55; border-radius: 8px; overflow: hidden; margin: 0 0 10px; }
+    .seg button { background: #2E2E2C; color: #E6E6DF; border: 0; padding: 8px 14px; font-size: 14px; cursor: pointer; } .seg button.on { background: #3E7C98; color: #fff; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { background: #2E2E2C; padding: 7px; text-align: left; } td { padding: 7px; border-bottom: 1px solid #4a4a47; vertical-align: top; }
+    .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+    .tier { background: #2E2E2C; border: 2px solid #4a4a47; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; }
+    .tier.best { border-color: #5FBF3E; }
+    .tier.chosen { border-color: #5FBF3E; background: #2b3a28; }
+    .tier .nm { font-size: 18px; font-weight: 700; } .tier .pr { font-size: 28px; font-weight: 700; margin: 6px 0; color: #fff; }
+    .tier .ds { font-size: 14px; color: #D8D8D2; margin-bottom: 8px; }
+    .tier ul { margin: 0 0 14px; padding-left: 18px; font-size: 14px; color: #E6E6DF; flex: 1; } .tier li { margin: 3px 0; }
+    .btn { display: inline-block; border: 0; color: #fff; text-decoration: none; font-weight: 700; padding: 13px 22px; border-radius: 8px; font-size: 16px; cursor: pointer; text-align: center; }
+    .go { background: #5FBF3E; } .pay { background: #3E7C98; } .ghost { background: #4a4a47; }
+    .btn[disabled] { opacity: .5; cursor: default; }
+    .dep { font-size: 13px; color: #C4C4BC; margin-top: 6px; text-align: center; }
+    .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: flex-end; justify-content: center; z-index: 50; }
+    .sheet.show { display: flex; }
+    .sheet .box { background: #3A3A38; width: 100%; max-width: 520px; border-radius: 16px 16px 0 0; padding: 20px; max-height: 92vh; overflow: auto; }
+    @media (min-width: 600px) { .sheet { align-items: center; } .sheet .box { border-radius: 16px; } }
+    label { display: block; font-size: 13px; color: #C4C4BC; margin: 10px 0 4px; }
+    input[type=text], textarea { width: 100%; background: #2E2E2C; border: 1px solid #5A5A55; color: #F5F5F0; border-radius: 8px; padding: 11px; font-size: 16px; font-family: inherit; }
+    textarea { min-height: 80px; }
+    .chk { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; margin: 12px 0; color: #E6E6DF; } .chk input { margin-top: 3px; width: 18px; height: 18px; }
+    .err { color: #FFB4A8; font-size: 14px; min-height: 18px; margin-top: 6px; }
+    .lb { position: fixed; inset: 0; background: rgba(0,0,0,.92); display: none; align-items: center; justify-content: center; z-index: 60; cursor: zoom-out; }
+    .lb.show { display: flex; } .lb img { max-width: 100%; max-height: 100%; }
+    .foot { text-align: center; font-size: 12px; color: #C4C4BC; padding: 14px; } .foot a { color: #C4C4BC; text-decoration: none; }
+    .center { text-align: center; padding: 30px 10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card"><div class="top"><div class="n">EcoHaven Solutions LLC</div><div class="t">High-Efficiency Sprinklers | Low-Maintenance Landscaping</div></div>
+      <div class="inner" id="content"><p class="center">Loading&hellip;</p></div></div>
+    <div class="foot">Call/Text <a href="tel:5098666388">509-866-6388</a> &middot; <a href="https://ecohavenpro.com">ecohavenpro.com</a></div>
+  </div>
+  <div class="sheet" id="sheet"><div class="box" id="sheetbox"></div></div>
+  <div class="lb" id="lb"><img id="lbimg" alt="" /></div>
+
+  <script>
+    var FN_URL = (window.DESIGN_SHARE_FN_URL) || 'https://tudyqzbmlfkgcdfjdhej.supabase.co/functions/v1/design-share';
+    var qs = new URLSearchParams(window.location.search);
+    var token = qs.get('t');
+    var D = null;
+    var el = document.getElementById('content');
+
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function money(n) { n = Number(n || 0); return '$' + n.toLocaleString('en-US', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 }); }
+    function safeUrl(u) { return /^https?:\/\//i.test(u || '') ? u : ''; }
+    function showMsg(t) { el.innerHTML = '<p class="center">' + esc(t) + ' Please call/text 509-866-6388 and we\'ll help.</p>'; }
+
+    function render() {
+      document.title = (D.title || 'Your landscape design') + ' - EcoHaven Solutions LLC';
+      var h = '';
+      var approved = D.status === 'approved';
+      var tierName = '';
+      (D.tiers || []).forEach(function (t) { if (t.key === D.approvedTier) tierName = t.name; });
+      if (qs.get('paid') === '1') h += '<div class="badge ok">Deposit received. Thank you!</div>';
+      else if (approved) h += '<div class="badge ok">You approved the ' + esc(tierName || 'selected') + ' option. Thank you!</div>';
+      h += '<h1>' + esc(D.title || 'Your landscape design') + '</h1>';
+      h += '<p>Hi ' + esc((D.customerName || 'there').split(' ')[0]) + ', here is the design we put together for you.</p>';
+      if (D.message) h += '<div class="msg">' + esc(D.message) + '</div>';
+
+      var imgs = (D.images || []).filter(function (i) { return safeUrl(i.url); });
+      if (imgs.length) {
+        h += '<h2 style="margin-top:22px">Your design</h2><div class="stage"><img class="main" id="mainimg" alt="" src="' + esc(imgs[0].url) + '" /></div><div class="cap" id="maincap">' + esc(imgs[0].label || '') + '</div>';
+        if (imgs.length > 1) {
+          h += '<div class="thumbs">';
+          imgs.forEach(function (i, k) { h += '<button type="button" data-k="' + k + '" class="' + (k === 0 ? 'on' : '') + '"><img alt="" src="' + esc(i.url) + '" /></button>'; });
+          h += '</div>';
+        }
+      }
+      (D.mockups || []).forEach(function (m, idx) {
+        if (!safeUrl(m.before) || !safeUrl(m.after)) return;
+        h += '<h2 style="margin-top:26px">' + esc(m.name || 'Before and after') + '</h2>';
+        if (safeUrl(m.night)) h += '<div class="seg" data-seg="' + idx + '"><button type="button" class="on" data-mode="day">Day</button><button type="button" data-mode="night">Night</button></div>';
+        h += '<div class="ba" id="ba' + idx + '" data-after="' + esc(m.after) + '" data-night="' + esc(safeUrl(m.night)) + '"><img class="afterimg" alt="After" src="' + esc(m.after) + '" /><div class="before" style="width:50%"><img alt="Before" src="' + esc(m.before) + '" /></div><span class="tag" style="left:10px">Before</span><span class="tag" style="right:10px">After</span><div class="bar" style="left:50%"></div></div>';
+        h += '<div class="cap">Drag the handle to compare.</div>';
+      });
+
+      var pl = D.plants || [];
+      if (pl.length) {
+        h += '<h2 style="margin-top:26px">Plants in your design</h2><table><thead><tr><th>Plant</th><th>Qty</th><th>Grows to</th></tr></thead><tbody>';
+        pl.forEach(function (p) { h += '<tr><td><strong>' + esc(p.name) + '</strong><div style="font-size:12px;color:#A9AC9E">' + esc(p.sun || '') + ' sun &middot; ' + esc(p.water || '') + ' water</div></td><td>' + esc(p.qty) + '</td><td>' + esc(p.size) + '</td></tr>'; });
+        h += '</tbody></table>';
+      }
+
+      var tiers = D.tiers || [];
+      if (tiers.length) {
+        h += '<h2 style="margin-top:26px">' + (tiers.length > 1 ? 'Choose your option' : 'Your investment') + '</h2><div class="tiers">';
+        tiers.forEach(function (t, k) {
+          var chosen = approved && t.key === D.approvedTier;
+          var cls = 'tier' + (chosen ? ' chosen' : (tiers.length === 3 && k === 1 && !approved ? ' best' : ''));
+          h += '<div class="' + cls + '"><div class="nm">' + esc(t.name) + '</div><div class="pr">' + money(t.price) + '</div>';
+          if (t.description) h += '<div class="ds">' + esc(t.description) + '</div>';
+          if ((t.items || []).length) { h += '<ul>'; t.items.forEach(function (i) { h += '<li>' + esc(i) + '</li>'; }); h += '</ul>'; } else h += '<div style="flex:1"></div>';
+          if (chosen) h += '<div class="badge ok" style="margin:0">Approved</div>';
+          else if (!approved) {
+            h += '<button type="button" class="btn go" data-choose="' + esc(t.key) + '">Choose ' + esc(t.name) + '</button>';
+            if (D.deposit && D.deposit.enabled) h += '<div class="dep">' + money(Math.round(t.price * D.deposit.percent) / 100) + ' deposit to get started</div>';
+          }
+          h += '</div>';
+        });
+        h += '</div>';
+      }
+      if (approved) {
+        h += '<div style="margin-top:18px">' + (qs.get('paid') === '1' ? '' : D.depositUrl ? '<a class="btn pay" style="display:block" href="' + esc(safeUrl(D.depositUrl)) + '">Pay ' + money(D.depositAmount) + ' deposit</a>' : '<div class="badge info">We will send your deposit invoice shortly and be in touch to schedule the work.</div>') + '</div>';
+      }
+      h += '<h2 style="margin-top:28px">Questions or changes?</h2><p style="font-size:14px;color:#C4C4BC">Send us a note and we will get right back to you.</p><button type="button" class="btn ghost" id="askbtn">Send a message</button>';
+      el.innerHTML = h;
+      wire();
+    }
+
+    function wire() {
+      var main = document.getElementById('mainimg'), cap = document.getElementById('maincap');
+      var imgs = (D.images || []).filter(function (i) { return safeUrl(i.url); });
+      el.querySelectorAll('.thumbs button').forEach(function (b) {
+        b.addEventListener('click', function () { var i = imgs[Number(b.dataset.k)]; main.src = i.url; cap.textContent = i.label || ''; el.querySelectorAll('.thumbs button').forEach(function (x) { x.classList.toggle('on', x === b); }); });
+      });
+      if (main) main.addEventListener('click', function () { document.getElementById('lbimg').src = main.src; document.getElementById('lb').classList.add('show'); });
+      document.getElementById('lb').addEventListener('click', function () { this.classList.remove('show'); });
+      el.querySelectorAll('.ba').forEach(function (ba) {
+        var bar = ba.querySelector('.bar'), before = ba.querySelector('.before'), drag = false;
+        function setPos(clientX) { var r = ba.getBoundingClientRect(); var p = Math.max(2, Math.min(98, (clientX - r.left) / r.width * 100)); bar.style.left = p + '%'; before.style.width = p + '%'; }
+        function sizeBefore() { var bi = before.querySelector('img'); bi.style.width = ba.getBoundingClientRect().width + 'px'; bi.style.height = ba.getBoundingClientRect().height + 'px'; }
+        ba.querySelector('.afterimg').addEventListener('load', sizeBefore); window.addEventListener('resize', sizeBefore); sizeBefore();
+        bar.addEventListener('pointerdown', function (e) { drag = true; bar.setPointerCapture(e.pointerId); });
+        bar.addEventListener('pointerup', function () { drag = false; });
+        bar.addEventListener('pointermove', function (e) { if (drag) setPos(e.clientX); });
+        ba.addEventListener('pointerdown', function (e) { if (e.target === bar) return; setPos(e.clientX); });
+      });
+      el.querySelectorAll('.seg').forEach(function (seg) {
+        var ba = document.getElementById('ba' + seg.dataset.seg);
+        seg.querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () {
+          seg.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+          ba.querySelector('.afterimg').src = b.dataset.mode === 'night' ? ba.dataset.night : ba.dataset.after;
+        }); });
+      });
+      el.querySelectorAll('[data-choose]').forEach(function (b) { b.addEventListener('click', function () { openApprove(b.dataset.choose); }); });
+      document.getElementById('askbtn').addEventListener('click', openAsk);
+    }
+
+    var sheet = document.getElementById('sheet'), box = document.getElementById('sheetbox');
+    sheet.addEventListener('click', function (e) { if (e.target === sheet) sheet.classList.remove('show'); });
+    function openApprove(key) {
+      var t = (D.tiers || []).filter(function (x) { return x.key === key; })[0]; if (!t) return;
+      var dep = D.deposit && D.deposit.enabled ? Math.round(t.price * D.deposit.percent) / 100 : 0;
+      box.innerHTML = '<h2>Approve ' + esc(t.name) + '</h2><p>' + esc(D.title || '') + ' &middot; <strong>' + money(t.price) + '</strong></p>' +
+        (dep ? '<p style="color:#C4C4BC;font-size:14px">After you approve, you will get a link to pay the ' + money(dep) + ' deposit and we will schedule your project.</p>' : '<p style="color:#C4C4BC;font-size:14px">After you approve, we will be in touch to schedule your project.</p>') +
+        '<label for="ap-name">Your full name</label><input type="text" id="ap-name" autocomplete="name" />' +
+        '<label for="ap-note">Anything we should know? (optional)</label><textarea id="ap-note"></textarea>' +
+        '<label class="chk"><input type="checkbox" id="ap-ok" /> <span>I approve the ' + esc(t.name) + ' option for ' + money(t.price) + '.</span></label>' +
+        '<div class="err" id="ap-err"></div><button type="button" class="btn go" style="width:100%" id="ap-go">Approve</button><button type="button" class="btn ghost" style="width:100%;margin-top:8px" id="ap-cancel">Cancel</button>';
+      sheet.classList.add('show');
+      document.getElementById('ap-cancel').onclick = function () { sheet.classList.remove('show'); };
+      document.getElementById('ap-go').onclick = function () {
+        var name = document.getElementById('ap-name').value.trim(), err = document.getElementById('ap-err');
+        if (!name) { err.textContent = 'Please type your name.'; return; }
+        if (!document.getElementById('ap-ok').checked) { err.textContent = 'Please check the box to approve.'; return; }
+        var go = this; go.disabled = true; go.textContent = 'Sending...'; err.textContent = '';
+        post({ action: 'approve', token: token, tier: key, name: name, note: document.getElementById('ap-note').value }).then(function (r) {
+          if (r.ok) { D = r; sheet.classList.remove('show'); render(); window.scrollTo(0, 0); }
+          else { err.textContent = 'Something went wrong. Please call/text 509-866-6388.'; go.disabled = false; go.textContent = 'Approve'; }
+        });
+      };
+    }
+    function openAsk() {
+      box.innerHTML = '<h2>Send us a message</h2><label for="q-name">Your name</label><input type="text" id="q-name" value="' + esc(D.customerName || '') + '" /><label for="q-msg">Your message</label><textarea id="q-msg"></textarea><div class="err" id="q-err"></div><button type="button" class="btn go" style="width:100%" id="q-go">Send</button><button type="button" class="btn ghost" style="width:100%;margin-top:8px" id="q-cancel">Cancel</button>';
+      sheet.classList.add('show');
+      document.getElementById('q-cancel').onclick = function () { sheet.classList.remove('show'); };
+      document.getElementById('q-go').onclick = function () {
+        var msg = document.getElementById('q-msg').value.trim(), err = document.getElementById('q-err'); if (!msg) { err.textContent = 'Please type a message.'; return; }
+        var go = this; go.disabled = true; go.textContent = 'Sending...';
+        post({ action: 'message', token: token, name: document.getElementById('q-name').value, message: msg }).then(function (r) {
+          if (r.ok) { box.innerHTML = '<h2>Message sent</h2><p>Thank you. We will get back to you soon.</p><button type="button" class="btn ghost" style="width:100%" id="q-done">Close</button>'; document.getElementById('q-done').onclick = function () { sheet.classList.remove('show'); }; }
+          else { err.textContent = 'Could not send. Please call/text 509-866-6388.'; go.disabled = false; go.textContent = 'Send'; }
+        });
+      };
+    }
+    function post(body) {
+      return fetch(FN_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(function (r) { return r.json(); }).catch(function () { return { ok: false }; });
+    }
+
+    if (!token) showMsg('This link is missing something.');
+    else {
+      fetch(FN_URL + '?view=' + encodeURIComponent(token))
+        .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+        .then(function (res) {
+          if (res.body && res.body.ok) { D = res.body; render(); }
+          else if (res.status === 404) showMsg('We couldn\'t find that link, or it has expired.');
+          else showMsg('Something went wrong loading this page.');
+        }).catch(function () { showMsg('Something went wrong loading this page.'); });
+    }
+  </script>
+</body>
+</html>
