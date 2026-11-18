@@ -173,6 +173,7 @@
     try {
       const folder = `design-shares/${currentDesign.id}`; const images = []; const mocks = [];
       if ($('sh-plan').checked) { prog('Making the plan picture...'); const u = await planImage(); if (u) images.push({ id: 'plan', type: 'plan', label: 'Plan view', url: await up(u, folder) }); }
+      if (typeof DPRO.threeD.capture !== 'function' && THREE_PRESETS.some((p) => { const cb = modal.querySelector(`[data-3d="${p.id}"]`); return cb && cb.checked; })) throw new Error('Your browser is still using an old copy of the app. Close this tab, reopen the app, and try again (or use a private window).');
       const picks = THREE_PRESETS.filter((p) => { const cb = modal.querySelector(`[data-3d="${p.id}"]`); return cb && cb.checked && !cb.disabled; });
       for (let i = 0; i < picks.length; i++) {
         prog(`Rendering 3D picture ${i + 1} of ${picks.length}...`);
