@@ -49,6 +49,9 @@
     .btn { display: inline-block; border: 0; color: #fff; text-decoration: none; font-weight: 700; padding: 13px 22px; border-radius: 8px; font-size: 16px; cursor: pointer; text-align: center; }
     .go { background: #5FBF3E; } .pay { background: #3E7C98; } .ghost { background: #4a4a47; }
     .btn[disabled] { opacity: .5; cursor: default; }
+    .x3d { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; margin: 18px 0 4px; padding: 16px 18px; border-radius: 14px; border: 2px solid #5FBF3E; background: linear-gradient(135deg, #2b3a28, #2E2E2C); color: #fff; cursor: pointer; font-family: inherit; }
+    .x3d .ic { font-size: 30px; line-height: 1; } .x3d b { display: block; font-size: 18px; } .x3d span { display: block; font-size: 13px; color: #CFE8C6; margin-top: 2px; }
+    .x3d[disabled] { opacity: .7; cursor: default; }
     .dep { font-size: 13px; color: #C4C4BC; margin-top: 6px; text-align: center; }
     .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: flex-end; justify-content: center; z-index: 50; }
     .sheet.show { display: flex; }
@@ -97,6 +100,7 @@
       h += '<h1>' + esc(D.title || 'Your landscape design') + '</h1>';
       h += '<p>Hi ' + esc((D.customerName || 'there').split(' ')[0]) + ', here is the design we put together for you.</p>';
       if (D.message) h += '<div class="msg">' + esc(D.message) + '</div>';
+      if (D.scene && D.scene.elements && D.scene.elements.length) h += '<button type="button" class="x3d" id="x3d"><div class="ic">&#127969;</div><div><b>Explore your design in 3D</b><span>Walk around it, look from any angle, and see it in different seasons, at sunset and at night.</span></div></button><div class="cap" id="x3dmsg"></div>';
 
       var imgs = (D.images || []).filter(function (i) { return safeUrl(i.url); });
       if (imgs.length) {
@@ -149,6 +153,15 @@
     }
 
     function wire() {
+      var x3 = document.getElementById('x3d');
+      if (x3) x3.addEventListener('click', function () {
+        var msg = document.getElementById('x3dmsg'); x3.disabled = true; msg.textContent = 'Loading the 3D view...';
+        function go() { x3.disabled = false; msg.textContent = ''; try { window.DesignViewer.open(D.scene); } catch (e) { msg.textContent = 'The 3D view could not start on this device.'; } }
+        if (window.DesignViewer) return go();
+        var sc = document.createElement('script'); sc.src = 'design-viewer.js?v=' + (window.DESIGN_VIEWER_VER || Date.now());
+        sc.onload = go; sc.onerror = function () { x3.disabled = false; msg.textContent = 'Could not load the 3D view. Please check your connection and try again.'; };
+        document.head.appendChild(sc);
+      });
       var main = document.getElementById('mainimg'), cap = document.getElementById('maincap');
       var imgs = (D.images || []).filter(function (i) { return safeUrl(i.url); });
       el.querySelectorAll('.thumbs button').forEach(function (b) {
@@ -225,8 +238,8 @@
         .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
         .then(function (res) {
           if (res.body && res.body.ok) { D = res.body; render(); }
-          else if (res.status === 404) showMsg('We couldn\'t find that link, or it has expired.');
-          else showMsg('Something went wrong loading this page.');
+          else if (res.status === 404 && res.body && res.body.error === 'not_found') showMsg('We couldn\'t find that link, or it has expired.');
+          else showMsg('This page is not working yet (error ' + res.status + (res.body && (res.body.code || res.body.error || res.body.message) ? ': ' + String(res.body.code || res.body.error || res.body.message).slice(0, 80) : '') + ').');
         }).catch(function () { showMsg('Something went wrong loading this page.'); });
     }
   </script>

@@ -307,9 +307,16 @@
     const grp = new THREE.Group(); grp.position.set(x, 0, z);
     const { color, bare } = seasonTint(plant);
     const seed = (x * 12.9898 + z * 78.233) % 6.28;
+    let top = h, used = false;
+    if (DPRO.plants3d) {
+      try {
+        const r = DPRO.plants3d.build(THREE, plant, { h, w, month: state.month, seed, night: state.night });
+        grp.add(r.group); info.trunkH = Math.max(0.5, (r.trunkH || 0) * 1.05); top = r.top || h; used = true;
+      } catch (err) { console.warn('plant model failed, using simple shape', err); }
+    }
+    if (!used) {
     const leafMat = bare ? new THREE.MeshStandardMaterial({ color: '#6B5A48', wireframe: true, roughness: 1 }) : new THREE.MeshStandardMaterial({ color: color.clone().multiplyScalar(0.9), flatShading: true, roughness: 0.9 });
     const leafMat2 = bare ? leafMat : new THREE.MeshStandardMaterial({ color: color.clone().offsetHSL(0.01, 0, 0.06), flatShading: true, roughness: 0.9 });
-    let top = h;
     if (plant.category === 'Tree') {
       const bark = std('bark', { color: '#5A4332' });
       if (plant.evergreen) {
@@ -345,6 +352,7 @@
     } else {
       const b = new THREE.Mesh(new THREE.CylinderGeometry(w / 2, w / 2, Math.max(0.15, h * 0.5), 14), leafMat); b.position.y = Math.max(0.15, h * 0.5) / 2; b.receiveShadow = true; grp.add(b);
       top = Math.max(0.3, h * 0.5);
+    }
     }
     // holiday lights
     if (el.holiday && (el.holiday.trunk || el.holiday.canopy)) {
@@ -447,17 +455,17 @@
   const LIFT = { lawn: 0.06, turf: 0.06, bed: 0.16, hardscape: 0.12, driveway: 0.12, pavers: 0.13, flagstone: 0.13, gravel: 0.1, deck: 0.7, water: 0.14 };
   const SURF = { lawn: 'lawn', turf: 'turf', hardscape: 'conc', driveway: 'conc', pavers: 'pavers', flagstone: 'pavers', gravel: 'gravel', deck: 'deck', water: 'water' };
   function computeBounds() {
-    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9, tall = 0;
     const add = (x, z) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); };
     elements.forEach((e) => {
       if (e.points) for (let i = 0; i < e.points.length; i += 2) add(e.points[i] / pxPerFt, e.points[i + 1] / pxPerFt);
       else if (typeof e.x === 'number') {
-        let rr = 0; if (e.type === 'plant') { const pl = CATP.PLANT_CATALOG.find((p) => p.key === e.plantKey); if (pl) rr = pl.spreadFt / 2; }
+        let rr = 0; if (e.type === 'plant') { const pl = CATP.PLANT_CATALOG.find((p) => p.key === e.plantKey); if (pl) { rr = pl.spreadFt / 2; tall = Math.max(tall, pl.heightFt * ((CATP.GROWTH[state.growth] || CATP.GROWTH.mature)[pl.category] || 1)); } }
         add(e.x / pxPerFt - rr, e.y / pxPerFt - rr); add(e.x / pxPerFt + rr, e.y / pxPerFt + rr);
       }
     });
     if (x0 > x1) { x0 = -30; x1 = 30; z0 = -30; z1 = 30; }
-    bounds = { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, r: Math.max(20, Math.hypot(x1 - x0, z1 - z0) / 2), x0, x1, z0, z1 };
+    bounds = { cx: (x0 + x1) / 2, cz: (z0 + z1) / 2, r: Math.max(20, Math.hypot(x1 - x0, z1 - z0) / 2, tall * 0.85), x0, x1, z0, z1 };
   }
   function buildScene() {
     if (root) { scene.remove(root); root.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
@@ -490,7 +498,7 @@
     computeBounds();
     const sc = sun.shadow.camera, R = bounds.r * 1.25;
     sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.near = 1; sc.far = bounds.r * 8 + 400; sc.updateProjectionMatrix();
-    applySun();
+    applySun(); fixFrames = 1;
     const msg = $('d3-msg');
     if (msg) msg.textContent = elements.length ? '' : 'The plan is empty. Draw something in the editor, then open 3D again.';
   }
@@ -502,9 +510,12 @@
     $('d3-pad').classList.toggle('show', name === 'walk');
     state.mode = name === 'walk' ? 'walk' : 'orbit';
     cam.tx = bounds.cx; cam.tz = bounds.cz; cam.ty = 0;
-    if (name === 'aerial') { cam.theta = 0.55; cam.phi = 0.95; cam.radius = bounds.r * 1.75 + 25; }
-    else if (name === 'top') { cam.theta = 0; cam.phi = 0.03; cam.radius = bounds.r * 2.0 + 25; }
-    else if (name === 'front') { cam.theta = 0; cam.phi = 1.38; cam.radius = bounds.r * 1.9 + 25; cam.ty = 6; }
+    // distance that just fits the design in the frame (works for wide and tall screens), so it opens close, not far away
+    const asp = camera && camera.aspect ? camera.aspect : 1.6, fit = (bounds.r * 1.08) / (Math.tan((48 / 2) * Math.PI / 180) * Math.min(1, asp * 1.05));
+    const kk = asp >= 1.2 ? 0.64 : 0.64 + (0.98 - 0.64) * Math.min(1, (1.2 - asp) / 0.7); // tall/narrow screens need more room
+    if (name === 'aerial') { cam.theta = 0.55; cam.phi = 0.95; cam.radius = fit * kk + 7; cam.ty = 1.5; }
+    else if (name === 'top') { cam.theta = 0; cam.phi = 0.03; cam.radius = fit * (kk + 0.06) + 7; }
+    else if (name === 'front') { cam.theta = 0; cam.phi = 1.38; cam.radius = fit * (kk + 0.06) + 7; cam.ty = 4; }
     else if (name === 'walk') { walk.x = bounds.cx; walk.z = bounds.z1 - Math.min(10, (bounds.z1 - bounds.z0) * 0.15); walk.yaw = 0; walk.pitch = -0.05; }
     updateCamera();
   }
@@ -556,7 +567,7 @@
     const fx = Math.sin(walk.yaw), fz = -Math.cos(walk.yaw), rx = Math.cos(walk.yaw), rz = Math.sin(walk.yaw);
     walk.x += fx * fwd + rx * side; walk.z += fz * fwd + rz * side; updateCamera();
   }
-  let lastT = 0;
+  let lastT = 0, fixFrames = 0;
   function tick(t) {
     raf = open ? requestAnimationFrame(tick) : 0;
     const dt = Math.min(0.1, (t - lastT) / 1000 || 0); lastT = t;
@@ -566,7 +577,13 @@
       if (turn) { walk.yaw += turn * dt * 1.6; updateCamera(); }
       if (f || sd) moveWalk(f * dt * 9, sd * dt * 9);
     }
-    if (dirty && renderer) { dirty = false; renderer.render(scene, camera); }
+    if (dirty && renderer) {
+      dirty = false; renderer.render(scene, camera);
+      if (fixFrames > 0) { // after the scene is rebuilt, refresh shaders once so every plant/leaf shows up (lights change between day and night)
+        fixFrames -= 1; scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.needsUpdate = true; }); });
+        dirty = true;
+      }
+    }
   }
   function onKey(e, down) {
     if (!open) return;
@@ -658,8 +675,9 @@
     try {
       state.growth = opts.growth || 'mature'; state.night = !!opts.night; state.month = opts.month == null ? 5 : opts.month; state.hour = opts.hour == null ? 16 : opts.hour;
       state.labels = !!opts.labels; state.irrigation = false;
-      computeBounds(); buildScene(); setView(opts.view || 'aerial');
+      computeBounds(); buildScene();
       renderer.setPixelRatio(1); renderer.setSize(W, H, false); camera.aspect = W / H; camera.updateProjectionMatrix();
+      setView(opts.view || 'aerial');
       renderer.render(scene, camera);
       return renderer.domElement.toDataURL('image/jpeg', 0.88);
     } finally {
@@ -668,5 +686,5 @@
       if (wasOpen) resize();
     }
   }
-  DPRO.threeD = { open: openView, close, snapshot, capture, setView, state, rebuild: () => { if (scene) buildScene(); }, get ready() { return !!renderer; } };
+  DPRO.threeD = { open: openView, close, snapshot, capture, setView, state, rebuild: () => { if (scene) buildScene(); }, get ready() { return !!renderer; }, get scene() { return scene; } };
 })();

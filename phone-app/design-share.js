@@ -58,6 +58,13 @@
   function newToken() { const a = new Uint8Array(18); crypto.getRandomValues(a); return Array.from(a, (b) => b.toString(16).padStart(2, '0')).join(''); }
 
   function hasLights() { return elements.some((e) => e.type === 'lightrun' || e.type === 'lightpoint'); }
+  // The plan itself (shapes, plants, lights) so the customer page can rebuild the 3D model and let them move around in it.
+  function sceneData() {
+    const els = JSON.parse(JSON.stringify(elements)).filter((e) => !JSON.stringify(e).includes('data:image'));
+    const sc = { elements: els, pxPerFt, northDeg: Number(DPRO.extras && DPRO.extras.northDeg) || 0, night: !!(DPRO.extras && DPRO.extras.night) };
+    if (JSON.stringify(sc).length > 1800000) throw new Error('This design is too big to share in 3D. Turn off the 3D walk-around option, or remove some unused shapes.');
+    return sc;
+  }
   function plantRows() {
     const m = new Map(); elements.filter((e) => e.type === 'plant').forEach((e) => m.set(e.plantKey, (m.get(e.plantKey) || 0) + 1));
     const out = []; m.forEach((qty, k) => { const p = CATP.PLANT_CATALOG.find((x) => x.key === k); if (p) out.push({ code: p.code, name: p.name, qty, size: `${p.heightFt}' tall x ${p.spreadFt}' wide`, sun: p.sun, water: p.water, category: p.category }); });
@@ -143,6 +150,7 @@
     THREE_PRESETS.forEach((p) => { h += `<div class="sh-src"><input type="checkbox" data-3d="${p.id}" ${p.def && (p.id !== 'night' || hasLights()) ? 'checked' : ''} ${p.id === 'night' && !hasLights() ? 'disabled' : ''} /><div><strong>3D: ${esc(p.label)}</strong><small>${esc(p.sub)}</small></div></div>`; });
     if (mockups.length) mockups.forEach((m) => { h += `<div class="sh-src"><input type="checkbox" data-mock="${m.id}" checked /><div><strong>Photo mockup: ${esc(m.name)}</strong><small>Before/after slider${m.afterNightUrl ? ' with a night version' : ''}</small></div></div>`; });
     else h += '<p class="sm">No saved photo mockups yet. Use the Photo mockup button, save one, and it shows up here.</p>';
+    h += `<h3>3D walk-around</h3><div class="sh-src"><input type="checkbox" id="sh-3d" ${P.scene && P.scene.elements ? 'checked' : (existing ? '' : 'checked')} /><div><strong>Let the customer explore the design in 3D</strong><small>Adds an "Explore in 3D" button to their page: they can spin, zoom, walk through, and try other seasons, times of day and night lighting on their own phone.</small></div></div>`;
     h += `<h3>Plant list</h3><div class="sh-src"><input type="checkbox" id="sh-plants" checked /><div><strong>Include the plant list</strong><small>${plantRows().length} ${plantRows().length === 1 ? "kind" : "kinds"} of plants from the plan, with mature sizes</small></div></div>`;
     h += '<h3>Options and prices</h3><p class="sm">Turn on one, two or three options. Prices are what the customer sees, so enter the full amount you want them to pay.</p><div class="sh-grid">';
     tiers.forEach((t) => { h += `<div class="sh-tier ${t.on ? '' : 'off'}" data-tier="${t.key}"><label style="margin-top:0"><input type="checkbox" class="t-on" ${t.on ? 'checked' : ''} /> Show this option</label>
@@ -191,7 +199,7 @@
       if (tiers.some((t) => !(t.price > 0))) throw new Error('Enter a price for each option you turned on.');
       prog('Saving the page...');
       const depOn = $('sh-dep-on').checked; const pct = Math.max(1, Math.min(100, Number($('sh-dep-pct').value) || 25));
-      const payload = { title: $('sh-title').value.trim() || 'Your landscape design', customerName: $('sh-cname').value.trim(), message: $('sh-msg').value.trim(), images, mockups: mocks, plants: $('sh-plants').checked ? plantRows() : [], tiers, deposit: { enabled: depOn && tiers.length > 0, percent: pct }, updatedAt: new Date().toISOString() };
+      const payload = { title: $('sh-title').value.trim() || 'Your landscape design', customerName: $('sh-cname').value.trim(), message: $('sh-msg').value.trim(), images, mockups: mocks, plants: $('sh-plants').checked ? plantRows() : [], scene: $('sh-3d') && $('sh-3d').checked ? sceneData() : null, tiers, deposit: { enabled: depOn && tiers.length > 0, percent: pct }, updatedAt: new Date().toISOString() };
       const row = { design_id: currentDesign.id, title: payload.title, customer_name: payload.customerName, customer_email: $('sh-cemail').value.trim() || null, payload, updated_at: new Date().toISOString() };
       let saved;
       if (existing && !forceNew) {
