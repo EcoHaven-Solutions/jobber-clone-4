@@ -366,7 +366,13 @@ function mulberry32(seed) {
       return { canvas: c, ft: 6 };
     },
   };
-  function texture(name) { if (!texCache[name]) texCache[name] = TEXTURES[name](); return texCache[name]; }
+  function texture(name) {
+    if (!texCache[name]) {
+      const m = DPRO.mat && DPRO.mat.by && DPRO.mat.by[name]; // rock / gravel / mulch library (design-materials.js)
+      texCache[name] = m ? DPRO.mat.tex2d(name) : TEXTURES[name]();
+    }
+    return texCache[name];
+  }
   DPRO.texture = texture;
 })();
 (function () {
@@ -415,6 +421,433 @@ function mulberry32(seed) {
   }
   DPRO.light.colorOf = colorOf;
 })();
+// ============================================================================
+// design-materials.js — decorative rock, gravel, mulch and surface materials.
+//
+//  * A library of ~23 ground materials (river rock, cobble, lava rock, black
+//    Mexican beach pebbles, marble chips, decomposed granite, pea gravel, bark
+//    mulch ...) that are drawn with code, so they look like what they are in
+//    the 2D plan AND in the 3D view (real stones with relief, not flat color).
+//  * Boulders you can place (granite, basalt, moss rock, sandstone ...).
+//  * Realistic surface textures for lawn, turf, concrete, pavers, flagstone
+//    and decking (used by the 3D view).
+//  * Editor tools: pick a material card, draw the bed, and get a quantity list
+//    (square feet, cubic yards, tons) with optional pricing.
+//
+// The first half (catalog + textures) also runs on the customer 3D page; the
+// editor half only runs inside the design editor.
+// ============================================================================
+(function () {
+  'use strict';
+  const DPRO = (window.DPRO = window.DPRO || {});
+  if (DPRO.mat) return;
+
+  // ----------------------------------------------------------------- helpers
+  function rng(seed) { let s = (Math.floor(seed) >>> 0) || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+  const hashStr = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  function hex(h) { h = String(h).replace('#', ''); if (h.length === 3) h = h.split('').map((c) => c + c).join(''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+  const rgb = (c, k, a) => `rgba(${clamp(Math.round(c[0] * k), 0, 255)},${clamp(Math.round(c[1] * k), 0, 255)},${clamp(Math.round(c[2] * k), 0, 255)},${a == null ? 1 : a})`;
+  function cv(n, m) { const c = document.createElement('canvas'); c.width = n; c.height = m || n; return [c, c.getContext('2d')]; }
+  function wrap(n, x, y, r, fn) { // draw at wrapped offsets so tiles repeat with no seams
+    const xs = [0], ys = [0]; if (x < r) xs.push(n); if (x > n - r) xs.push(-n); if (y < r) ys.push(n); if (y > n - r) ys.push(-n);
+    for (const dx of xs) for (const dy of ys) fn(x + dx, y + dy);
+  }
+
+  // ----------------------------------------------------------------- catalog
+  const G = { MULCH: 'Mulch', SOIL: 'Soil & sand', ROCK: 'Decorative rock', GRAVEL: 'Gravel & granite' };
+  // kind: round | angular | flat | chip | shred | fine | soil | sand
+  // r: stone radius range in texture pixels (tile = ft feet across 512px).  d3: instanced 3D stone size (ft), if large enough.
+  const MATS = [
+    // ---- mulch
+    { key: 'bark-dark', name: 'Dark bark mulch', group: G.MULCH, kind: 'chip', ft: 3, r: [20, 34], base: '#2e1c10', pal: ['#5a3a22', '#4a2e1b', '#6b4429', '#3d2616', '#7a4f2e'], depthIn: 3, ton: 0, bump: 3, rough: 1, note: 'Classic brown bark nuggets' },
+    { key: 'cedar-red', name: 'Red cedar mulch', group: G.MULCH, kind: 'shred', ft: 3, base: '#4a2014', pal: ['#9a4a2a', '#8a3f22', '#b05a34', '#7a3820', '#c06a40'], depthIn: 3, ton: 0, bump: 2, rough: 1, note: 'Shredded cedar, warm red-brown' },
+    { key: 'mulch-black', name: 'Black mulch', group: G.MULCH, kind: 'shred', ft: 3, base: '#0e0b09', pal: ['#241d19', '#2a2420', '#15110f', '#33291f', '#3b3029'], depthIn: 3, ton: 0, bump: 2, rough: 1, note: 'Dyed black shredded hardwood' },
+    { key: 'wood-chips', name: 'Natural wood chips', group: G.MULCH, kind: 'chip', ft: 3, r: [22, 40], base: '#5f4426', pal: ['#b88a55', '#a57a49', '#c9a06a', '#8e6b40', '#d2ae7a'], depthIn: 3, ton: 0, bump: 3, rough: 1, note: 'Light arborist chips' },
+    // ---- soil & sand
+    { key: 'topsoil', name: 'Topsoil', group: G.SOIL, kind: 'soil', ft: 3, base: '#4a3626', pal: ['#6a5038', '#3a2a1c', '#5a4430'], depthIn: 4, ton: 1.1, bump: 1.2, rough: 1, note: 'Planting soil' },
+    { key: 'sand', name: 'Sand', group: G.SOIL, kind: 'sand', ft: 2, base: '#d6c398', pal: ['#e3d2a8', '#c9b584', '#bfa970'], depthIn: 2, ton: 1.3, bump: 0.8, rough: 1, note: 'Play / paver sand' },
+    // ---- decorative rock
+    { key: 'river-rock', name: 'River rock (2-4 in)', group: G.ROCK, kind: 'round', ft: 2.5, r: [17, 34], base: '#3a362f', pal: ['#b9b2a2', '#9c9484', '#cfc7b4', '#8a8478', '#a69a85', '#7e7a70', '#c4b8a0'], depthIn: 3, ton: 1.4, bump: 5, rough: 0.9, d3: 0.24, cover: 0.55, note: 'Smooth rounded stones, mixed tan and grey' },
+    { key: 'cobble', name: 'Cobblestone (4-8 in)', group: G.ROCK, kind: 'round', ft: 4, r: [26, 50], base: '#34312b', pal: ['#8f897c', '#a39c8b', '#7c776b', '#b0a893', '#6f6a5f', '#99917f'], depthIn: 5, ton: 1.5, bump: 6, rough: 0.92, d3: 0.5, cover: 0.62, note: 'Large rounded cobbles for dry creek beds and borders' },
+    { key: 'rainbow-rock', name: 'Rainbow river rock (1-3 in)', group: G.ROCK, kind: 'round', ft: 2, r: [14, 28], base: '#3b342c', pal: ['#b8704a', '#8f8a80', '#c9b48a', '#6f7a5e', '#a4573b', '#d8cfc0', '#7d6a58', '#5e6670'], depthIn: 3, ton: 1.4, bump: 5, rough: 0.88, d3: 0.17, cover: 0.55, note: 'Multicolor river stones (rust, tan, grey, olive)' },
+    { key: 'lava-red', name: 'Red lava rock', group: G.ROCK, kind: 'angular', ft: 2, r: [10, 24], base: '#2a1410', pal: ['#8a3b27', '#a14a30', '#7a3322', '#b85a3a', '#6a2a1c'], pores: true, depthIn: 3, ton: 0.7, bump: 6, rough: 1, note: 'Lightweight porous volcanic rock' },
+    { key: 'lava-black', name: 'Black lava rock', group: G.ROCK, kind: 'angular', ft: 2, r: [10, 24], base: '#0c0b0b', pal: ['#2a2523', '#38312e', '#1d1a19', '#4a403b', '#2f2926'], pores: true, depthIn: 3, ton: 0.7, bump: 6, rough: 1, note: 'Dark porous volcanic rock' },
+    { key: 'beach-pebble', name: 'Black Mexican beach pebbles', group: G.ROCK, kind: 'round', ft: 2, r: [12, 24], base: '#050505', pal: ['#111113', '#1a1a1c', '#232326', '#2c2c30', '#0c0c0d'], gloss: true, depthIn: 2, ton: 1.4, bump: 4, rough: 0.42, d3: 0.15, cover: 0.62, note: 'Polished black river pebbles (1-3 in)' },
+    { key: 'marble-white', name: 'White marble chips', group: G.ROCK, kind: 'angular', ft: 1.5, r: [9, 19], base: '#a9a69c', pal: ['#f4f1ea', '#e6e2d8', '#ddd8cc', '#fbfaf6', '#cfcabd'], depthIn: 3, ton: 1.4, bump: 4, rough: 0.6, note: 'Bright white crushed marble' },
+    { key: 'red-rock', name: 'Colorado red rock', group: G.ROCK, kind: 'angular', ft: 1.6, r: [10, 21], base: '#5a2c1e', pal: ['#a8553a', '#b86445', '#964a32', '#c0714f', '#8a4430'], depthIn: 3, ton: 1.4, bump: 4, rough: 0.95, note: 'Brick-red crushed rock, 1-2 in' },
+    { key: 'basalt', name: 'Black basalt chips', group: G.ROCK, kind: 'angular', ft: 1.6, r: [9, 20], base: '#18191b', pal: ['#3a3d42', '#2e3034', '#464a50', '#25272a', '#50555c'], depthIn: 3, ton: 1.5, bump: 4, rough: 0.85, note: 'Dark blue-grey crushed basalt' },
+    { key: 'granite-pink', name: 'Pink granite chips', group: G.ROCK, kind: 'angular', ft: 1.4, r: [8, 17], base: '#6b5249', pal: ['#c79a8e', '#b58a7d', '#d6b0a2', '#9c7468', '#e0c2b6'], speckle: true, depthIn: 3, ton: 1.5, bump: 4, rough: 0.8, note: 'Speckled pink and grey granite' },
+    { key: 'sandstone', name: 'Tan sandstone chips', group: G.ROCK, kind: 'angular', ft: 1.6, r: [10, 21], base: '#6a5538', pal: ['#c9a77a', '#b8935f', '#d8b98f', '#a98250', '#e0c8a0'], depthIn: 3, ton: 1.4, bump: 4, rough: 0.95, note: 'Warm desert sandstone' },
+    { key: 'slate-chips', name: 'Blue-grey slate chips', group: G.ROCK, kind: 'flat', ft: 1.8, r: [11, 24], base: '#2a3036', pal: ['#5b6670', '#4a545d', '#6e7a85', '#3d454d', '#7f8b96'], depthIn: 2, ton: 1.3, bump: 3.5, rough: 0.75, note: 'Flat layered slate pieces' },
+    // ---- gravel & granite
+    { key: 'pea-gravel', name: 'Pea gravel (3/8 in)', group: G.GRAVEL, kind: 'round', ft: 0.9, r: [7, 12], base: '#4d4538', pal: ['#c9b999', '#a89678', '#d6c8aa', '#8f826c', '#b5a58a', '#9a9486', '#c2a888'], depthIn: 3, ton: 1.45, bump: 3, rough: 0.9, note: 'Small smooth pebbles for paths and patios' },
+    { key: 'gravel-34', name: '3/4 in crushed gravel (grey)', group: G.GRAVEL, kind: 'angular', ft: 1.2, r: [7, 15], base: '#4a4a46', pal: ['#9a9a96', '#7e7e7a', '#b0aea6', '#68675f', '#a6a49a'], depthIn: 3, ton: 1.4, bump: 4, rough: 0.95, note: 'Angular grey crushed stone, locks together' },
+    { key: 'dg-gold', name: 'Decomposed granite (gold)', group: G.GRAVEL, kind: 'fine', ft: 0.6, base: '#a58a64', pal: ['#b59a73', '#a58a64', '#c6ab84', '#8f7653', '#d2b88f'], depthIn: 3, ton: 1.5, bump: 1.5, rough: 1, note: 'Fine tan granite fines, compacts for paths' },
+    { key: 'dg-gray', name: 'Decomposed granite (grey)', group: G.GRAVEL, kind: 'fine', ft: 0.6, base: '#8d8b85', pal: ['#8d8b85', '#a09e97', '#797771', '#b3b1aa', '#6b6a64'], depthIn: 3, ton: 1.5, bump: 1.5, rough: 1, note: 'Fine grey granite fines' },
+    { key: 'road-base', name: 'Crushed road base (1-1/2 minus)', group: G.GRAVEL, kind: 'angular', fines: true, ft: 1.4, r: [6, 14], base: '#8a877d', pal: ['#b9b6aa', '#a5a296', '#cdc9bb', '#8f8c80', '#c2bdae'], depthIn: 4, ton: 1.5, bump: 2.5, rough: 1, note: 'Compactable base under pavers and patios' },
+  ];
+  const BY = {}; MATS.forEach((m) => { BY[m.key] = m; });
+  const LEGACY = { bark: 'bark-dark', rock: 'river-rock', soil: 'topsoil' };
+  const DEFAULT_FOR = { bed: 'bark-dark', gravel: 'gravel-34' };
+  function keyFor(el) {
+    if (el.material && BY[el.material]) return el.material;
+    if (el.type === 'area' && el.subtype === 'bed') return LEGACY[el.surface] || DEFAULT_FOR.bed;
+    return DEFAULT_FOR[el.subtype] || null;
+  }
+
+  // boulders
+  const ROCKS = [
+    { key: 'granite', name: 'Granite boulder (grey)', pal: ['#8d8f92', '#a4a6a9', '#7a7c80', '#b4b5b6'], rough: 0.85, flat: true },
+    { key: 'basalt', name: 'Basalt boulder (dark)', pal: ['#3d4046', '#2f3237', '#4a4e55', '#25282c'], rough: 0.8, flat: true },
+    { key: 'moss', name: 'Moss rock (green-grey)', pal: ['#7d8a6c', '#6a7a5a', '#8d9a7c', '#5a6a4c'], rough: 1, flat: false },
+    { key: 'sandstone', name: 'Sandstone boulder (tan)', pal: ['#c4a176', '#b48f62', '#d2b48a', '#a07d52'], rough: 0.95, flat: false },
+    { key: 'redstone', name: 'Red sandstone boulder', pal: ['#a95a3c', '#b96a48', '#964b32', '#c47a56'], rough: 0.95, flat: false },
+    { key: 'limestone', name: 'Limestone boulder (cream)', pal: ['#d8d0bc', '#c8bfa8', '#e6dfcc', '#b8ae96'], rough: 0.9, flat: false },
+    { key: 'lava', name: 'Lava boulder (red-black)', pal: ['#4a2a22', '#5a3026', '#3a211b', '#6a382c'], rough: 1, flat: true },
+  ];
+  const ROCK_BY = {}; ROCKS.forEach((r) => { ROCK_BY[r.key] = r; });
+  const BOULDER_SIZES = [['Small', 1.5], ['Medium', 2.5], ['Large', 3.5], ['Huge', 5]];
+
+  // ------------------------------------------------------------- stone drawing
+  function stoneShape(R, kind, r) {
+    if (kind === 'round') { const n = 10 + (R() * 4 | 0), rx = r * (0.9 + 0.2 * R()), ry = r * (0.62 + 0.3 * R()); const rot = R() * 3.1416; const v = []; for (let i = 0; i < n; i++) { const a = (i / n) * 6.2832; const k = 0.92 + 0.16 * R(); v.push([Math.cos(a) * rx * k, Math.sin(a) * ry * k]); } return { v, rot, smooth: true }; }
+    if (kind === 'flat') { const n = 5 + (R() * 3 | 0), rx = r * (1.0 + 0.3 * R()), ry = r * (0.4 + 0.2 * R()); const rot = R() * 3.1416; const v = []; for (let i = 0; i < n; i++) { const a = (i / n) * 6.2832 + R() * 0.4; const k = 0.7 + 0.4 * R(); v.push([Math.cos(a) * rx * k, Math.sin(a) * ry * k]); } return { v, rot, smooth: false }; }
+    if (kind === 'chip') { const n = 6 + (R() * 3 | 0), rx = r * (1.0 + 0.3 * R()), ry = r * (0.45 + 0.25 * R()); const rot = R() * 3.1416; const v = []; for (let i = 0; i < n; i++) { const a = (i / n) * 6.2832 + R() * 0.3; const k = 0.8 + 0.3 * R(); v.push([Math.cos(a) * rx * k, Math.sin(a) * ry * k]); } return { v, rot, smooth: false, bark: true }; }
+    const n = 5 + (R() * 4 | 0), rr = r; const rot = R() * 3.1416; const v = []; for (let i = 0; i < n; i++) { const a = (i / n) * 6.2832 + R() * 0.5; const k = 0.62 + 0.5 * R(); v.push([Math.cos(a) * rr * k, Math.sin(a) * rr * k * (0.8 + 0.3 * R())]); } return { v, rot, smooth: false };
+  }
+  function pathOf(g, sh, x, y) {
+    const c = Math.cos(sh.rot), s = Math.sin(sh.rot); const P = sh.v.map((p) => [x + p[0] * c - p[1] * s, y + p[0] * s + p[1] * c]);
+    g.beginPath();
+    if (sh.smooth) { const n = P.length; const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; let m0 = mid(P[n - 1], P[0]); g.moveTo(m0[0], m0[1]); for (let i = 0; i < n; i++) { const m = mid(P[i], P[(i + 1) % n]); g.quadraticCurveTo(P[i][0], P[i][1], m[0], m[1]); } }
+    else { g.moveTo(P[0][0], P[0][1]); for (let i = 1; i < P.length; i++) g.lineTo(P[i][0], P[i][1]); }
+    g.closePath(); return P;
+  }
+  function drawStone(g, hg, sh, x, y, col, o) {
+    const P = pathOf(g, sh, x, y); const [cx, cy] = [x, y];
+    if (sh.smooth) {
+      const rr = Math.max(...sh.v.map((p) => Math.hypot(p[0], p[1])));
+      const gr = g.createRadialGradient(cx - rr * 0.35, cy - rr * 0.4, rr * 0.1, cx, cy, rr * 1.05); gr.addColorStop(0, rgb(col, 1.22)); gr.addColorStop(0.6, rgb(col, 0.95)); gr.addColorStop(1, rgb(col, 0.6));
+      g.fillStyle = gr; g.fill(); g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = Math.max(1, rr * 0.07); g.stroke();
+      if (o.gloss) { g.fillStyle = 'rgba(255,255,255,0.22)'; g.beginPath(); g.ellipse(cx - rr * 0.3, cy - rr * 0.35, rr * 0.28, rr * 0.14, -0.6, 0, 6.28); g.fill(); }
+      pathOf(hg, sh, x, y); const hgr = hg.createRadialGradient(cx, cy, 0, cx, cy, rr * 1.05); hgr.addColorStop(0, '#fff'); hgr.addColorStop(0.65, '#a8a8a8'); hgr.addColorStop(1, '#404040'); hg.fillStyle = hgr; hg.fill();
+    } else {
+      // faceted: shade every wedge by how much it faces the light (top-left)
+      const n = P.length; for (let i = 0; i < n; i++) {
+        const a = P[i], b = P[(i + 1) % n]; const ang = Math.atan2((a[1] + b[1]) / 2 - cy, (a[0] + b[0]) / 2 - cx); const sh2 = 0.72 + 0.4 * Math.max(0, Math.cos(ang - 3.9));
+        g.fillStyle = rgb(col, sh2 + (o.jit || 0)); g.beginPath(); g.moveTo(cx, cy); g.lineTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.closePath(); g.fill();
+        hg.fillStyle = `rgb(${Math.round(110 + 120 * (sh2 - 0.6))},${Math.round(110 + 120 * (sh2 - 0.6))},${Math.round(110 + 120 * (sh2 - 0.6))})`; hg.beginPath(); hg.moveTo(cx, cy); hg.lineTo(a[0], a[1]); hg.lineTo(b[0], b[1]); hg.closePath(); hg.fill();
+      }
+      g.strokeStyle = 'rgba(0,0,0,0.5)'; g.lineWidth = 1.1; pathOf(g, sh, x, y); g.stroke(); hg.strokeStyle = 'rgba(0,0,0,0.9)'; hg.lineWidth = 2; pathOf(hg, sh, x, y); hg.stroke();
+      if (sh.bark) { g.strokeStyle = 'rgba(20,10,5,0.35)'; g.lineWidth = 0.9; const c2 = Math.cos(sh.rot), s2 = Math.sin(sh.rot); for (let k = -1; k <= 1; k++) { g.beginPath(); g.moveTo(x + (-0.6 * 20) * c2 - k * 4 * s2, y + (-0.6 * 20) * s2 + k * 4 * c2); g.lineTo(x + (0.6 * 20) * c2 - k * 4 * s2, y + (0.6 * 20) * s2 + k * 4 * c2); g.stroke(); } }
+    }
+    if (o.speckle) { g.save(); pathOf(g, sh, x, y); g.clip(); for (let i = 0; i < 12; i++) { g.fillStyle = Math.random() > 0.5 ? 'rgba(20,20,20,0.35)' : 'rgba(255,255,255,0.3)'; g.fillRect(x + (Math.random() - 0.5) * 26, y + (Math.random() - 0.5) * 20, 2, 2); } g.restore(); }
+    if (o.pores) { g.save(); pathOf(g, sh, x, y); g.clip(); for (let i = 0; i < 7; i++) { g.fillStyle = 'rgba(0,0,0,0.55)'; g.beginPath(); g.arc(x + (Math.random() - 0.5) * 24, y + (Math.random() - 0.5) * 18, 1 + Math.random() * 2.2, 0, 6.28); g.fill(); } g.restore(); }
+  }
+
+  // ------------------------------------------------------- material generators
+  const N = 512;
+  function genStones(m) {
+    const [c, g] = cv(N), [h, hg] = cv(N); const R = rng(hashStr(m.key));
+    g.fillStyle = m.base; g.fillRect(0, 0, N, N); hg.fillStyle = '#1c1c1c'; hg.fillRect(0, 0, N, N);
+    if (m.fines) { for (let i = 0; i < 9000; i++) { const p = hex(m.pal[(R() * m.pal.length) | 0]); g.fillStyle = rgb(p, 0.7 + R() * 0.4, 0.8); g.fillRect(R() * N, R() * N, 1 + R() * 2, 1 + R() * 2); } }
+    const pal = m.pal.map(hex); const avg = (m.r[0] + m.r[1]) / 2; const cover = m.kind === 'flat' ? 0.9 : 1.25;
+    let count = Math.min(4200, Math.round(N * N / (Math.PI * avg * avg * (m.kind === 'round' ? 0.7 : 0.55)) * cover));
+    const items = [];
+    for (let i = 0; i < count; i++) { const r = lerp(m.r[0], m.r[1], Math.pow(R(), 1.2)); items.push({ x: R() * N, y: R() * N, r, sh: stoneShape(R, m.kind, r), col: pal[(R() * pal.length) | 0], jit: (R() - 0.5) * 0.18 }); }
+    items.forEach((it) => { wrap(N, it.x, it.y, it.r * 1.5, (x, y) => drawStone(g, hg, it.sh, x, y, it.col, { jit: it.jit, gloss: m.gloss, speckle: m.speckle, pores: m.pores })); });
+    return [c, h];
+  }
+  function genFine(m) {
+    const [c, g] = cv(N), [h, hg] = cv(N); const R = rng(hashStr(m.key)); const pal = m.pal.map(hex);
+    g.fillStyle = m.base; g.fillRect(0, 0, N, N); hg.fillStyle = '#808080'; hg.fillRect(0, 0, N, N);
+    for (let i = 0; i < 26000; i++) { const x = R() * N, y = R() * N, s = 1 + R() * 2.6; g.fillStyle = rgb(pal[(R() * pal.length) | 0], 0.8 + R() * 0.45, 0.9); g.fillRect(x, y, s, s * (0.7 + R() * 0.5)); const v = Math.round(60 + R() * 170); hg.fillStyle = `rgb(${v},${v},${v})`; hg.fillRect(x, y, s, s); }
+    for (let i = 0; i < 260; i++) { const x = R() * N, y = R() * N, r = 3 + R() * 6; const sh = stoneShape(R, 'angular', r); const col = pal[(R() * pal.length) | 0]; wrap(N, x, y, r * 1.4, (xx, yy) => drawStone(g, hg, sh, xx, yy, col, { jit: 0 })); }
+    return [c, h];
+  }
+  function genShred(m) {
+    const [c, g] = cv(N), [h, hg] = cv(N); const R = rng(hashStr(m.key)); const pal = m.pal.map(hex);
+    g.fillStyle = m.base; g.fillRect(0, 0, N, N); hg.fillStyle = '#2a2a2a'; hg.fillRect(0, 0, N, N);
+    for (let i = 0; i < 2600; i++) {
+      const x = R() * N, y = R() * N, L = 26 + R() * 70, a = R() * 6.2832, bend = (R() - 0.5) * 24, w = 2.2 + R() * 2.4; const col = pal[(R() * pal.length) | 0], k = 0.75 + R() * 0.5;
+      wrap(N, x, y, L, (xx, yy) => {
+        const ex = xx + Math.cos(a) * L, ey = yy + Math.sin(a) * L, mx = (xx + ex) / 2 - Math.sin(a) * bend, my = (yy + ey) / 2 + Math.cos(a) * bend;
+        g.strokeStyle = 'rgba(0,0,0,0.45)'; g.lineWidth = w + 1.4; g.lineCap = 'round'; g.beginPath(); g.moveTo(xx, yy); g.quadraticCurveTo(mx, my, ex, ey); g.stroke();
+        g.strokeStyle = rgb(col, k); g.lineWidth = w; g.beginPath(); g.moveTo(xx, yy); g.quadraticCurveTo(mx, my, ex, ey); g.stroke();
+        hg.strokeStyle = `rgb(${Math.round(150 + R() * 100)},${Math.round(150 + R() * 100)},${Math.round(150 + R() * 100)})`; hg.lineWidth = w; hg.lineCap = 'round'; hg.beginPath(); hg.moveTo(xx, yy); hg.quadraticCurveTo(mx, my, ex, ey); hg.stroke();
+      });
+    }
+    return [c, h];
+  }
+  function genSoil(m) {
+    const [c, g] = cv(N), [h, hg] = cv(N); const R = rng(hashStr(m.key)); const pal = m.pal.map(hex);
+    g.fillStyle = m.base; g.fillRect(0, 0, N, N); hg.fillStyle = '#707070'; hg.fillRect(0, 0, N, N);
+    for (let i = 0; i < 220; i++) { const x = R() * N, y = R() * N, r = 6 + R() * 16; const col = pal[(R() * pal.length) | 0]; wrap(N, x, y, r, (xx, yy) => { const gr = g.createRadialGradient(xx, yy, 0, xx, yy, r); gr.addColorStop(0, rgb(col, 1.05, 0.55)); gr.addColorStop(1, rgb(col, 1, 0)); g.fillStyle = gr; g.beginPath(); g.arc(xx, yy, r, 0, 6.28); g.fill(); const hh = hg.createRadialGradient(xx, yy, 0, xx, yy, r); hh.addColorStop(0, 'rgba(255,255,255,0.6)'); hh.addColorStop(1, 'rgba(255,255,255,0)'); hg.fillStyle = hh; hg.beginPath(); hg.arc(xx, yy, r, 0, 6.28); hg.fill(); }); }
+    for (let i = 0; i < 14000; i++) { const x = R() * N, y = R() * N, s = 1 + R() * 2.2; g.fillStyle = R() > 0.5 ? 'rgba(0,0,0,0.22)' : 'rgba(190,150,110,0.24)'; g.fillRect(x, y, s, s); const v = Math.round(40 + R() * 200); hg.fillStyle = `rgb(${v},${v},${v})`; hg.fillRect(x, y, s, s); }
+    return [c, h];
+  }
+  function genSand(m) {
+    const [c, g] = cv(N), [h, hg] = cv(N); const R = rng(hashStr(m.key)); const pal = m.pal.map(hex);
+    g.fillStyle = m.base; g.fillRect(0, 0, N, N); hg.fillStyle = '#808080'; hg.fillRect(0, 0, N, N);
+    for (let i = 0; i < 40; i++) { const y0 = R() * N; g.strokeStyle = 'rgba(120,100,60,0.08)'; g.lineWidth = 3 + R() * 6; g.beginPath(); for (let x = 0; x <= N; x += 16) g.lineTo(x, y0 + Math.sin(x * 0.03 + i) * 6); g.stroke(); }
+    for (let i = 0; i < 30000; i++) { const x = R() * N, y = R() * N; g.fillStyle = rgb(pal[(R() * pal.length) | 0], 0.9 + R() * 0.2, 0.5); g.fillRect(x, y, 1.4, 1.4); const v = Math.round(90 + R() * 80); hg.fillStyle = `rgb(${v},${v},${v})`; hg.fillRect(x, y, 1.4, 1.4); }
+    return [c, h];
+  }
+  function genMaterial(m) {
+    const gen = { round: genStones, angular: genStones, flat: genStones, chip: genStones, shred: genShred, fine: genFine, soil: genSoil, sand: genSand }[m.kind] || genStones;
+    const [c, h] = gen(m);
+    // small copy for the 2D plan (tile = 6 ft there; the real-size version is used in 3D)
+    const [c2, g2] = cv(128); g2.imageSmoothingQuality = 'high'; g2.drawImage(c, 0, 0, 128, 128);
+    return { canvas: c, height: h, ft: m.ft, canvas2d: c2, ft2d: 6 };
+  }
+
+  // ------------------------------------------------------------ surface textures (3D)
+  const SURF = {
+    lawn() { return genLawn(false); },
+    turf() { return genLawn(true); },
+    conc() {
+      const [c, g] = cv(N), [h, hg] = cv(N); const R = rng(71);
+      g.fillStyle = '#c6c4bc'; g.fillRect(0, 0, N, N); hg.fillStyle = '#909090'; hg.fillRect(0, 0, N, N);
+      for (let i = 0; i < 16000; i++) { const x = R() * N, y = R() * N; g.fillStyle = R() > 0.5 ? 'rgba(255,255,255,0.16)' : 'rgba(70,70,64,0.14)'; g.fillRect(x, y, 1 + R() * 1.8, 1 + R() * 1.8); const v = Math.round(100 + R() * 110); hg.fillStyle = `rgb(${v},${v},${v})`; hg.fillRect(x, y, 1.6, 1.6); }
+      for (let y = 0; y < N; y += 4) { g.fillStyle = 'rgba(90,90,84,0.045)'; g.fillRect(0, y, N, 1.5); }
+      for (let i = 0; i < 18; i++) { const x = R() * N, y = R() * N, r = 20 + R() * 50; const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(90,90,84,0.07)'); gr.addColorStop(1, 'rgba(90,90,84,0)'); g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 6.28); g.fill(); }
+      g.strokeStyle = 'rgba(70,70,64,0.7)'; g.lineWidth = 3; g.beginPath(); g.moveTo(0, 1.5); g.lineTo(N, 1.5); g.moveTo(1.5, 0); g.lineTo(1.5, N); g.stroke();
+      hg.strokeStyle = '#000'; hg.lineWidth = 4; hg.beginPath(); hg.moveTo(0, 2); hg.lineTo(N, 2); hg.moveTo(2, 0); hg.lineTo(2, N); hg.stroke();
+      return { canvas: c, height: h, ft: 8 };
+    },
+    pavers() {
+      const [c, g] = cv(N), [h, hg] = cv(N); const R = rng(81); const tones = ['#b39a82', '#a88d74', '#bca58d', '#9f8670', '#b8a088', '#a0958a', '#b09078'].map(hex);
+      g.fillStyle = '#6e6252'; g.fillRect(0, 0, N, N); hg.fillStyle = '#000'; hg.fillRect(0, 0, N, N);
+      const rows = 8, bh = N / rows, bw = bh * 2;
+      for (let r = 0; r < rows; r++) { const off = r % 2 ? bw / 2 : 0; for (let col = -1; col < 4; col++) {
+        const x = col * bw + off, y = r * bh, t = tones[(R() * tones.length) | 0], k = 0.9 + R() * 0.2;
+        g.fillStyle = rgb(t, k); g.fillRect(x + 2, y + 2, bw - 4, bh - 4);
+        for (let i = 0; i < 70; i++) { g.fillStyle = R() > 0.5 ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'; g.fillRect(x + 3 + R() * (bw - 8), y + 3 + R() * (bh - 8), 1.6, 1.6); }
+        g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(x + 2, y + 2, bw - 4, 3); g.fillRect(x + 2, y + 2, 3, bh - 4); g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(x + 2, y + bh - 6, bw - 4, 4); g.fillRect(x + bw - 6, y + 2, 4, bh - 4);
+        const v = Math.round(150 + R() * 60); hg.fillStyle = `rgb(${v},${v},${v})`; hg.fillRect(x + 3, y + 3, bw - 6, bh - 6);
+      } }
+      return { canvas: c, height: h, ft: 2.667 };
+    },
+    flagstone() {
+      const [c, g] = cv(N), [h, hg] = cv(N); const R = rng(93); const cells = 5, cw = N / cells; const pts = [];
+      for (let j = 0; j < cells; j++) for (let i = 0; i < cells; i++) pts.push({ x: (i + 0.15 + R() * 0.7) * cw, y: (j + 0.15 + R() * 0.7) * cw, ci: i, cj: j });
+      const tones = ['#a39a85', '#948b78', '#b0a68f', '#8c8470', '#a89b84', '#9a9080', '#b8a98a', '#857d70'].map(hex);
+      pts.forEach((p) => { p.col = tones[(R() * tones.length) | 0]; p.k = 0.88 + R() * 0.24; p.lvl = 120 + R() * 90; p.gx = (R() - 0.5) * 0.12; });
+      const img = g.createImageData(N, N), him = hg.createImageData(N, N);
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+        const ci = Math.floor(x / cw), cj = Math.floor(y / cw); let d1 = 1e9, d2 = 1e9, b = null;
+        for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+          const ii = (ci + di + cells) % cells, jj = (cj + dj + cells) % cells; const p = pts[jj * cells + ii]; const px = p.x + (ci + di < 0 ? -N : ci + di >= cells ? N : 0), py = p.y + (cj + dj < 0 ? -N : cj + dj >= cells ? N : 0);
+          const d = Math.hypot(x - px, y - py); if (d < d1) { d2 = d1; d1 = d; b = p; } else if (d < d2) d2 = d;
+        }
+        const edge = d2 - d1; const o = (y * N + x) * 4;
+        if (edge < 4.5) { img.data[o] = 70; img.data[o + 1] = 64; img.data[o + 2] = 54; img.data[o + 3] = 255; him.data[o] = him.data[o + 1] = him.data[o + 2] = 0; him.data[o + 3] = 255; continue; }
+        const n = (Math.sin(x * 0.07 + b.x) + Math.sin(y * 0.09 + b.y)) * 0.04 + (((x * 7 + y * 13) % 11) / 11 - 0.5) * 0.09; const k = b.k + n + (x - b.x) * b.gx * 0.01;
+        const bevel = edge < 14 ? 0.82 + 0.18 * ((edge - 4.5) / 9.5) : 1;
+        img.data[o] = clamp(b.col[0] * k * bevel, 0, 255); img.data[o + 1] = clamp(b.col[1] * k * bevel, 0, 255); img.data[o + 2] = clamp(b.col[2] * k * bevel, 0, 255); img.data[o + 3] = 255;
+        const hv = clamp(b.lvl * (edge < 14 ? 0.55 + 0.45 * ((edge - 4.5) / 9.5) : 1) + n * 140, 0, 255); him.data[o] = him.data[o + 1] = him.data[o + 2] = hv; him.data[o + 3] = 255;
+      }
+      g.putImageData(img, 0, 0); hg.putImageData(him, 0, 0);
+      return { canvas: c, height: h, ft: 6 };
+    },
+    deck() {
+      const [c, g] = cv(N), [h, hg] = cv(N); const R = rng(91); const tones = ['#a9713f', '#9a6636', '#b77c48', '#8e5e31', '#a56d3b'].map(hex); const planks = 4, ph = N / planks;
+      g.fillStyle = '#2a1a0e'; g.fillRect(0, 0, N, N); hg.fillStyle = '#000'; hg.fillRect(0, 0, N, N);
+      for (let r = 0; r < planks; r++) {
+        const y = r * ph, t = tones[(R() * tones.length) | 0], k = 0.92 + R() * 0.16; const joint = (R() * 0.6 + 0.2) * N;
+        [[0, joint], [joint, N]].forEach(([x0, x1], si) => {
+          const kk = k * (si ? 1.04 : 0.97); g.fillStyle = rgb(t, kk); g.fillRect(x0 + 1.5, y + 3, x1 - x0 - 3, ph - 6); hg.fillStyle = '#b0b0b0'; hg.fillRect(x0 + 1.5, y + 3, x1 - x0 - 3, ph - 6);
+          for (let i = 0; i < 46; i++) { const gy = y + 5 + R() * (ph - 10); g.strokeStyle = `rgba(${R() > 0.5 ? '60,35,15' : '210,160,110'},${0.12 + R() * 0.16})`; g.lineWidth = 0.8 + R(); g.beginPath(); g.moveTo(x0 + R() * 40, gy); g.bezierCurveTo(x0 + (x1 - x0) * 0.3, gy + (R() - 0.5) * 6, x0 + (x1 - x0) * 0.7, gy + (R() - 0.5) * 6, x1 - R() * 40, gy + (R() - 0.5) * 4); g.stroke(); }
+          if (R() > 0.4) { const kx = x0 + 30 + R() * (x1 - x0 - 60), ky = y + 20 + R() * (ph - 40); g.fillStyle = 'rgba(55,30,12,0.55)'; g.beginPath(); g.ellipse(kx, ky, 9, 5, 0, 0, 6.28); g.fill(); g.strokeStyle = 'rgba(55,30,12,0.3)'; g.lineWidth = 1; g.beginPath(); g.ellipse(kx, ky, 15, 8, 0, 0, 6.28); g.stroke(); }
+          g.fillStyle = 'rgba(40,40,40,0.75)'; for (const sx of [x0 + 14, x1 - 14]) { g.beginPath(); g.arc(sx, y + ph * 0.28, 2.2, 0, 6.28); g.arc(sx, y + ph * 0.72, 2.2, 0, 6.28); g.fill(); }
+        });
+      }
+      return { canvas: c, height: h, ft: 1.9 };
+    },
+  };
+  function genLawn(turf) {
+    const [c, g] = cv(N), [h, hg] = cv(N); const R = rng(turf ? 29 : 17);
+    const base = turf ? ['#5fa046', '#68ab4c', '#559a3e'] : ['#5f9a3f', '#6aa648', '#548f38', '#76b052', '#4d8434'];
+    g.fillStyle = base[0]; g.fillRect(0, 0, N, N); hg.fillStyle = '#707070'; hg.fillRect(0, 0, N, N);
+    for (let i = 0; i < 46; i++) { const x = R() * N, y = R() * N, r = 30 + R() * 80; const col = hex(base[(R() * base.length) | 0]); wrap(N, x, y, r, (xx, yy) => { const gr = g.createRadialGradient(xx, yy, 0, xx, yy, r); gr.addColorStop(0, rgb(col, 1, 0.4)); gr.addColorStop(1, rgb(col, 1, 0)); g.fillStyle = gr; g.beginPath(); g.arc(xx, yy, r, 0, 6.28); g.fill(); }); }
+    const blades = turf ? 26000 : 20000;
+    for (let i = 0; i < blades; i++) { const x = R() * N, y = R() * N, L = 6 + R() * 10, a = -1.5708 + (R() - 0.5) * (turf ? 0.7 : 1.5); const col = hex(base[(R() * base.length) | 0]); const k = 0.7 + R() * 0.55;
+      wrap(N, x, y, L, (xx, yy) => { g.strokeStyle = rgb(col, k, 0.9); g.lineWidth = 1 + R() * 0.8; g.lineCap = 'round'; g.beginPath(); g.moveTo(xx, yy); g.lineTo(xx + Math.cos(a) * L, yy + Math.sin(a) * L); g.stroke(); const v = Math.round(90 + k * 90); hg.strokeStyle = `rgb(${v},${v},${v})`; hg.lineWidth = 1.2; hg.beginPath(); hg.moveTo(xx, yy); hg.lineTo(xx + Math.cos(a) * L, yy + Math.sin(a) * L); hg.stroke(); }); }
+    if (!turf) { for (let i = 0; i < 90; i++) { g.fillStyle = 'rgba(190,170,90,0.35)'; g.fillRect(R() * N, R() * N, 1.5, 3); } } else { g.fillStyle = 'rgba(30,70,20,0.08)'; for (let y = 0; y < N; y += 6) g.fillRect(0, y, N, 1.5); }
+    return { canvas: c, height: h, ft: turf ? 3 : 4 };
+  }
+
+  const cache = {};
+  function tex(key) { if (cache[key] === undefined) { const m = BY[key]; cache[key] = m ? genMaterial(m) : (SURF[key] ? SURF[key]() : null); } return cache[key]; }
+  function tex2d(key) { const t = tex(key); if (!t) return null; return t.canvas2d ? { canvas: t.canvas2d, ft: t.ft2d } : { canvas: t.canvas, ft: t.ft }; }
+  const thumbCache = {};
+  function thumb(key, size) {
+    size = size || 56; const k = key + size; if (thumbCache[k]) return thumbCache[k];
+    const t = tex(key); if (!t) return ''; const [c, g] = cv(size); g.imageSmoothingQuality = 'high';
+    const src = t.canvas; const crop = Math.min(src.width, Math.round(src.width * Math.min(1, 1.2 / t.ft))); g.drawImage(src, 0, 0, crop, crop, 0, 0, size, size);
+    return (thumbCache[k] = c.toDataURL('image/png'));
+  }
+
+  DPRO.mat = { list: MATS, by: BY, groups: G, rocks: ROCKS, rockBy: ROCK_BY, boulderSizes: BOULDER_SIZES, keyFor, tex, tex2d, thumb, legacy: LEGACY, rng, hashStr };
+
+  // ============================================================================
+  // Editor integration (skipped on the customer 3D page)
+  // ============================================================================
+  if (!DPRO.types || !DPRO.addToolGroup || typeof Konva === 'undefined') return;
+  const $ = (id) => document.getElementById(id);
+  const esc = DPRO.esc || ((s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])));
+  const armed = { mat: 'bark-dark', rock: 'granite', size: 2.5, fromCard: false };
+  const money = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // new beds/gravel areas pick up the material chosen in the library
+  const origAdd = window.addElement;
+  window.addElement = function (el) {
+    if (el && el.type === 'area' && (el.subtype === 'bed' || el.subtype === 'gravel') && !el.material && armed.active) el.material = armed.mat;
+    return origAdd.apply(this, arguments);
+  };
+
+  // ---- catalog panel ----
+  const catPanel = $('design-panel-catalog');
+  const sec = document.createElement('div'); sec.id = 'design-catalog-mat'; sec.className = 'design-catalog-section'; sec.hidden = true;
+  if (catPanel) catPanel.appendChild(sec);
+  function renderCatalog() {
+    let h = `<div class="design-tool-group-label">Rock, gravel &amp; mulch</div><p class="empty-sub" style="margin:4px 0 8px">Tap a material, then click points on the plan to draw the area. Enter to finish.</p>`;
+    Object.keys(G).forEach((gk) => {
+      const list = MATS.filter((m) => m.group === G[gk]); if (!list.length) return;
+      h += `<div class="design-tool-group-label" style="margin-top:10px">${G[gk]}</div><div class="dpm-grid">`;
+      list.forEach((m) => { h += `<button type="button" class="dpm-card${armed.mat === m.key && armed.active ? ' on' : ''}" data-mat="${m.key}" title="${esc(m.note)}"><img alt="" src="${thumb(m.key, 64)}" /><span>${esc(m.name)}</span></button>`; });
+      h += '</div>';
+    });
+    h += `<div class="design-tool-group-label" style="margin-top:12px">Boulders</div><div class="dpm-row">`;
+    ROCKS.forEach((r) => { h += `<button type="button" class="dpm-chip${armed.rock === r.key && armed.boulder ? ' on' : ''}" data-rock="${r.key}"><i style="background:${r.pal[0]}"></i>${esc(r.name)}</button>`; });
+    h += `</div><div class="dpm-row" style="margin-top:6px">`;
+    BOULDER_SIZES.forEach(([l, ft]) => { h += `<button type="button" class="dpm-chip${armed.size === ft ? ' on' : ''}" data-bsize="${ft}">${l} (${ft} ft)</button>`; });
+    h += '</div><p class="empty-sub" style="margin-top:6px">Pick a boulder type and size, then click the plan to place it.</p>';
+    sec.innerHTML = h;
+    sec.querySelectorAll('[data-mat]').forEach((b) => b.addEventListener('click', () => {
+      armed.mat = b.dataset.mat; armed.active = true; armed.boulder = false; armed.fromCard = true;
+      setActiveTool(BY[armed.mat].group === G.GRAVEL ? 'area-gravel' : 'area-bed'); renderCatalog();
+    }));
+    sec.querySelectorAll('[data-rock]').forEach((b) => b.addEventListener('click', () => { armed.rock = b.dataset.rock; armed.boulder = true; armed.fromCard = true; setActiveTool('boulder'); renderCatalog(); }));
+    sec.querySelectorAll('[data-bsize]').forEach((b) => b.addEventListener('click', () => { armed.size = Number(b.dataset.bsize); armed.boulder = true; armed.fromCard = true; setActiveTool('boulder'); renderCatalog(); }));
+  }
+  const prevHook = DPRO.toolHook;
+  DPRO.toolHook = function (tool) {
+    if (prevHook) prevHook(tool);
+    const mine = tool === 'area-bed' || tool === 'area-gravel' || tool === 'boulder';
+    if (!armed.fromCard) { armed.active = false; if (tool !== 'boulder') armed.boulder = false; }
+    armed.fromCard = false;
+    if (mine) {
+      renderCatalog(); sec.hidden = false; const empty = $('design-catalog-empty'); if (empty) empty.hidden = true; switchSidePanel('catalog');
+    } else sec.hidden = true;
+  };
+  DPRO.hints.boulder = 'Click to place a boulder. Pick the rock type and size in the Catalog tab. Drag to move it.';
+  DPRO.pointTools.boulder = function (pos) {
+    addElement({ id: uid(), type: 'boulder', rock: armed.rock, sizeFt: armed.size, x: pos.x, y: pos.y, rotationDeg: Math.round(Math.random() * 360), seed: 1 + Math.floor(Math.random() * 9999) });
+  };
+
+  // ---- boulder element ----
+  function boulderPoints(el) {
+    const R = rng((el.seed || 1) * 7919); const n = 11 + (R() * 3 | 0), rad = ((el.sizeFt || 2.5) / 2) * pxPerFt; const pts = [];
+    for (let i = 0; i < n; i++) { const a = (i / n) * 6.2832; const k = 0.8 + 0.3 * R(); pts.push(Math.cos(a) * rad * k * 1.05, Math.sin(a) * rad * k * 0.88); }
+    return pts;
+  }
+  DPRO.types.boulder = {
+    layerKey: () => 'boulders',
+    build(el) {
+      const rock = ROCK_BY[el.rock] || ROCKS[0]; const g = new Konva.Group({ x: el.x, y: el.y, rotation: el.rotationDeg || 0, draggable: activeTool === 'select' });
+      const pts = boulderPoints(el); const rad = ((el.sizeFt || 2.5) / 2) * pxPerFt; const base = hex(rock.pal[0]);
+      g.add(new Konva.Line({ points: pts, closed: true, x: 1.5, y: 2.5, fill: 'rgba(0,0,0,0.28)', listening: false }));
+      g.add(new Konva.Line({ points: pts, closed: true, tension: 0.18, stroke: '#2a2a28', strokeWidth: 1.4, lineJoin: 'round', fillLinearGradientStartPoint: { x: -rad, y: -rad }, fillLinearGradientEndPoint: { x: rad, y: rad }, fillLinearGradientColorStops: [0, rgb(base, 1.3), 0.45, rgb(base, 1), 1, rgb(base, 0.62)], name: 'main' }));
+      const R = rng((el.seed || 1) * 31);
+      for (let i = 0; i < 3; i++) { const a = R() * 6.28, d = rad * (0.15 + R() * 0.35); g.add(new Konva.Line({ points: [Math.cos(a) * d, Math.sin(a) * d, Math.cos(a + 0.6) * d * 1.7, Math.sin(a + 0.6) * d * 1.7], stroke: 'rgba(0,0,0,0.35)', strokeWidth: 0.9, listening: false })); }
+      g.add(new Konva.Ellipse({ x: -rad * 0.3, y: -rad * 0.3, radiusX: rad * 0.28, radiusY: rad * 0.16, rotation: -30, fill: 'rgba(255,255,255,0.25)', listening: false }));
+      if (el.label) g.add(new Konva.Text({ text: el.label, x: rad * 0.7, y: -6, fontSize: 10, fontStyle: 'bold', fill: DPRO.ink(), stroke: DPRO.halo(), strokeWidth: 3, fillAfterStrokeEnabled: true, listening: false, rotation: -(el.rotationDeg || 0) }));
+      g.on('dragend', () => { el.x = g.x(); el.y = g.y(); markDirty(); if (selectedElementId === el.id) positionSelectionRing(el); });
+      attachSelectHandler(g, el); return g;
+    },
+    props(el, box) {
+      let h = DPRO.fieldHtml('Rock type', `<select id="bd-rock">${ROCKS.map((r) => `<option value="${r.key}" ${el.rock === r.key ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>`);
+      h += DPRO.fieldHtml('Size across (feet)', `<input id="bd-size" type="number" min="0.5" max="12" step="0.5" value="${el.sizeFt || 2.5}" />`);
+      h += DPRO.fieldHtml('Turn (degrees)', `<input id="bd-rot" type="number" min="0" max="359" step="15" value="${el.rotationDeg || 0}" />`);
+      h += DPRO.fieldHtml('Label (optional)', `<input id="bd-label" type="text" value="${esc(el.label || '')}" />`);
+      box.innerHTML = h;
+      const upd = (k, v) => { el[k] = v; DPRO.rerender(el); markDirty(); DPRO.runLegend(); };
+      $('bd-rock').addEventListener('change', (e) => upd('rock', e.target.value));
+      $('bd-size').addEventListener('change', (e) => upd('sizeFt', clamp(Number(e.target.value) || 2.5, 0.5, 12)));
+      $('bd-rot').addEventListener('change', (e) => upd('rotationDeg', Number(e.target.value) || 0));
+      $('bd-label').addEventListener('change', (e) => upd('label', e.target.value));
+    },
+  };
+  DPRO.addLayer('boulders', 'Boulders');
+
+  // ---- material picker on beds / gravel areas ----
+  DPRO.propHooks.push(function (el, box) {
+    if (el.type !== 'area' || (el.subtype !== 'bed' && el.subtype !== 'gravel')) return;
+    const old = $('pf-x-surface'); if (old) { const f = old.closest('.design-properties-field'); if (f) f.remove(); }
+    const cur = keyFor(el), m = BY[cur];
+    let opts = ''; Object.keys(G).forEach((gk) => { opts += `<optgroup label="${G[gk]}">${MATS.filter((x) => x.group === G[gk]).map((x) => `<option value="${x.key}" ${x.key === cur ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</optgroup>`; });
+    const sq = DPRO.areaSqFt ? DPRO.areaSqFt(el) : polygonAreaSqFt(el.points); const depth = el.depthIn || m.depthIn; const cy = sq * depth / 12 / 27;
+    const html = `<div class="design-properties-field dpm-prop"><label>Material</label><div class="dpm-propwrap"><img alt="" id="mp-thumb" src="${thumb(cur, 56)}" /><select id="mp-mat">${opts}</select></div><small>${esc(m.note)}</small></div>` +
+      DPRO.fieldHtml('Depth (inches)', `<input id="mp-depth" type="number" min="1" max="12" step="0.5" value="${depth}" />`) +
+      `<p class="empty-sub" id="mp-qty">${sq.toFixed(0)} sq ft at ${depth} in deep = <strong>${cy.toFixed(2)} cu yd</strong>${m.ton ? ` (about ${(cy * m.ton).toFixed(1)} tons)` : ''}</p>`;
+    box.insertAdjacentHTML('beforeend', html);
+    $('mp-mat').addEventListener('change', (e) => { el.material = e.target.value; delete el.depthIn; DPRO.rerender(el); markDirty(); DPRO.runLegend(); DPRO.renderProps(el); });
+    $('mp-depth').addEventListener('change', (e) => { el.depthIn = clamp(Number(e.target.value) || m.depthIn, 1, 12); markDirty(); DPRO.runLegend(); DPRO.renderProps(el); });
+  });
+
+  // ---- quantities ----
+  function takeoff() {
+    const rows = new Map();
+    elements.forEach((el) => {
+      if (el.type !== 'area' || (el.subtype !== 'bed' && el.subtype !== 'gravel')) return;
+      const k = keyFor(el), m = BY[k]; if (!m) return; const sq = polygonAreaSqFt(el.points); const depth = el.depthIn || m.depthIn;
+      const r = rows.get(k) || { m, sq: 0, cy: 0 }; r.sq += sq; r.cy += sq * depth / 12 / 27; rows.set(k, r);
+    });
+    const boulders = elements.filter((e) => e.type === 'boulder'); const bm = new Map();
+    boulders.forEach((b) => { const k = (b.rock || 'granite') + '|' + (b.sizeFt || 2.5); bm.set(k, (bm.get(k) || 0) + 1); });
+    return { rows: [...rows.values()], boulders: [...bm.entries()].map(([k, n]) => { const [r, s] = k.split('|'); return { rock: ROCK_BY[r] || ROCKS[0], size: Number(s), n }; }) };
+  }
+  DPRO.mat.takeoff = takeoff;
+  function prices() { if (!DPRO.extras.matPrices || typeof DPRO.extras.matPrices !== 'object') DPRO.extras.matPrices = {}; return DPRO.extras.matPrices; }
+  DPRO.addSideTab('materials', 'Rock & mulch', function (panel) {
+    const t = takeoff(); const P = prices(); let total = 0;
+    let h = `<div class="design-legend-group"><h4>Rock, gravel &amp; mulch needed</h4>`;
+    if (!t.rows.length && !t.boulders.length) h += `<p class="empty-sub">Draw a bed or gravel area, or place boulders, and the quantities show up here.</p>`;
+    t.rows.forEach((r) => {
+      const price = Number(P[r.m.key]) || 0; const cost = r.cy * price; total += cost;
+      h += `<div class="dpm-qrow"><img alt="" src="${thumb(r.m.key, 40)}" /><div><strong>${esc(r.m.name)}</strong><div class="empty-sub" style="margin:0">${r.sq.toFixed(0)} sq ft &middot; <strong>${r.cy.toFixed(2)} cu yd</strong>${r.m.ton ? ` &middot; ~${(r.cy * r.m.ton).toFixed(1)} tons` : ''}</div>
+        <label class="dpm-price">$ per cu yd <input type="number" min="0" step="1" data-price="${r.m.key}" value="${price || ''}" placeholder="0" /></label>${price ? `<span class="dpm-cost">${money(cost)}</span>` : ''}</div></div>`;
+    });
+    if (t.boulders.length) { h += `<h4 style="margin-top:12px">Boulders</h4>`; t.boulders.forEach((b) => { h += `<div class="design-legend-row"><span>${esc(b.rock.name)} &mdash; ${b.size} ft</span><span>&times;${b.n}</span></div>`; }); }
+    if (total) h += `<div class="design-legend-row design-legend-total"><span>Estimated material cost</span><span>${money(total)}</span></div>`;
+    h += `<p class="empty-sub" style="margin-top:8px">Quantities use the depth set on each area (default depth for the material). Add 5-10% for settling and waste.</p></div>`;
+    panel.innerHTML = h;
+    panel.querySelectorAll('[data-price]').forEach((n) => n.addEventListener('change', () => { P[n.dataset.price] = Math.max(0, Number(n.value) || 0); markDirty(); setTimeout(() => DPRO.sidePanels.materials(), 0); }));
+  });
+  DPRO.legendHooks.push(function () {
+    const t = takeoff(); if (!t.rows.length && !t.boulders.length) return '';
+    let h = `<div class="design-legend-group"><h4>Rock, gravel &amp; mulch</h4>`;
+    t.rows.forEach((r) => { h += `<div class="design-legend-row"><span>${esc(r.m.name)}</span><span>${r.cy.toFixed(1)} cu yd</span></div>`; });
+    t.boulders.forEach((b) => { h += `<div class="design-legend-row"><span>${esc(b.rock.name)} ${b.size} ft</span><span>&times;${b.n}</span></div>`; });
+    return h + '</div>';
+  });
+  DPRO.printHooks.push(function () {
+    const t = takeoff(); if (!t.rows.length && !t.boulders.length) return '';
+    let h = `<div class="design-print-section"><h3>Rock, gravel &amp; mulch</h3>`;
+    t.rows.forEach((r) => { h += `<div class="design-print-row"><span>${esc(r.m.name)} (${r.sq.toFixed(0)} sq ft)</span><span>${r.cy.toFixed(1)} cu yd${r.m.ton ? ' / ' + (r.cy * r.m.ton).toFixed(1) + ' tons' : ''}</span></div>`; });
+    t.boulders.forEach((b) => { h += `<div class="design-print-row"><span>${esc(b.rock.name)} &mdash; ${b.size} ft</span><span>&times;${b.n}</span></div>`; });
+    return h + '</div>';
+  });
+
+  DPRO.addToolGroup('dpro-group-rock', 'Rock, gravel & mulch', [
+    { id: 'btn-dpm-lib', label: 'Rock & mulch library', title: 'Pick river rock, lava rock, pea gravel, bark mulch and more, then draw the area', onclick: () => { armed.active = true; armed.fromCard = true; setActiveTool('area-bed'); } },
+    { tool: 'boulder', label: 'Boulder', title: 'Place decorative boulders' },
+    { id: 'btn-dpm-list', label: 'Quantities', title: 'Cubic yards and tons of each material', onclick: () => switchSidePanel('materials') },
+  ]);
+})();
+
 // ============================================================================
 // design-3d-plants.js — realistic plant models for the 3D view.
 //
@@ -1019,32 +1452,66 @@ function mulberry32(seed) {
   }
 
   // ======================= UI =======================
+  const ICON = {
+    plus: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+    minus: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h14"/></svg>',
+    home: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/></svg>',
+    left: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5 8 12l6.5 6.5"/></svg>',
+    right: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>',
+    play: '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7 4.5v15l12-7.5z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M6.5 4.5h4v15h-4zM13.5 4.5h4v15h-4z"/></svg>',
+    close: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+    fold: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9.5l6 6 6-6"/></svg>',
+  };
   const css = document.createElement('style');
   css.textContent = `
-  #dpro3d{position:fixed;inset:0;z-index:5000;background:#0b0f14;display:flex;flex-direction:column;color:#EDEDED;font-family:inherit}
+  #dpro3d{position:fixed;inset:0;z-index:5000;background:#0b0f14;display:flex;flex-direction:column;color:#EDEDED;font-family:inherit;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
   #dpro3d[hidden]{display:none}
-  .d3-top{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;background:#161b22;border-bottom:1px solid #2a313b}
-  .d3-top h3{margin:0 8px 0 0;font-size:15px;font-weight:700}
-  .d3-btn{background:#232a34;color:#EDEDED;border:1px solid #37404d;border-radius:8px;padding:7px 11px;font-size:13px;cursor:pointer;touch-action:manipulation}
+  .d3-top{display:flex;gap:8px;align-items:center;padding:8px 10px;background:#161b22;border-bottom:1px solid #2a313b}
+  .d3-top h3{margin:0;font-size:15px;font-weight:700;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .d3-btn{background:#232a34;color:#EDEDED;border:1px solid #37404d;border-radius:10px;padding:9px 13px;font-size:13.5px;font-family:inherit;cursor:pointer;touch-action:manipulation;min-height:40px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
   .d3-btn.on{background:#2F7F9E;border-color:#5BB6D6;color:#fff}
-  .d3-btn:active{filter:brightness(1.2)}
-  .d3-sp{flex:1}
-  #d3-wrap{position:relative;flex:1;min-height:0}
+  .d3-btn:active{filter:brightness(1.25)}
+  .d3-x{padding:9px 14px}
+  #d3-wrap{position:relative;flex:1;min-height:0;overflow:hidden}
   #d3-wrap canvas{display:block;width:100%;height:100%;touch-action:none;outline:none}
-  .d3-bottom{background:#161b22;border-top:1px solid #2a313b;padding:8px 10px;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;font-size:12.5px;max-height:38vh;overflow:auto}
-  .d3-grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-  .d3-grp label{color:#9fb0c3}
-  .d3-grp select,.d3-grp input[type=range]{accent-color:#5BB6D6}
-  .d3-grp select{background:#232a34;color:#EDEDED;border:1px solid #37404d;border-radius:6px;padding:5px}
-  .d3-grp input[type=range]{width:150px}
-  .d3-time{min-width:150px}
+  .d3-fab{position:absolute;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px}
+  .d3-fab button,.d3-turn button.d3-round{width:48px;height:48px;border-radius:50%;background:rgba(22,27,34,.9);border:1px solid #3b4553;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:manipulation;padding:0;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+  .d3-fab button:active,.d3-turn button:active{background:#2F7F9E}
+  .d3-turn{position:absolute;left:10px;bottom:10px;display:flex;gap:8px;align-items:center}
+  .d3-turn .d3-tour{background:rgba(22,27,34,.9);border-radius:24px;height:48px;padding:0 16px;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+  .d3-turn .d3-tour.on{background:#2F7F9E}
   #d3-msg:empty{display:none}
-  #d3-msg{position:absolute;left:10px;top:10px;background:rgba(11,15,20,.78);padding:6px 10px;border-radius:8px;font-size:12px;max-width:70%;pointer-events:none}
-  #d3-pad{position:absolute;right:12px;bottom:12px;display:none;grid-template-columns:repeat(3,46px);grid-template-rows:repeat(2,46px);gap:6px}
+  #d3-msg{position:absolute;left:10px;right:70px;top:10px;background:rgba(11,15,20,.84);padding:9px 12px;border-radius:10px;font-size:13px;line-height:1.35;border:1px solid #2a313b;cursor:pointer}
+  #d3-info{position:absolute;left:50%;transform:translateX(-50%);bottom:68px;max-width:min(92%,420px);background:rgba(18,23,30,.96);border:1px solid #3b4553;border-radius:12px;padding:10px 12px;display:flex;gap:12px;align-items:center;box-shadow:0 4px 18px rgba(0,0,0,.5)}
+  #d3-info[hidden]{display:none}
+  #d3-info b{display:block;font-size:14.5px}
+  #d3-info span{display:block;font-size:12.5px;color:#9fb0c3;margin-top:2px}
+  #d3-info button{background:none;border:0;color:#9fb0c3;cursor:pointer;padding:6px}
+  #d3-pad{position:absolute;right:68px;bottom:12px;display:none;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(2,48px);gap:6px}
   #d3-pad.show{display:grid}
-  #d3-pad button{background:rgba(35,42,52,.85);border:1px solid #37404d;border-radius:10px;color:#fff;font-size:18px;touch-action:none}
+  #d3-pad button{background:rgba(35,42,52,.9);border:1px solid #3b4553;border-radius:12px;color:#fff;font-size:18px;touch-action:none}
   #d3-loading[hidden]{display:none}
-  #d3-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:15px;background:#0b0f14}
+  #d3-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:15px;background:#0b0f14;z-index:3}
+  .d3-dock{background:#161b22;border-top:1px solid #2a313b;flex:none}
+  .d3-tabs{display:flex;align-items:stretch}
+  .d3-tab{flex:1;min-width:0;padding:9px 4px;font-size:13px;font-family:inherit;background:none;border:0;border-bottom:3px solid transparent;color:#9fb0c3;cursor:pointer;touch-action:manipulation;white-space:nowrap}
+  .d3-tab.on{color:#fff;border-bottom-color:#5BB6D6;font-weight:700}
+  .d3-fold{flex:none;width:46px;display:flex;align-items:center;justify-content:center}
+  .d3-dock.folded .d3-fold svg{transform:rotate(180deg)}
+  .d3-panel{display:none;padding:8px 10px 10px;max-height:36vh;overflow:auto}
+  .d3-dock:not(.folded) .d3-panel.show{display:block}
+  .d3-row{display:flex;gap:8px;align-items:center;margin-bottom:7px;flex-wrap:wrap}
+  .d3-row:last-child{margin-bottom:0}
+  .d3-lbl{font-size:12px;color:#9fb0c3;width:64px;flex:none}
+  .d3-seg{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
+  .d3-seg .d3-btn{flex:1 1 74px;padding:8px 6px}
+  .d3-row select{background:#232a34;color:#EDEDED;border:1px solid #37404d;border-radius:8px;padding:9px;font-size:14px;min-height:42px}
+  .d3-row input[type=range]{accent-color:#5BB6D6;flex:1;min-width:120px;height:32px}
+  .d3-time{font-size:12.5px;color:#cfd8e3;min-width:150px}
+  .d3-note{font-size:12px;color:#8fa0b4;margin:2px 0 0}
+  #dpro3d.walking #d3-tour{display:none}
+  @media (max-width:560px){.d3-lbl{width:100%}.d3-fab button,.d3-turn button.d3-round{width:46px;height:46px}.d3-panel{max-height:40vh}}
   `;
   document.head.appendChild(css);
 
@@ -1053,26 +1520,70 @@ function mulberry32(seed) {
   modal.innerHTML = `
     <div class="d3-top">
       <h3>3D view</h3>
-      <button class="d3-btn on" data-view="aerial" type="button">Aerial</button>
-      <button class="d3-btn" data-view="top" type="button">Top</button>
-      <button class="d3-btn" data-view="front" type="button">Front</button>
-      <button class="d3-btn" data-view="walk" type="button">Walk through</button>
-      <span class="d3-sp"></span>
       <button class="d3-btn" id="d3-save" type="button">Save image</button>
-      <button class="d3-btn" id="d3-close" type="button">Close</button>
+      <button class="d3-btn d3-x" id="d3-close" type="button" aria-label="Close 3D view">${ICON.close} Close</button>
     </div>
     <div id="d3-wrap"><div id="d3-loading">Building the 3D model...</div><div id="d3-msg"></div>
+      <div class="d3-fab">
+        <button id="d3-zin" type="button" aria-label="Zoom in">${ICON.plus}</button>
+        <button id="d3-zout" type="button" aria-label="Zoom out">${ICON.minus}</button>
+        <button id="d3-reset" type="button" aria-label="Reset the view">${ICON.home}</button>
+      </div>
+      <div class="d3-turn">
+        <button class="d3-round" id="d3-tl" type="button" aria-label="Turn left">${ICON.left}</button>
+        <button class="d3-round" id="d3-tr" type="button" aria-label="Turn right">${ICON.right}</button>
+        <button class="d3-btn d3-tour" id="d3-tour" type="button">${ICON.play}<span>Auto tour</span></button>
+      </div>
+      <div id="d3-info" hidden><div><b></b><span></span></div><button type="button" aria-label="Close">${ICON.close}</button></div>
       <div id="d3-pad"><span></span><button data-k="w" type="button">&uarr;</button><span></span><button data-k="a" type="button">&larr;</button><button data-k="s" type="button">&darr;</button><button data-k="d" type="button">&rarr;</button></div>
     </div>
-    <div class="d3-bottom">
-      <div class="d3-grp"><label>Plant size</label>
-        ${Object.keys(CATP.GROWTH_LABELS).map((k) => `<button class="d3-btn${k === 'mature' ? ' on' : ''}" data-growth="${k}" type="button">${CATP.GROWTH_LABELS[k]}</button>`).join('')}
+    <div class="d3-dock" id="d3-dock">
+      <div class="d3-tabs">
+        <button class="d3-tab on" data-d3tab="view" type="button">View</button>
+        <button class="d3-tab" data-d3tab="time" type="button">Time</button>
+        <button class="d3-tab" data-d3tab="season" type="button">Season</button>
+        <button class="d3-tab" data-d3tab="plants" type="button">Plants</button>
+        <button class="d3-tab" data-d3tab="show" type="button">Show</button>
+        <button class="d3-tab d3-fold" id="d3-fold" type="button" aria-label="Hide or show the controls">${ICON.fold}</button>
       </div>
-      <div class="d3-grp"><label for="d3-month">Month</label><select id="d3-month">${MONTHS.map((m, i) => `<option value="${i}">${m}</option>`).join('')}</select>
-        <label for="d3-hour">Sun</label><input id="d3-hour" type="range" min="5" max="22" step="0.25" value="15" /><span class="d3-time" id="d3-time"></span></div>
-      <div class="d3-grp"><button class="d3-btn" id="d3-night" type="button">Night lighting</button>
-        <button class="d3-btn" id="d3-labels" type="button">Plant labels</button>
-        <button class="d3-btn" id="d3-irr" type="button">Sprinklers</button></div>
+      <div class="d3-panel show" data-d3panel="view">
+        <div class="d3-row"><span class="d3-lbl">View</span><div class="d3-seg">
+          <button class="d3-btn on" data-view="aerial" type="button">Aerial</button>
+          <button class="d3-btn" data-view="top" type="button">Top-down</button>
+          <button class="d3-btn" data-view="walk" type="button">Walk through</button></div></div>
+        <div class="d3-row"><span class="d3-lbl">Look from</span><div class="d3-seg">
+          <button class="d3-btn" data-view="front" type="button" title="From the bottom edge of the plan">Front</button>
+          <button class="d3-btn" data-view="right" type="button">Right</button>
+          <button class="d3-btn" data-view="back" type="button">Back</button>
+          <button class="d3-btn" data-view="left" type="button">Left</button></div></div>
+      </div>
+      <div class="d3-panel" data-d3panel="time">
+        <div class="d3-row"><span class="d3-lbl">Light</span><div class="d3-seg">
+          <button class="d3-btn" data-hour="8" type="button">Morning</button>
+          <button class="d3-btn" data-hour="12.5" type="button">Midday</button>
+          <button class="d3-btn" data-hour="16" type="button">Afternoon</button>
+          <button class="d3-btn" data-hour="19.5" type="button">Evening</button>
+          <button class="d3-btn" id="d3-night" type="button">Night lighting</button></div></div>
+        <div class="d3-row"><span class="d3-lbl">Sun</span><input id="d3-hour" type="range" min="5" max="22" step="0.25" value="15" aria-label="Time of day" /><span class="d3-time" id="d3-time"></span></div>
+      </div>
+      <div class="d3-panel" data-d3panel="season">
+        <div class="d3-row"><span class="d3-lbl">Season</span><div class="d3-seg">
+          <button class="d3-btn" data-season="4" type="button">Spring</button>
+          <button class="d3-btn" data-season="6" type="button">Summer</button>
+          <button class="d3-btn" data-season="9" type="button">Fall</button>
+          <button class="d3-btn" data-season="0" type="button">Winter</button></div></div>
+        <div class="d3-row"><span class="d3-lbl">Month</span><select id="d3-month" aria-label="Month">${MONTHS.map((m, i) => `<option value="${i}">${m}</option>`).join('')}</select></div>
+      </div>
+      <div class="d3-panel" data-d3panel="plants">
+        <div class="d3-row"><span class="d3-lbl">Plant size</span><div class="d3-seg">
+          ${Object.keys(CATP.GROWTH_LABELS).map((k) => `<button class="d3-btn${k === 'mature' ? ' on' : ''}" data-growth="${k}" type="button">${CATP.GROWTH_LABELS[k]}</button>`).join('')}</div></div>
+        <p class="d3-note">See how the plants look when they are first installed and as they grow in.</p>
+      </div>
+      <div class="d3-panel" data-d3panel="show">
+        <div class="d3-row"><span class="d3-lbl">Show</span><div class="d3-seg">
+          <button class="d3-btn" id="d3-labels" type="button">Plant names</button>
+          <button class="d3-btn" id="d3-irr" type="button">Sprinklers</button></div></div>
+      </div>
     </div>`;
   document.body.appendChild(modal);
 
@@ -1111,7 +1622,7 @@ function mulberry32(seed) {
     else if (deg > 12) bg = new THREE.Color('#9CCBF0');
     else bg = lerpColor('#0E1630', deg > 0 ? '#F2B27A' : '#2A2F55', (deg + 8) / 20).lerp(new THREE.Color('#9CCBF0'), Math.max(0, (deg - 4) / 12));
     scene.background = bg; scene.fog.color.copy(bg);
-    ground.material.color.set(night ? '#27402B' : '#86A76F');
+    ground.material.color.set(ground.material.map ? (night ? '#6f8f75' : '#d3e4c2') : (night ? '#27402B' : '#86A76F'));
     const label = $('d3-time'); if (label) label.textContent = `${fmtHour(state.hour)} · sun ${deg > 0 ? Math.round(deg) + '° high' : 'below horizon'}`;
     spots.forEach((sp) => { sp.visible = night; });
     dirty = true;
@@ -1156,6 +1667,128 @@ function mulberry32(seed) {
   }
   const matCache = {};
   const std = (key, opts) => matCache[key] || (matCache[key] = new THREE.MeshStandardMaterial(Object.assign({ roughness: 0.95, metalness: 0 }, opts)));
+
+  // ---- realistic ground surfaces (rock, gravel, mulch, lawn, pavers ... from design-materials.js) ----
+  const PBR = {};
+  function matMaps(key) {
+    if (PBR[key] !== undefined) return PBR[key];
+    const M = DPRO.mat; const t = M && M.tex(key);
+    if (!t) return (PBR[key] = null);
+    const mk = (cv, srgb) => { const tx = new THREE.CanvasTexture(cv); tx.wrapS = tx.wrapT = THREE.RepeatWrapping; if (srgb) tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 8; tx.repeat.set(1 / t.ft, 1 / t.ft); return tx; };
+    return (PBR[key] = { map: mk(t.canvas, true), bump: mk(t.height, false), ft: t.ft });
+  }
+  const SURF_KEY = { lawn: 'lawn', turf: 'turf', hardscape: 'conc', driveway: 'conc', pavers: 'pavers', flagstone: 'flagstone', deck: 'deck' };
+  const SURF_ROUGH = { lawn: 1, turf: 0.95, conc: 0.92, pavers: 0.85, flagstone: 0.8, deck: 0.62 };
+  const SURF_BUMP = { lawn: 1.1, turf: 0.8, conc: 0.5, pavers: 1.3, flagstone: 1.8, deck: 0.9 };
+  function surfaceMat(el) {
+    const M = DPRO.mat; const sub = el.subtype;
+    let key = null;
+    if (M && (sub === 'bed' || sub === 'gravel')) key = M.keyFor(el); else if (SURF_KEY[sub]) key = SURF_KEY[sub];
+    const mp = key && matMaps(key);
+    if (!mp) return null;
+    const m = M && M.by[key];
+    return std('pbr-' + key, { map: mp.map, bumpMap: mp.bump, bumpScale: m ? m.bump * 0.55 : (SURF_BUMP[key] || SURF_BUMP[sub] || 1), roughness: m ? m.rough : (SURF_ROUGH[key] || 0.9) });
+  }
+  function inPoly(pts, x, z) {
+    let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const a = pts[i], b = pts[j]; if ((a.z > z) !== (b.z > z) && x < ((b.x - a.x) * (z - a.z)) / (b.z - a.z) + a.x) c = !c;
+    } return c;
+  }
+  function polyAreaFt(pts) { let a = 0; for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; a += p.x * q.z - q.x * p.z; } return Math.abs(a) / 2; }
+  let stoneBudget = 0;
+  const stoneGeo = {};
+  function stoneGeometry(kind) {
+    if (stoneGeo[kind]) return stoneGeo[kind];
+    const R = DPRO.mat.rng(kind === 'round' ? 11 : 12);
+    const geo = kind === 'round' ? new THREE.SphereGeometry(0.5, 9, 6) : new THREE.IcosahedronGeometry(0.5, 1);
+    const pos = geo.attributes.position; const jit = new Map();
+    for (let i = 0; i < pos.count; i++) {
+      const key = pos.getX(i).toFixed(3) + ',' + pos.getY(i).toFixed(3) + ',' + pos.getZ(i).toFixed(3);
+      if (!jit.has(key)) jit.set(key, 0.84 + R() * (kind === 'round' ? 0.2 : 0.34));
+      const k = jit.get(key); pos.setXYZ(i, pos.getX(i) * k, pos.getY(i) * k, pos.getZ(i) * k);
+    }
+    geo.computeVertexNormals(); return (stoneGeo[kind] = geo);
+  }
+  function scatterStones(pts, topY, m, g, seed) {
+    const diam = m.d3; const area = polyAreaFt(pts); if (area < 1 || stoneBudget <= 0) return;
+    let want = Math.round((area * (m.cover || 0.5)) / (Math.PI * (diam / 2) * (diam / 2) * 0.9));
+    let n = Math.min(want, stoneBudget, 9000); if (n < 8) return;
+    const sc = Math.max(1, Math.min(2, Math.sqrt(want / n)));
+    stoneBudget -= n;
+    const geo = stoneGeometry(m.kind === 'round' ? 'round' : 'angular');
+    const mat = std('stones-' + m.key, { color: '#ffffff', roughness: m.rough, metalness: m.gloss ? 0.15 : 0 });
+    const im = new THREE.InstancedMesh(geo, mat, n); im.receiveShadow = true; im.castShadow = false;
+    const R = DPRO.mat.rng(DPRO.mat.hashStr(m.key) + seed); const pal = m.pal.map((h) => new THREE.Color(h));
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; pts.forEach((p) => { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); });
+    const d = new THREE.Object3D(); const col = new THREE.Color(); let placed = 0, tries = 0;
+    while (placed < n && tries < n * 14) {
+      tries++; const x = x0 + R() * (x1 - x0), z = z0 + R() * (z1 - z0); if (!inPoly(pts, x, z)) continue;
+      const s = diam * sc * (0.7 + R() * 0.65), flat = 0.42 + R() * 0.3;
+      d.position.set(x, topY + s * flat * 0.18, z); d.rotation.set((R() - 0.5) * 0.5, R() * 6.283, (R() - 0.5) * 0.5);
+      d.scale.set(s * (0.85 + R() * 0.4), s * flat, s * (0.8 + R() * 0.35)); d.updateMatrix(); im.setMatrixAt(placed, d.matrix);
+      col.copy(pal[(R() * pal.length) | 0]).multiplyScalar(0.8 + R() * 0.35); im.setColorAt(placed, col); placed++;
+    }
+    im.count = placed; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    g.add(im);
+  }
+
+  // ---- boulders: lumpy, faceted rock with colour variation (no two alike) ----
+  const nz = (() => { // smooth 3D value noise
+    const h = (x, y, z) => { let n = (x * 374761393 + y * 668265263 + z * 2147483647) | 0; n = (n ^ (n >>> 13)) * 1274126177 | 0; return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
+    const sm = (t) => t * t * (3 - 2 * t);
+    return (x, y, z) => {
+      const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), xf = sm(x - xi), yf = sm(y - yi), zf = sm(z - zi);
+      const l = (a, b, t) => a + (b - a) * t;
+      return l(l(l(h(xi, yi, zi), h(xi + 1, yi, zi), xf), l(h(xi, yi + 1, zi), h(xi + 1, yi + 1, zi), xf), yf), l(l(h(xi, yi, zi + 1), h(xi + 1, yi, zi + 1), xf), l(h(xi, yi + 1, zi + 1), h(xi + 1, yi + 1, zi + 1), xf), yf), zf);
+    };
+  })();
+  function boulderMesh(el) {
+    const M = DPRO.mat; const rock = (M && M.rockBy[el.rock]) || { pal: ['#8d8f92', '#a4a6a9', '#7a7c80'], rough: 0.85, flat: true, key: 'granite' };
+    const R = M ? M.rng((el.seed || 1) * 97 + 5) : Math.random; const size = (el.sizeFt || 2.5) / 2;
+    const A = size * (0.95 + R() * 0.2), B = size * (0.62 + R() * 0.18), C = size * (0.85 + R() * 0.2);
+    const planes = []; const nPl = rock.flat ? 9 : 4;
+    for (let i = 0; i < nPl; i++) { const a = R() * 6.283, b = Math.acos(2 * R() - 1); const nx = Math.sin(b) * Math.cos(a), ny = Math.cos(b), nzz = Math.sin(b) * Math.sin(a); planes.push([nx, ny, nzz, (rock.flat ? 0.72 : 0.84) + R() * 0.16]); }
+    const off = R() * 50; const pal = rock.pal.map((h) => new THREE.Color(h));
+    const shape = (dx, dy, dz) => {
+      let l = Math.hypot(dx, dy, dz) || 1; dx /= l; dy /= l; dz /= l;
+      const nn = nz(dx * 1.6 + off, dy * 1.6, dz * 1.6) * 0.5 + nz(dx * 3.4 + off, dy * 3.4, dz * 3.4) * 0.25 + nz(dx * 7.5 + off, dy * 7.5, dz * 7.5) * 0.12;
+      let px = dx * A * (0.86 + nn * 0.3), py = dy * B * (0.86 + nn * 0.3), pz = dz * C * (0.86 + nn * 0.3);
+      for (const [nx, ny, nzz, c] of planes) { const t = (px * nx + py * ny + pz * nzz) / size; if (t > c) { const k = c / t; px *= k; py *= k; pz *= k; } }
+      if (py < -B * 0.55) py = -B * 0.55 - (-B * 0.55 - py) * 0.1; // flat-ish underside
+      return [px, py, pz];
+    };
+    const SEG_U = rock.flat ? 64 : 48, SEG_V = rock.flat ? 44 : 32, geo = new THREE.SphereGeometry(1, SEG_U, SEG_V); const pos = geo.attributes.position; const nor = geo.attributes.normal;
+    const colors = new Float32Array(pos.count * 3); const e = 0.012;
+    for (let i = 0; i < pos.count; i++) {
+      const dx = pos.getX(i), dy = pos.getY(i), dz = pos.getZ(i);
+      const p = shape(dx, dy, dz); pos.setXYZ(i, p[0], p[1], p[2]);
+      // normal from the shape itself (so seams and poles match)
+      let tx, ty, tz; if (Math.abs(dy) < 0.9) { tx = -dz; ty = 0; tz = dx; } else { tx = 1; ty = 0; tz = 0; }
+      const tl = Math.hypot(tx, ty, tz); tx /= tl; ty /= tl; tz /= tl;
+      const bx = dy * tz - dz * ty, by = dz * tx - dx * tz, bz = dx * ty - dy * tx;
+      const p1 = shape(dx + tx * e, dy + ty * e, dz + tz * e), p2 = shape(dx + bx * e, dy + by * e, dz + bz * e);
+      const u = [p1[0] - p[0], p1[1] - p[1], p1[2] - p[2]], v = [p2[0] - p[0], p2[1] - p[1], p2[2] - p[2]];
+      let nx = u[1] * v[2] - u[2] * v[1], ny = u[2] * v[0] - u[0] * v[2], nzz = u[0] * v[1] - u[1] * v[0]; const nl = Math.hypot(nx, ny, nzz) || 1; nx /= nl; ny /= nl; nzz /= nl;
+      if (nx * dx + ny * dy + nzz * dz < 0) { nx = -nx; ny = -ny; nzz = -nzz; }
+      nor.setXYZ(i, nx, ny, nzz);
+      // colour: blotches + strata + dark cracks + a little lichen on top
+      const q = nz(p[0] * 1.3 + off, p[1] * 1.3, p[2] * 1.3), q2 = nz(p[0] * 5 + off, p[1] * 5, p[2] * 5);
+      const c = pal[Math.min(pal.length - 1, Math.floor(q * pal.length))].clone().lerp(pal[(Math.floor(q2 * pal.length)) % pal.length], 0.45);
+      if (rock.key === 'sandstone' || rock.key === 'redstone' || rock.key === 'limestone') c.multiplyScalar(0.86 + 0.18 * Math.sin(p[1] * 7 + q * 5));
+      c.multiplyScalar(0.85 + 0.3 * q2);
+      if (rock.key === 'moss' || (rock.key === 'granite' && q2 > 0.66)) { const top = Math.max(0, ny); const mw = nz(p[0] * 3 + off, p[1] * 3, p[2] * 3) * top; if (mw > (rock.key === 'moss' ? 0.28 : 0.4)) c.lerp(new THREE.Color(rock.key === 'moss' ? '#5f7a3f' : '#7d8f5c'), rock.key === 'moss' ? 0.75 : 0.45); }
+      if (rock.key === 'lava') { c.multiplyScalar(0.7 + 0.5 * Math.max(0, nz(p[0] * 9 + off, p[1] * 9, p[2] * 9) - 0.5) * 2); }
+      const cav = (Math.hypot(p[0] / A, p[1] / B, p[2] / C) < 0.8) ? 0.8 : 1; c.multiplyScalar(cav);
+      colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: rock.rough, metalness: 0 });
+    const mesh = new THREE.Mesh(geo, mat); mesh.castShadow = true; mesh.receiveShadow = true;
+    mesh.rotation.y = -(el.rotationDeg || 0) * Math.PI / 180;
+    mesh.position.set(el.x / pxPerFt, B * 0.5 + 0.04, el.y / pxPerFt);
+    mesh.userData.pick = { title: rock.name || 'Boulder', sub: (el.sizeFt || 2.5) + ' ft boulder' };
+    return mesh;
+  }
 
   // ======================= Geometry helpers =======================
   const ftPts = (el) => { const out = []; for (let i = 0; i < el.points.length; i += 2) out.push({ x: el.points[i] / pxPerFt, z: el.points[i + 1] / pxPerFt }); return out; };
@@ -1281,6 +1914,7 @@ function mulberry32(seed) {
     const gf = (CATP.GROWTH[state.growth] || CATP.GROWTH.mature)[plant.category] || 1;
     const h = Math.max(0.4, plant.heightFt * gf), w = Math.max(0.5, plant.spreadFt * gf), x = el.x / pxPerFt, z = el.y / pxPerFt;
     const grp = new THREE.Group(); grp.position.set(x, 0, z);
+    grp.userData.pick = { title: plant.name, sub: plant.category + ' \u00b7 about ' + Math.round(h) + ' ft tall x ' + Math.round(w) + ' ft wide' + (CATP.GROWTH_LABELS && state.growth !== 'mature' ? ' (' + CATP.GROWTH_LABELS[state.growth] + ')' : ' when mature') };
     const { color, bare } = seasonTint(plant);
     const seed = (x * 12.9898 + z * 78.233) % 6.28;
     let top = h, used = false;
@@ -1436,7 +2070,7 @@ function mulberry32(seed) {
     elements.forEach((e) => {
       if (e.points) for (let i = 0; i < e.points.length; i += 2) add(e.points[i] / pxPerFt, e.points[i + 1] / pxPerFt);
       else if (typeof e.x === 'number') {
-        let rr = 0; if (e.type === 'plant') { const pl = CATP.PLANT_CATALOG.find((p) => p.key === e.plantKey); if (pl) { rr = pl.spreadFt / 2; tall = Math.max(tall, pl.heightFt * ((CATP.GROWTH[state.growth] || CATP.GROWTH.mature)[pl.category] || 1)); } }
+        let rr = 0; if (e.type === 'boulder') rr = (e.sizeFt || 2.5) / 2; if (e.type === 'plant') { const pl = CATP.PLANT_CATALOG.find((p) => p.key === e.plantKey); if (pl) { rr = pl.spreadFt / 2; tall = Math.max(tall, pl.heightFt * ((CATP.GROWTH[state.growth] || CATP.GROWTH.mature)[pl.category] || 1)); } }
         add(e.x / pxPerFt - rr, e.y / pxPerFt - rr); add(e.x / pxPerFt + rr, e.y / pxPerFt + rr);
       }
     });
@@ -1446,9 +2080,10 @@ function mulberry32(seed) {
   function buildScene() {
     if (root) { scene.remove(root); root.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
     spots.forEach((s) => { if (s.parent) s.parent.remove(s); }); spots = [];
+    { const inf = $('d3-info'); if (inf) inf.hidden = true; }
     root = new THREE.Group(); scene.add(root);
     const info = { buildings: [], barriers: [], litCount: 0 };
-    let idx = 0;
+    let idx = 0; stoneBudget = 7000;
     // surfaces first, then buildings/barriers (mounting heights), then plants, then lights
     elements.forEach((el) => {
       if (el.type !== 'area' || !el.points || el.points.length < 6) return;
@@ -1457,20 +2092,29 @@ function mulberry32(seed) {
       const pts = ftPts(el);
       if (el.subtype === 'boundary') { const ln = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts.map((p) => new THREE.Vector3(p.x, 0.2, p.z))), new THREE.LineBasicMaterial({ color: '#E5E5E5' })); root.add(ln); return; }
       const top = (LIFT[el.subtype] || 0.1) + idx * 0.0008;
-      let topMat;
-      if (el.subtype === 'bed') topMat = std('bed-' + (el.surface || 'bark'), { map: planTex({ rock: 'rock', soil: 'soil' }[el.surface] || 'bark'), roughness: 1 });
-      else if (SURF[el.subtype]) topMat = el.subtype === 'water' ? new THREE.MeshStandardMaterial({ map: planTex('water'), roughness: 0.15, metalness: 0.25, transparent: true, opacity: 0.88 }) : std('surf-' + el.subtype, { map: planTex(SURF[el.subtype]) });
-      else topMat = std('surf-default', { color: '#B5B0A0' });
-      const side = el.subtype === 'deck' ? std('deck-side', { color: '#6B4A2A' }) : std('slab-side', { color: '#6F6F68' });
-      root.add(slab(pts, top, el.subtype === 'deck' ? 0 : 0, topMat, side));
+      let topMat = surfaceMat(el);
+      if (!topMat) {
+        if (el.subtype === 'bed') topMat = std('bed-' + (el.surface || 'bark'), { map: planTex({ rock: 'rock', soil: 'soil' }[el.surface] || 'bark'), roughness: 1 });
+        else if (SURF[el.subtype]) topMat = el.subtype === 'water' ? new THREE.MeshStandardMaterial({ map: planTex('water'), roughness: 0.15, metalness: 0.25, transparent: true, opacity: 0.88 }) : std('surf-' + el.subtype, { map: planTex(SURF[el.subtype]) });
+        else topMat = std('surf-default', { color: '#B5B0A0' });
+      }
+      const side = el.subtype === 'deck' ? std('deck-side', { color: '#6B4A2A' }) : (el.subtype === 'bed' || el.subtype === 'gravel') && DPRO.mat ? std('edge-' + DPRO.mat.keyFor(el), { color: new THREE.Color((DPRO.mat.by[DPRO.mat.keyFor(el)] || {}).base || '#4a3a2a').multiplyScalar(1.6) }) : std('slab-side', { color: '#6F6F68' });
+      const sl = slab(pts, top, 0, topMat, side);
+      const mk = DPRO.mat && (el.subtype === 'bed' || el.subtype === 'gravel') ? DPRO.mat.keyFor(el) : null; const mdef = mk && DPRO.mat.by[mk];
+      sl.userData.pick = { title: mdef ? mdef.name : ((CATP.AREA_PRESETS.find((p) => p.key === el.subtype) || {}).name || 'Surface'), sub: Math.round(polyAreaFt(pts)) + ' sq ft' + (el.label ? ' \u00b7 ' + el.label : '') };
+      root.add(sl);
+      if (mdef && mdef.d3) scatterStones(pts, top, mdef, root, idx);
     });
-    elements.forEach((el) => { if (el.type === 'area' && el.subtype === 'building') buildBuilding(el, root, info); });
-    elements.forEach((el) => { if (el.type === 'barrier' && el.points) buildBarrier(el, root, info); });
+    const tagged = (el, pick, fn) => { const n0 = root.children.length; fn(); for (let i = n0; i < root.children.length; i++) root.children[i].userData.pick = pick; };
+    elements.forEach((el) => { if (el.type === 'area' && el.subtype === 'building') tagged(el, { title: el.label || 'House / building', sub: Math.round(polyAreaFt(ftPts(el))) + ' sq ft footprint' }, () => buildBuilding(el, root, info)); });
+    elements.forEach((el) => { if (el.type === 'barrier' && el.points) { const bt = (CATP.BARRIER_TYPES || []).find((b) => b.key === el.subtype); tagged(el, { title: bt ? bt.name : 'Wall / fence', sub: (el.heightFt || (bt && bt.heightFt) || 0) + ' ft tall' }, () => buildBarrier(el, root, info)); } });
+    elements.forEach((el) => { if (el.type === 'boulder' && DPRO.mat) { try { const bm = boulderMesh(el); if (bm) root.add(bm); } catch (err) { console.warn('boulder failed', err); } } });
     elements.forEach((el) => { if (el.type === 'plant') { const pl = CATP.PLANT_CATALOG.find((p) => p.key === el.plantKey); if (pl) buildPlant(el, pl, root, info); } });
     if (state.irrigation) buildIrrigation(root);
     let budget = 6000;
-    elements.forEach((el) => { if (el.type === 'lightrun' && el.points) { buildLightRun(el, root, info, Math.max(300, budget / 4)); } });
-    elements.forEach((el) => { if (el.type === 'lightpoint') buildLightPoint(el, root, info); });
+    const lp = (k) => (DPRO.light && DPRO.light.P ? DPRO.light.P(k) : null);
+    elements.forEach((el) => { if (el.type === 'lightrun' && el.points) { const p = lp(el.key); tagged(el, { title: p ? p.name : 'Light run', sub: 'Lighting' }, () => buildLightRun(el, root, info, Math.max(300, budget / 4))); } });
+    elements.forEach((el) => { if (el.type === 'lightpoint') { const p = lp(el.key); tagged(el, { title: p ? p.name : 'Light', sub: 'Lighting fixture' }, () => buildLightPoint(el, root, info)); } });
     computeBounds();
     const sc = sun.shadow.camera, R = bounds.r * 1.25;
     sc.left = -R; sc.right = R; sc.top = R; sc.bottom = -R; sc.near = 1; sc.far = bounds.r * 8 + 400; sc.updateProjectionMatrix();
@@ -1480,21 +2124,30 @@ function mulberry32(seed) {
   }
 
   // ======================= Camera / controls =======================
-  function setView(name) {
-    state.view = name; walk.keys = {};
-    modal.querySelectorAll('[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === name));
-    $('d3-pad').classList.toggle('show', name === 'walk');
-    state.mode = name === 'walk' ? 'walk' : 'orbit';
-    cam.tx = bounds.cx; cam.tz = bounds.cz; cam.ty = 0;
-    // distance that just fits the design in the frame (works for wide and tall screens), so it opens close, not far away
+  let anim = null, tour = false;
+  const orbitTarget = (name) => {
     const asp = camera && camera.aspect ? camera.aspect : 1.6, fit = (bounds.r * 1.08) / (Math.tan((48 / 2) * Math.PI / 180) * Math.min(1, asp * 1.05));
     const kk = asp >= 1.2 ? 0.64 : 0.64 + (0.98 - 0.64) * Math.min(1, (1.2 - asp) / 0.7); // tall/narrow screens need more room
-    if (name === 'aerial') { cam.theta = 0.55; cam.phi = 0.95; cam.radius = fit * kk + 7; cam.ty = 1.5; }
-    else if (name === 'top') { cam.theta = 0; cam.phi = 0.03; cam.radius = fit * (kk + 0.06) + 7; }
-    else if (name === 'front') { cam.theta = 0; cam.phi = 1.38; cam.radius = fit * (kk + 0.06) + 7; cam.ty = 4; }
-    else if (name === 'walk') { walk.x = bounds.cx; walk.z = bounds.z1 - Math.min(10, (bounds.z1 - bounds.z0) * 0.15); walk.yaw = 0; walk.pitch = -0.05; }
-    updateCamera();
+    const T = { theta: 0.55, phi: 0.95, radius: fit * kk + 7, tx: bounds.cx, ty: 1.5, tz: bounds.cz };
+    if (name === 'top') Object.assign(T, { theta: 0, phi: 0.03, radius: fit * (kk + 0.06) + 7, ty: 0 });
+    else if (name === 'front' || name === 'right' || name === 'back' || name === 'left') Object.assign(T, { theta: { front: 0, right: Math.PI / 2, back: Math.PI, left: -Math.PI / 2 }[name], phi: 1.38, radius: fit * (kk + 0.06) + 7, ty: 4 });
+    return T;
+  };
+  function setView(name, animate) {
+    const was = state.mode; state.view = name; walk.keys = {}; anim = null;
+    modal.querySelectorAll('[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === name));
+    $('d3-pad').classList.toggle('show', name === 'walk'); modal.classList.toggle('walking', name === 'walk'); $('d3-info').hidden = true;
+    state.mode = name === 'walk' ? 'walk' : 'orbit';
+    if (name === 'walk') { tour = false; syncTour(); const hh = (bounds.z1 - bounds.z0) * 0.15; walk.x = bounds.cx; walk.z = bounds.z1 - Math.min(10, hh); walk.yaw = 0; walk.pitch = -0.05; updateCamera(); return; }
+    const T = orbitTarget(name);
+    if (animate && renderer && open && was === 'orbit') {
+      let dth = ((T.theta - cam.theta + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; // shortest way round
+      anim = { start: null, dur: 0.7, from: { theta: cam.theta, phi: cam.phi, radius: cam.radius, tx: cam.tx, ty: cam.ty, tz: cam.tz }, to: Object.assign({}, T, { theta: cam.theta + dth }) };
+      dirty = true; return;
+    }
+    Object.assign(cam, T); updateCamera();
   }
+  function syncTour() { const b = $('d3-tour'); if (!b) return; b.classList.toggle('on', tour); b.innerHTML = (tour ? ICON.pause : ICON.play) + '<span>' + (tour ? 'Stop tour' : 'Auto tour') + '</span>'; }
   function updateCamera() {
     if (!camera) return;
     if (state.mode === 'walk') {
@@ -1510,16 +2163,26 @@ function mulberry32(seed) {
   function bindPointer(el) {
     const ptrs = new Map(); let last = null;
     el.addEventListener('contextmenu', (e) => e.preventDefault());
-    el.addEventListener('pointerdown', (e) => { el.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, btn: e.button, shift: e.shiftKey }); last = null; });
-    el.addEventListener('pointerup', (e) => { ptrs.delete(e.pointerId); last = null; });
+    let tap = null;
+    el.addEventListener('pointerdown', (e) => {
+      el.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, btn: e.button, shift: e.shiftKey }); last = null;
+      anim = null; if (tour) { tour = false; syncTour(); }
+      if (ptrs.size === 1) tap = { x: e.clientX, y: e.clientY, t: performance.now(), moved: false, multi: false, btn: e.button }; else if (tap) tap.multi = true;
+    });
+    el.addEventListener('pointerup', (e) => {
+      const had = ptrs.delete(e.pointerId); last = null;
+      if (had && tap && !tap.multi && !tap.moved && ptrs.size === 0 && tap.btn === 0 && performance.now() - tap.t < 600) pickAt(e.clientX, e.clientY);
+      if (ptrs.size === 0) tap = null;
+    });
     el.addEventListener('pointercancel', (e) => { ptrs.delete(e.pointerId); last = null; });
     el.addEventListener('pointermove', (e) => {
       const p = ptrs.get(e.pointerId); if (!p) return;
       const dx = e.clientX - p.x, dy = e.clientY - p.y;
+      if (tap && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 7) tap.moved = true;
       if (ptrs.size === 2) {
         const [a, b] = [...ptrs.values()]; const d0 = Math.hypot(a.x - b.x, a.y - b.y); const mid0 = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         p.x = e.clientX; p.y = e.clientY; const d1 = Math.hypot(a.x - b.x, a.y - b.y); const mid1 = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-        if (state.mode === 'orbit') { if (d0 > 0) cam.radius = Math.max(8, Math.min(bounds.r * 8, cam.radius * (d0 / Math.max(1, d1)))); panBy(mid1.x - mid0.x, mid1.y - mid0.y); updateCamera(); }
+        if (state.mode === 'orbit') { if (d0 > 0) cam.radius = Math.max(5, Math.min(bounds.r * 8, cam.radius * (d0 / Math.max(1, d1)))); panBy(mid1.x - mid0.x, mid1.y - mid0.y); updateCamera(); }
         return;
       }
       p.x = e.clientX; p.y = e.clientY;
@@ -1531,7 +2194,7 @@ function mulberry32(seed) {
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
       if (state.mode === 'walk') { moveWalk(-e.deltaY * 0.02, 0); return; }
-      cam.radius = Math.max(8, Math.min(bounds.r * 8, cam.radius * Math.exp(e.deltaY * 0.0012))); updateCamera();
+      anim = null; cam.radius = Math.max(5, Math.min(bounds.r * 8, cam.radius * Math.exp(e.deltaY * 0.0012))); updateCamera();
     }, { passive: false });
   }
   function panBy(dx, dy) {
@@ -1553,6 +2216,16 @@ function mulberry32(seed) {
       if (turn) { walk.yaw += turn * dt * 1.6; updateCamera(); }
       if (f || sd) moveWalk(f * dt * 9, sd * dt * 9);
     }
+    if (state.mode === 'orbit' && renderer) {
+      const k = walk.keys; const tx = (k.arrowright ? 1 : 0) - (k.arrowleft ? 1 : 0), ty = (k.arrowdown ? 1 : 0) - (k.arrowup ? 1 : 0), zz = (k['+'] || k['='] ? 1 : 0) - (k['-'] || k['_'] ? 1 : 0);
+      if (tx || ty || zz) { anim = null; cam.theta += tx * dt * 1.4; cam.phi = Math.max(0.03, Math.min(1.54, cam.phi + ty * dt * 1.0)); cam.radius = Math.max(5, Math.min(bounds.r * 8, cam.radius * Math.exp(-zz * dt * 1.4))); updateCamera(); }
+      if (tour) { cam.theta += dt * 0.32; updateCamera(); }
+      if (anim) {
+        if (anim.start == null) anim.start = t; const u = Math.max(0, Math.min(1, (t - anim.start) / (anim.dur * 1000))), e2 = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+        ['theta', 'phi', 'radius', 'tx', 'ty', 'tz'].forEach((kk) => { cam[kk] = anim.from[kk] + (anim.to[kk] - anim.from[kk]) * e2; });
+        if (u >= 1) anim = null; updateCamera();
+      }
+    }
     if (dirty && renderer) {
       dirty = false; renderer.render(scene, camera);
       if (fixFrames > 0) { // after the scene is rebuilt, refresh shaders once so every plant/leaf shows up (lights change between day and night)
@@ -1566,7 +2239,7 @@ function mulberry32(seed) {
     if (down && e.key === 'Escape') { close(); return; }
     if (/INPUT|SELECT|TEXTAREA/.test((e.target.tagName || ''))) return;
     walk.keys[e.key.toLowerCase()] = down;
-    if (state.mode === 'walk' && /^arrow/i.test(e.key)) e.preventDefault();
+    if (/^arrow/i.test(e.key) || e.key === '+' || e.key === '-') e.preventDefault();
   }
   window.addEventListener('keydown', (e) => onKey(e, true));
   window.addEventListener('keyup', (e) => onKey(e, false));
@@ -1588,7 +2261,9 @@ function mulberry32(seed) {
     hemi = new THREE.HemisphereLight('#CFE3FF', '#6B7A55', 1.6); scene.add(hemi);
     sun = new THREE.DirectionalLight('#FFF4E0', 3); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.05;
     scene.add(sun); scene.add(sun.target);
-    ground = new THREE.Mesh(new THREE.CircleGeometry(900, 48), new THREE.MeshStandardMaterial({ color: '#86A76F', roughness: 1 }));
+    const gm = DPRO.mat && matMaps('lawn'); let gtx = null;
+    if (gm) { gtx = gm.map.clone(); gtx.needsUpdate = true; gtx.repeat.set(1800 / 5, 1800 / 5); }
+    ground = new THREE.Mesh(new THREE.CircleGeometry(900, 48), new THREE.MeshStandardMaterial(gtx ? { map: gtx, color: '#d3e4c2', roughness: 1 } : { color: '#86A76F', roughness: 1 }));
     ground.rotation.x = -Math.PI / 2; ground.position.y = -0.03; ground.receiveShadow = true; scene.add(ground);
     bindPointer(renderer.domElement);
     ro = new ResizeObserver(resize); ro.observe($('d3-wrap'));
@@ -1596,20 +2271,45 @@ function mulberry32(seed) {
   function openView() {
     if (open) return;
     open = true; modal.hidden = false; $('d3-loading').hidden = false; $('d3-loading').textContent = 'Building the 3D model...';
-    state.night = !!DPRO.extras.night; state.labels = false; state.irrigation = false;
+    state.night = !!DPRO.extras.night; state.labels = false; state.irrigation = false; tour = false; syncTour(); $('d3-info').hidden = true;
     syncButtons();
     loadThree().then(() => {
       init(); resize();
       computeBounds(); buildScene(); setView('aerial'); resize();
       $('d3-loading').hidden = true; dirty = true;
+      if (elements.length) say('Drag to turn. Pinch or scroll to zoom. Tap anything to see what it is.', 8000);
       if (!raf) raf = requestAnimationFrame(tick);
     }).catch((err) => { $('d3-loading').textContent = err.message || 'The 3D view could not start on this device.'; });
   }
-  function close() { open = false; modal.hidden = true; if (raf) cancelAnimationFrame(raf); raf = 0; walk.keys = {}; }
+  function close() { open = false; tour = false; anim = null; modal.hidden = true; if (raf) cancelAnimationFrame(raf); raf = 0; walk.keys = {}; }
+  function seasonOf(m) { return m >= 2 && m <= 4 ? 4 : m >= 5 && m <= 7 ? 6 : m >= 8 && m <= 10 ? 9 : 0; }
   function syncButtons() {
     $('d3-night').classList.toggle('on', state.night); $('d3-labels').classList.toggle('on', state.labels); $('d3-irr').classList.toggle('on', state.irrigation);
     modal.querySelectorAll('[data-growth]').forEach((b) => b.classList.toggle('on', b.dataset.growth === state.growth));
+    modal.querySelectorAll('[data-season]').forEach((b) => b.classList.toggle('on', Number(b.dataset.season) === seasonOf(state.month)));
+    modal.querySelectorAll('[data-hour]').forEach((b) => b.classList.toggle('on', !state.night && Math.abs(Number(b.dataset.hour) - state.hour) < 0.01));
     $('d3-month').value = String(state.month); $('d3-hour').value = String(state.hour);
+  }
+  let msgTimer = 0;
+  function say(text, ms) { const m = $('d3-msg'); if (!m) return; m.textContent = text; clearTimeout(msgTimer); if (ms) msgTimer = setTimeout(() => { if (m.textContent === text) m.textContent = ''; }, ms); }
+  function showTab(name) {
+    const dock = $('d3-dock'); const same = modal.querySelector('.d3-tab.on') && modal.querySelector('.d3-tab.on').dataset.d3tab === name;
+    if (same) { dock.classList.toggle('folded'); return; }
+    dock.classList.remove('folded');
+    modal.querySelectorAll('[data-d3tab]').forEach((b) => b.classList.toggle('on', b.dataset.d3tab === name));
+    modal.querySelectorAll('[data-d3panel]').forEach((p) => p.classList.toggle('show', p.dataset.d3panel === name));
+  }
+  // tap anything to see what it is
+  let ray = null;
+  function pickAt(cx, cy) {
+    const info = $('d3-info'); if (!renderer || !root) return;
+    const r = renderer.domElement.getBoundingClientRect(); if (!ray) ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);
+    const hits = ray.intersectObject(root, true); let found = null;
+    for (const h of hits) { let o = h.object; while (o) { if (o.userData && o.userData.pick) { found = o.userData.pick; break; } o = o.parent; } if (found) break; }
+    if (!found) { info.hidden = true; return; }
+    info.querySelector('b').textContent = found.title; info.querySelector('span').textContent = found.sub || ''; info.hidden = false;
+    clearTimeout(info._t); info._t = setTimeout(() => { info.hidden = true; }, 7000);
   }
   function snapshot() { if (!renderer) return null; renderer.render(scene, camera); return renderer.domElement.toDataURL('image/png'); }
   function download() {
@@ -1622,13 +2322,29 @@ function mulberry32(seed) {
   // ======================= Wire up UI =======================
   $('d3-close').addEventListener('click', close);
   $('d3-save').addEventListener('click', download);
-  modal.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
+  modal.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view, true)));
+  modal.querySelectorAll('[data-d3tab]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.d3tab)));
+  $('d3-fold').addEventListener('click', () => $('d3-dock').classList.toggle('folded'));
   modal.querySelectorAll('[data-growth]').forEach((b) => b.addEventListener('click', () => { state.growth = b.dataset.growth; syncButtons(); buildScene(); }));
-  $('d3-month').addEventListener('change', (e) => { state.month = Number(e.target.value); buildScene(); });
-  $('d3-hour').addEventListener('input', (e) => { state.hour = Number(e.target.value); applySun(); });
+  modal.querySelectorAll('[data-season]').forEach((b) => b.addEventListener('click', () => { state.month = Number(b.dataset.season); syncButtons(); buildScene(); }));
+  modal.querySelectorAll('[data-hour]').forEach((b) => b.addEventListener('click', () => { const wasNight = state.night; state.night = false; state.hour = Number(b.dataset.hour); syncButtons(); if (wasNight) buildScene(); else applySun(); }));
+  $('d3-month').addEventListener('change', (e) => { state.month = Number(e.target.value); syncButtons(); buildScene(); });
+  $('d3-hour').addEventListener('input', (e) => { state.hour = Number(e.target.value); const wasNight = state.night; if (wasNight) { state.night = false; syncButtons(); buildScene(); } else { syncButtons(); applySun(); } });
   $('d3-night').addEventListener('click', () => { state.night = !state.night; syncButtons(); buildScene(); });
   $('d3-labels').addEventListener('click', () => { state.labels = !state.labels; syncButtons(); buildScene(); });
   $('d3-irr').addEventListener('click', () => { state.irrigation = !state.irrigation; syncButtons(); buildScene(); });
+  $('d3-msg').addEventListener('click', () => { $('d3-msg').textContent = ''; });
+  $('d3-info').querySelector('button').addEventListener('click', () => { $('d3-info').hidden = true; });
+  // on-screen zoom / turn / reset / tour (hold a button to keep going)
+  function hold(btn, fn) {
+    let t = 0, iv = 0; const stop = () => { clearTimeout(t); clearInterval(iv); }; const go = (e) => { e.preventDefault(); anim = null; if (tour && btn.id !== 'd3-tour') { tour = false; syncTour(); } fn(); t = setTimeout(() => { iv = setInterval(fn, 70); }, 320); };
+    btn.addEventListener('pointerdown', go); ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => btn.addEventListener(ev, stop));
+  }
+  const zoomBy = (f) => () => { if (state.mode === 'walk') { moveWalk(f < 1 ? 1.2 : -1.2, 0); return; } cam.radius = Math.max(5, Math.min(bounds.r * 8, cam.radius * f)); updateCamera(); };
+  const turnBy = (d) => () => { if (state.mode === 'walk') { walk.yaw += d * 0.18; updateCamera(); return; } cam.theta += d * 0.12; updateCamera(); };
+  hold($('d3-zin'), zoomBy(0.93)); hold($('d3-zout'), zoomBy(1.075)); hold($('d3-tl'), turnBy(-1)); hold($('d3-tr'), turnBy(1));
+  $('d3-reset').addEventListener('click', () => { tour = false; syncTour(); setView(state.view === 'walk' ? 'aerial' : state.view, true); });
+  $('d3-tour').addEventListener('click', () => { if (state.mode === 'walk') setView('aerial'); tour = !tour; anim = null; syncTour(); });
   modal.querySelectorAll('#d3-pad [data-k]').forEach((b) => {
     const k = b.dataset.k;
     const on = (e) => { e.preventDefault(); walk.keys[k] = true; }, off = () => { walk.keys[k] = false; };
@@ -1662,7 +2378,7 @@ function mulberry32(seed) {
       if (wasOpen) resize();
     }
   }
-  DPRO.threeD = { open: openView, close, snapshot, capture, setView, state, rebuild: () => { if (scene) buildScene(); }, get ready() { return !!renderer; }, get scene() { return scene; } };
+  DPRO.threeD = { cam, walk, update: () => updateCamera(), project: (x, y, z) => { const r = renderer.domElement.getBoundingClientRect(); const v = new THREE.Vector3(x, y, z).project(camera); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; }, open: openView, close, snapshot, capture, setView, state, rebuild: () => { if (scene) buildScene(); }, get ready() { return !!renderer; }, get scene() { return scene; } };
 })();
 
 (function () {
@@ -1677,7 +2393,6 @@ function mulberry32(seed) {
       window.elements = Array.isArray(scene.elements) ? scene.elements : []; window.pxPerFt = Number(scene.pxPerFt) || 10;
       DPRO.extras.northDeg = Number(scene.northDeg) || 0; DPRO.extras.night = false;
       DPRO.threeD.open();
-      setTimeout(() => { const m = $('d3-msg'); if (m && window.elements.length) { m.textContent = 'Drag to look around. Pinch or scroll to zoom. Two fingers (or right-click drag) to move. Try "Walk through", other months, and Night lighting.'; setTimeout(() => { if (m.textContent.indexOf('Drag') === 0) m.textContent = ''; }, 9000); } }, 1800);
     },
   };
 })();

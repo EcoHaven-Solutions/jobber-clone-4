@@ -724,10 +724,16 @@
       return { canvas: c, ft: 6 };
     },
   };
-  function texture(name) { if (!texCache[name]) texCache[name] = TEXTURES[name](); return texCache[name]; }
+  function texture(name) {
+    if (!texCache[name]) {
+      const m = DPRO.mat && DPRO.mat.by && DPRO.mat.by[name]; // rock / gravel / mulch library (design-materials.js)
+      texCache[name] = m ? DPRO.mat.tex2d(name) : TEXTURES[name]();
+    }
+    return texCache[name];
+  }
   DPRO.texture = texture;
 
-  const SURFACE_FOR = { lawn: () => 'lawn', turf: () => 'turf', bed: (el) => ({ rock: 'rock', soil: 'soil' }[el.surface] || 'bark'), hardscape: () => 'conc', driveway: () => 'conc', pavers: () => 'pavers', gravel: () => 'gravel', deck: () => 'deck', building: () => 'roof', water: () => 'water' };
+  const SURFACE_FOR = { lawn: () => 'lawn', turf: () => 'turf', bed: (el) => (DPRO.mat ? DPRO.mat.keyFor(el) : ({ rock: 'rock', soil: 'soil' }[el.surface] || 'bark')), hardscape: () => 'conc', driveway: () => 'conc', pavers: () => 'pavers', gravel: (el) => (DPRO.mat ? DPRO.mat.keyFor(el) : 'gravel'), deck: () => 'deck', building: () => 'roof', water: () => 'water' };
   const STROKE_FOR = { lawn: '#4F7F3A', turf: '#3F7A2E', bed: '#6B4A2A', hardscape: '#7A7A74', driveway: '#85857F', pavers: '#8A7A6A', gravel: '#7D7868', deck: '#6B4A2A', building: '#2B2B2B', water: '#2E6FA6', flagstone: '#7A6F5C', boundary: '#1A1A1A' };
   const SHADOWED = { building: 1, deck: 0.6, hardscape: 0.4, pavers: 0.4, driveway: 0.3, flagstone: 0.3 };
 
