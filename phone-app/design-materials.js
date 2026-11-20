@@ -521,17 +521,20 @@
     for (let m = 0; m <= k; m++) { const d = (total * m) / k; let i = 1; while (i < n - 1 && cum[i] < d) i++; const a = cum[i - 1], b = cum[i], t = b > a ? (d - a) / (b - a) : 0; out.push(c[i * 2 - 2] + (c[i * 2] - c[i * 2 - 2]) * t, c[i * 2 - 1] + (c[i * 2 + 1] - c[i * 2 - 1]) * t); }
     return out;
   }
+  // a traditional irregular flagstone: a chunky 7-9 sided piece with chipped corners and uneven edges
   function naturalPoly(hl, hw, R, ppf) {
-    const j = (m) => (R() - 0.5) * 2 * m * ppf, c = (lo, hi) => (lo + R() * (hi - lo)) * ppf; const taper = 1 - 0.14 * R(), taper2 = 1 - 0.1 * R();
-    const cor = [[-1, -1], [1, -1], [1, 1], [-1, 1]], dir = [[1, 0], [0, 1], [-1, 0], [0, -1]]; const pts = [];
-    const k = Math.min(1, (hl * 2) / (3 * ppf), (hw * 2) / (2 * ppf)); // chips scale down on small stones
-    cor.forEach(([sx, sy], i) => {
-      const X = sx * hl, Y = sy * hw * (sx > 0 ? taper : taper2), din = dir[(i + 3) % 4], dout = dir[i]; const a = c(0.1, 0.34) * k, b = c(0.1, 0.34) * k;
-      pts.push([X - din[0] * a + j(0.04), Y - din[1] * a + j(0.04)], [X + dout[0] * b + j(0.04), Y + dout[1] * b + j(0.04)]);
-      const nx = cor[(i + 1) % 4], mx = (X + nx[0] * hl) / 2 + j(0.1), my = (Y + nx[1] * hw) / 2 + j(0.1); pts.push([mx + (dout[1] ? 0 : 0), my]);
-    });
-    // order: corner i out-point, then mid of the edge, then next corner's in-point -> rebuild in order
-    const out = []; for (let i = 0; i < 4; i++) { const o = pts[i * 3 + 1], m = pts[i * 3 + 2], nin = pts[((i + 1) % 4) * 3]; out.push(o, m, nin); } return out;
+    const N = 6 + Math.floor(R() * 3); const raw = [];
+    const start = R() * (Math.PI * 2 / N);
+    for (let k = 0; k < N; k++) {
+      const th = start + ((k + (R() - 0.5) * 0.55) / N) * Math.PI * 2, c = Math.cos(th), sn = Math.sin(th);
+      const r = Math.min(hl / Math.max(Math.abs(c), 1e-3), hw / Math.max(Math.abs(sn), 1e-3)); // out to the edge of the box
+      const corner = Math.abs(c) * hw > 0.55 * hl * Math.abs(sn) && Math.abs(sn) * hl > 0.55 * hw * Math.abs(c); // near a corner of the box
+      const f = corner ? (R() < 0.45 ? 0.66 + 0.12 * R() : 0.88 + 0.12 * R()) : 0.93 + 0.07 * R();
+      raw.push([c * r * f, sn * r * f]);
+    }
+    let mx = 0, my = 0; raw.forEach(([x, y]) => { mx = Math.max(mx, Math.abs(x)); my = Math.max(my, Math.abs(y)); });
+    const sx = hl / (mx || 1), sy = hw / (my || 1);
+    return raw.map(([x, y]) => [x * sx + (R() - 0.5) * 0.02 * ppf, y * sy + (R() - 0.5) * 0.02 * ppf]);
   }
   function stoneLayout(el, ppf) {
     if (!layoutOk(el)) return null; const sp = flagSpec(el); if (sp.style === 'fill') return null;
@@ -718,7 +721,7 @@
     if (isPath) {
       h += `<div class="design-tool-group-label" style="margin-top:10px">Path</div><div class="dpm-row"><label class="dpm-price">Width (ft) <input id="fl-width" type="number" min="1" max="12" step="0.5" value="${flagArm.width}" /></label><button type="button" class="dpm-chip${flagArm.curved ? ' on' : ''}" id="fl-curved">Smooth curves</button></div>`;
     }
-    h += '<p class="empty-sub" style="margin-top:12px;opacity:.6">Flagstone tools v8: bendable stepping stones</p>';
+    h += '<p class="empty-sub" style="margin-top:12px;opacity:.6">Flagstone tools v9: bendable stepping stones</p>';
     flagSec.innerHTML = h;
     const again = () => renderFlagCatalog(tool);
     flagSec.querySelectorAll('[data-fstyle]').forEach((b) => b.addEventListener('click', () => { flagArm.style = b.dataset.fstyle; if (isPath) flagArm.width = F.styleWidth[flagArm.style] || 3; again(); }));
