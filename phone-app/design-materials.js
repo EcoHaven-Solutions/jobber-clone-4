@@ -294,7 +294,7 @@
       infill: (BY[el.infill] || el.infill === 'lawn') ? el.infill : FLAGDEF.infill,
       joint: clamp(Number(el.joint) || FLAGDEF.joint, 0.5, 12),
       // older paths that used the 'Stepping stones' layout become two big stones side by side
-      style: FLAG_STYLES.some((p) => p[0] === el.style) ? el.style : (el.type === 'stonepath' && el.pattern === 'stepping' ? 'pairs' : 'fill'),
+      style: FLAG_STYLES.some((p) => p[0] === el.style) ? el.style : (layoutOk(el) && el.pattern === 'stepping' ? 'pairs' : 'fill'),
       cut: el.cut === 'natural' ? 'natural' : 'square',
       len: FLAG_LENS.includes(Number(el.stoneLen)) ? Number(el.stoneLen) : 2,
     };
@@ -440,36 +440,104 @@
     return { canvas: t.canvas, height: t.height, ft: 4, canvas2d: c2, ft2d: 4 };
   }
 
-  // Individually placed stones along a path: one big paver, two side by side, or a zipper.
-  // Returns stones in plan pixels: centre, direction, and an outline relative to the centre.
+  // ---- centre line of a path-shaped outline (so stones can follow whatever shape you draw) ----
+  function ptInPoly(pts, x, y) { let c = false; const n = pts.length / 2; for (let i = 0, j = n - 1; i < n; j = i++) { const ax = pts[i * 2], ay = pts[i * 2 + 1], bx = pts[j * 2], by = pts[j * 2 + 1]; if ((ay > y) !== (by > y) && x < ((bx - ax) * (y - ay)) / (by - ay) + ax) c = !c; } return c; }
+  class Heap { constructor() { this.k = []; this.v = []; } get size() { return this.k.length; }
+    push(key, val) { const k = this.k, v = this.v; let i = k.length; k.push(key); v.push(val); while (i > 0) { const p = (i - 1) >> 1; if (k[p] <= key) break; k[i] = k[p]; v[i] = v[p]; i = p; } k[i] = key; v[i] = val; }
+    pop() { const k = this.k, v = this.v, topV = v[0], lk = k.pop(), lv = v.pop(); const n = k.length; if (n) { let i = 0; for (;;) { let c = 2 * i + 1; if (c >= n) break; if (c + 1 < n && k[c + 1] < k[c]) c++; if (k[c] >= lk) break; k[i] = k[c]; v[i] = v[c]; i = c; } k[i] = lk; v[i] = lv; } return topV; } }
+  const NB = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [-1, 1, 1.4142], [1, -1, 1.4142], [-1, -1, 1.4142]];
+  function dijk(nx, ny, inside, src, costAt) {
+    const N = nx * ny, dist = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), h = new Heap(); dist[src] = 0; h.push(0, src);
+    while (h.size) { const u = h.pop(); const ux = u % nx, uy = (u / nx) | 0; const du = dist[u];
+      for (let k = 0; k < 8; k++) { const vx = ux + NB[k][0], vy = uy + NB[k][1]; if (vx < 0 || vy < 0 || vx >= nx || vy >= ny) continue; const v = vy * nx + vx; if (!inside[v]) continue;
+        const nd = du + NB[k][2] * costAt(v); if (nd < dist[v]) { dist[v] = nd; prev[v] = u; h.push(nd, v); } } }
+    return { dist, prev };
+  }
+  const CL_CACHE = new Map();
+  function areaCenterline(pts, ppf) {
+    const key = ppf + '|' + pts.join(','); if (CL_CACHE.has(key)) return CL_CACHE.get(key);
+    let res = null; try { res = computeCenterline(pts, ppf); } catch (e) { res = null; }
+    if (CL_CACHE.size > 60) CL_CACHE.clear(); CL_CACHE.set(key, res); return res;
+  }
+  function computeCenterline(pts, ppf) {
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (let i = 0; i < pts.length; i += 2) { x0 = Math.min(x0, pts[i]); x1 = Math.max(x1, pts[i]); y0 = Math.min(y0, pts[i + 1]); y1 = Math.max(y1, pts[i + 1]); }
+    const W = x1 - x0, H = y1 - y0; if (W < 4 || H < 4 && W < 4) return null;
+    const cs = Math.max(ppf * 0.2, Math.sqrt((W * H) / 45000)); const nx = Math.ceil(W / cs) + 3, ny = Math.ceil(H / cs) + 3; const N = nx * ny;
+    const cx = (i) => x0 + (i - 1.5) * cs + cs / 2 * 0, cy = (j) => y0 + (j - 1.5) * cs;
+    const inside = new Uint8Array(N); let cnt = 0;
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) if (ptInPoly(pts, cx(i), cy(j))) { inside[j * nx + i] = 1; cnt++; }
+    if (cnt < 8) return null;
+    // distance to the edge (chamfer)
+    const d = new Float32Array(N); for (let k = 0; k < N; k++) d[k] = inside[k] ? 1e9 : 0;
+    const at = (i, j) => (i < 0 || j < 0 || i >= nx || j >= ny ? 0 : d[j * nx + i]);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const k = j * nx + i; if (!d[k]) continue; d[k] = Math.min(d[k], at(i - 1, j) + 1, at(i, j - 1) + 1, at(i - 1, j - 1) + 1.4142, at(i + 1, j - 1) + 1.4142); }
+    for (let j = ny - 1; j >= 0; j--) for (let i = nx - 1; i >= 0; i--) { const k = j * nx + i; if (!d[k]) continue; d[k] = Math.min(d[k], at(i + 1, j) + 1, at(i, j + 1) + 1, at(i + 1, j + 1) + 1.4142, at(i - 1, j + 1) + 1.4142); }
+    let dm = 0, A = -1; for (let k = 0; k < N; k++) if (inside[k] && d[k] > dm) { dm = d[k]; A = k; }
+    if (A < 0) return null;
+    const far = (r) => { let b = A, bd = -1; for (let k = 0; k < N; k++) if (inside[k] && r.dist[k] < Infinity && r.dist[k] > bd) { bd = r.dist[k]; b = k; } return b; };
+    const B = far(dijk(nx, ny, inside, A, () => 1)); const C = far(dijk(nx, ny, inside, B, () => 1));
+    const w = dijk(nx, ny, inside, B, (v) => { const q = dm / Math.max(d[v] - 0.4, 0.6); return q * q; });
+    const cells = []; for (let k = C; k >= 0; k = w.prev[k]) { cells.push(k); if (k === B) break; }
+    if (cells.length < 4) return null; cells.reverse();
+    let P = cells.map((k) => [cx(k % nx), cy((k / nx) | 0)]);
+    const dAt = (x, y) => { const i = Math.round((x - x0) / cs + 1.5 - 0.5 * 0), j = Math.round((y - y0) / cs + 1.5); if (i < 0 || j < 0 || i >= nx || j >= ny) return 0; return Math.max(0, (d[j * nx + i] - 0.5)) * cs; };
+    const med = (a) => { const b = a.slice().sort((p, q) => p - q); return b[b.length >> 1]; };
+    const medD0 = med(P.map((q) => dAt(q[0], q[1])));
+    const smooth = (arr, r) => arr.map((q, i) => { let sx = 0, sy = 0, n = 0; for (let k = -r; k <= r; k++) { const t = arr[Math.max(0, Math.min(arr.length - 1, i + k))]; sx += t[0]; sy += t[1]; n++; } return i === 0 || i === arr.length - 1 ? q : [sx / n, sy / n]; });
+    const r = Math.max(2, Math.round(medD0 / cs)); P = smooth(smooth(P, r), r);
+    let D = P.map((q) => dAt(q[0], q[1])); const sd = D.map((v, i) => { let s2 = 0, n = 0; for (let k = -r; k <= r; k++) { s2 += D[Math.max(0, Math.min(D.length - 1, i + k))]; n++; } return s2 / n; }); D = sd;
+    const medD = med(D);
+    let lo = 0, hi = P.length - 1; while (lo < hi - 3 && D[lo] < 0.55 * medD) lo++; while (hi > lo + 3 && D[hi] < 0.55 * medD) hi--;
+    P = P.slice(lo, hi + 1); D = D.slice(lo, hi + 1); if (P.length < 3) return null;
+    // run the ends out to the edge of the outline
+    const ext = (fromEnd) => { const n = P.length; const a = fromEnd ? P[n - 1] : P[0], b = fromEnd ? P[Math.max(0, n - 1 - Math.max(2, r))] : P[Math.min(n - 1, Math.max(2, r))]; let tx = a[0] - b[0], ty = a[1] - b[1]; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl; const out = []; let x = a[0], y = a[1]; const last = D[fromEnd ? n - 1 : 0];
+      for (let k = 0; k < 400; k++) { x += tx * cs * 0.5; y += ty * cs * 0.5; if (!ptInPoly(pts, x, y)) break; const dd = dAt(x, y); if (dd < Math.min(last, medD) * 0.25) break; out.push([[x, y], Math.max(dd, last * 0.0 + dd)]); }
+      return out; };
+    const e1 = ext(false), e2 = ext(true);
+    const Q = e1.reverse().map((o) => o[0]).concat(P, e2.map((o) => o[0])); const DD = e1.map((o) => o[1]).concat(D, e2.map((o) => o[1]));
+    const c = []; Q.forEach((q) => c.push(q[0], q[1]));
+    return { c, hw: DD, medHalf: medD };
+  }
+
+  // Individually placed stones: one big paver, two side by side, or a zipper. The stones follow
+  // the path you drew (a path tool centre line, or the middle of an outline) and fit its width.
+  function layoutOk(el) { return el && (el.type === 'stonepath' || (el.type === 'area' && el.subtype === 'flagstone')); }
   function stoneLayout(el, ppf) {
-    const sp = flagSpec(el); if (sp.style === 'fill' || el.type !== 'stonepath') return null;
+    if (!layoutOk(el)) return null; const sp = flagSpec(el); if (sp.style === 'fill') return null;
     ppf = ppf || window.pxPerFt || 10;
-    const c = pathCenter(el), n = c.length / 2; if (n < 2) return null;
+    let c, hwList = null; const isArea = el.type !== 'stonepath';
+    if (!isArea) c = pathCenter(el); else { const cl = areaCenterline(el.points || [], ppf); if (!cl) return null; c = cl.c; hwList = cl.hw; }
+    const n = c.length / 2; if (n < 2) return null;
     const cum = [0]; for (let i = 1; i < n; i++) cum.push(cum[i - 1] + Math.hypot(c[i * 2] - c[i * 2 - 2], c[i * 2 + 1] - c[i * 2 - 1]));
     const total = cum[n - 1]; if (total < 4) return null;
-    const at = (d) => { d = clamp(d, 0, total); let i = 1; while (i < n - 1 && cum[i] < d) i++; const a = cum[i - 1], b = cum[i], t = b > a ? (d - a) / (b - a) : 0; return [c[i * 2 - 2] + (c[i * 2] - c[i * 2 - 2]) * t, c[i * 2 - 1] + (c[i * 2 + 1] - c[i * 2 - 1]) * t]; };
-    const L = sp.len * ppf, gap = (sp.joint / 12) * ppf, pw = (el.widthFt || 3) * ppf;
-    const lanes = sp.style === 'single' ? [{ off: 0, w: pw, shift: 0 }] : [{ off: -(pw - gap) / 4 - gap / 4, w: (pw - gap) / 2, shift: 0 }, { off: (pw - gap) / 4 + gap / 4, w: (pw - gap) / 2, shift: sp.style === 'zipper' ? (L + gap) / 2 : 0 }];
-    const step = L + gap, rows = Math.max(1, Math.floor((total + gap) / step)); const lead = (total - (rows * step - gap)) / 2 + L / 2;
-    const R = rng(hashStr(el.id || 'p') + 7 + Math.round(total)); const stones = [];
-    lanes.forEach((ln, li) => {
+    const hwConst = ((el.widthFt || 3) * ppf) / 2;
+    const loc = (d) => { d = clamp(d, 0, total); let i = 1; while (i < n - 1 && cum[i] < d) i++; const a = cum[i - 1], b = cum[i], t = b > a ? (d - a) / (b - a) : 0; return [c[i * 2 - 2] + (c[i * 2] - c[i * 2 - 2]) * t, c[i * 2 - 1] + (c[i * 2 + 1] - c[i * 2 - 1]) * t, hwList ? hwList[i - 1] + (hwList[i] - hwList[i - 1]) * t : hwConst]; };
+    const L0 = sp.len * ppf, gap = (sp.joint / 12) * ppf;
+    const step = L0 + gap, rows = Math.max(1, Math.floor((total + gap) / step)); const lead = (total - (rows * step - gap)) / 2 + L0 / 2;
+    const R = rng(hashStr(el.id || 'p') + 7 + Math.round(total)); const stones = []; const nl = sp.style === 'single' ? 1 : 2;
+    for (let li = 0; li < nl; li++) {
+      const shift = li === 1 && sp.style === 'zipper' ? step / 2 : 0;
       for (let j = -1; j <= rows; j++) {
-        const s = lead + j * step + ln.shift; if (s - L / 2 < -0.5 || s + L / 2 > total + 0.5) continue;
-        const p = at(s), a1 = at(s - L / 2), a2 = at(s + L / 2); let tx = a2[0] - a1[0], ty = a2[1] - a1[1]; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
-        const ang = Math.atan2(ty, tx), nx = -ty, ny = tx; const cx = p[0] + nx * ln.off, cy = p[1] + ny * ln.off;
-        const hl = L / 2, hw = ln.w / 2, poly = [];
-        if (sp.cut === 'natural') {
-          const jj = (k) => (R() - 0.5) * 2 * k * ppf;
-          poly.push([-hl + jj(0.1), -hw + jj(0.1)], [jj(0.05), -hw + jj(0.04)], [hl + jj(0.1), -hw + jj(0.1)], [hl + jj(0.04), jj(0.06)], [hl + jj(0.1), hw + jj(0.1)], [jj(0.05), hw + jj(0.04)], [-hl + jj(0.1), hw + jj(0.1)], [-hl + jj(0.04), jj(0.06)]);
-        } else {
-          const r = Math.min(0.08 * ppf, hl * 0.4, hw * 0.4), cs = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
-          cs.forEach(([sx, sy], k) => { const cxk = sx * (hl - r), cyk = sy * (hw - r), a0 = [Math.PI, 1.5 * Math.PI, 0, 0.5 * Math.PI][k]; for (let q = 0; q <= 3; q++) { const aa = a0 + (q / 3) * (Math.PI / 2); poly.push([cxk + Math.cos(aa) * r, cyk + Math.sin(aa) * r]); } });
+        const s = lead + j * step + shift; if (s - L0 / 2 < -0.5 || s + L0 / 2 > total + 0.5) continue;
+        const p = loc(s), a1 = loc(s - L0), a2 = loc(s + L0), e1 = loc(s - L0 / 2), e2 = loc(s + L0 / 2); let tx = a2[0] - a1[0], ty = a2[1] - a1[1]; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+        const ang = Math.atan2(ty, tx), nx = -ty, ny = tx; const hwLocal = isArea ? Math.min(p[2], e1[2], e2[2]) * 0.97 : hwConst; const pw = hwLocal * 2;
+        if (pw < 0.5 * ppf) continue;
+        const natural = sp.cut === 'natural'; const jj = natural ? Array.from({ length: 16 }, () => R()) : null; const tone = 0.9 + R() * 0.2, off0 = R();
+        let scW = 1, scL = 1, ok = false, out = null;
+        for (let tries = 0; tries < 4 && !ok; tries++) {
+          const laneW = (nl === 1 ? pw : (pw - gap) / 2) * scW, laneOff = nl === 1 ? 0 : (li === 0 ? -1 : 1) * (pw + gap) / 4;
+          const cx = p[0] + nx * laneOff, cy = p[1] + ny * laneOff; const hl = (L0 * scL) / 2, hw = laneW / 2, poly = [];
+          if (natural) { const q = (k, m) => (jj[k] - 0.5) * 2 * m * ppf; poly.push([-hl + q(0, 0.1), -hw + q(1, 0.1)], [q(2, 0.05), -hw + q(3, 0.04)], [hl + q(4, 0.1), -hw + q(5, 0.1)], [hl + q(6, 0.04), q(7, 0.06)], [hl + q(8, 0.1), hw + q(9, 0.1)], [q(10, 0.05), hw + q(11, 0.04)], [-hl + q(12, 0.1), hw + q(13, 0.1)], [-hl + q(14, 0.04), q(15, 0.06)]); }
+          else { const r = Math.min(0.08 * ppf, hl * 0.4, hw * 0.4), cs4 = [[-1, -1], [1, -1], [1, 1], [-1, 1]]; cs4.forEach(([sx, sy], k) => { const cxk = sx * (hl - r), cyk = sy * (hw - r), a0 = [Math.PI, 1.5 * Math.PI, 0, 0.5 * Math.PI][k]; for (let q = 0; q <= 3; q++) { const aa = a0 + (q / 3) * (Math.PI / 2); poly.push([cxk + Math.cos(aa) * r, cyk + Math.sin(aa) * r]); } }); }
+          out = { cx, cy, ang, poly, tone, lane: li, w: laneW, l: L0 * scL, off: off0 };
+          if (!isArea) { ok = true; break; }
+          const ca = Math.cos(ang), sa = Math.sin(ang); ok = poly.every(([x, y]) => ptInPoly(el.points, cx + x * ca - y * sa, cy + x * sa + y * ca));
+          if (!ok) { scW *= 0.88; scL *= 0.94; }
         }
-        stones.push({ cx, cy, ang, poly, tone: 0.9 + R() * 0.2, lane: li, w: ln.w, l: L, off: R() });
+        if (ok && out) stones.push(out);
       }
-    });
-    return { stones, total, L, pw };
+    }
+    return { stones, total, L: L0, pw: hwConst * 2 };
   }
 
   // the outline of a stone path (a centre line with a width) as a polygon, in plan pixels
@@ -500,7 +568,7 @@
   }
   function flagQty(el) { // stone and joint-fill needed for one flagstone area / path
     const sp = flagSpec(el); const pts = el.type === 'stonepath' ? pathPoly(el) : el.points; const sq = pts && pts.length >= 6 ? polyAreaPx(pts) / (Math.pow(window.pxPerFt || 10, 2)) : 0;
-    const lay = el.type === 'stonepath' ? stoneLayout(el) : null;
+    const lay = stoneLayout(el);
     if (lay) {
       const pp = window.pxPerFt || 10; const stoneSq = lay.stones.reduce((a, t) => a + polyAreaPx(t.poly.reduce((f, q) => f.concat(q), [])) / (pp * pp), 0); const gapSq = Math.max(0, sq - stoneSq), cf = gapSq * (1.5 / 12);
       return { sq, stoneSq, count: lay.stones.length, tons: stoneSq / 100, cuft: cf, cuyd: cf / 27, bags: cf / 0.5, sp, layout: true };
@@ -537,7 +605,7 @@
   const origAdd = window.addElement;
   window.addElement = function (el) {
     if (el && el.type === 'area' && (el.subtype === 'bed' || el.subtype === 'gravel') && !el.material && armed.active) el.material = armed.mat;
-    if (el && el.type === 'area' && el.subtype === 'flagstone' && !el.stone) Object.assign(el, { stone: flagArm.stone, pattern: flagArm.pattern, infill: flagArm.infill, joint: flagArm.joint });
+    if (el && el.type === 'area' && el.subtype === 'flagstone' && !el.stone) Object.assign(el, { stone: flagArm.stone, pattern: flagArm.pattern, infill: flagArm.infill, joint: flagArm.joint, style: flagArm.style, cut: flagArm.cut, stoneLen: flagArm.len });
     return origAdd.apply(this, arguments);
   };
 
@@ -590,23 +658,20 @@
   const F = DPRO.mat.flag;
   { const ob = document.querySelector('[data-tool="area-flagstone"]'); if (ob) { ob.textContent = 'Flagstone'; ob.title = 'Flagstone patios, paths and stepping stones (two side by side, zipper)'; } }
   function renderFlagCatalog(tool) {
-    const isPath = tool === 'line-flagpath';
-    let h = `<div class="design-tool-group-label">What are you laying?</div><div class="dpm-row"><button type="button" class="dpm-chip${!isPath ? ' on' : ''}" data-fshape="area">Patio / area</button>`;
-    F.styles.forEach(([k, l]) => { h += `<button type="button" class="dpm-chip${isPath && flagArm.style === k ? ' on' : ''}" data-fshape="${k}">${k === 'fill' ? 'Path: full flagstone' : l}</button>`; });
-    h += `</div><p class="empty-sub" style="margin:4px 0 8px">${isPath ? 'Click along the path, then press Enter to finish. You can change everything later.' : 'Click the corners of the area, then press Enter to finish. For a path or stepping stones, pick one above.'}</p>`;
-    if (isPath) {
-      if (flagArm.style !== 'fill') {
-        h += `<div class="design-tool-group-label" style="margin-top:10px">Stone cut</div><div class="dpm-row"><button type="button" class="dpm-chip${flagArm.cut === 'square' ? ' on' : ''}" data-fcut="square">Square-cut pavers</button><button type="button" class="dpm-chip${flagArm.cut === 'natural' ? ' on' : ''}" data-fcut="natural">Natural-cut</button></div>`;
-        h += `<div class="design-tool-group-label" style="margin-top:10px">Stone length</div><div class="dpm-row">`;
-        F.lens.forEach((n) => { h += `<button type="button" class="dpm-chip${flagArm.len === n ? ' on' : ''}" data-flen="${n}">${n} ft</button>`; });
-        h += '</div>';
-      }
-      h += '<div style="height:10px"></div>';
+    const isPath = tool === 'line-flagpath'; // (old centre-line tool, kept so earlier designs keep working)
+    let h = `<div class="design-tool-group-label">Flagstone style</div><div class="dpm-row">`;
+    F.styles.forEach(([k, l]) => { h += `<button type="button" class="dpm-chip${flagArm.style === k ? ' on' : ''}" data-fstyle="${k}">${l}</button>`; });
+    h += `</div><p class="empty-sub" style="margin:4px 0 8px">${isPath ? 'Click along the middle of the path, then press Enter to finish.' : 'Click around the outline, just like a flower bed, then press Enter to finish. Stepping stones are laid inside the shape and follow it, however wide it is.'}</p>`;
+    if (flagArm.style !== 'fill') {
+      h += `<div class="design-tool-group-label">Stone cut</div><div class="dpm-row"><button type="button" class="dpm-chip${flagArm.cut === 'square' ? ' on' : ''}" data-fcut="square">Square-cut pavers</button><button type="button" class="dpm-chip${flagArm.cut === 'natural' ? ' on' : ''}" data-fcut="natural">Natural-cut</button></div>`;
+      h += `<div class="design-tool-group-label" style="margin-top:10px">Stone length</div><div class="dpm-row">`;
+      F.lens.forEach((n) => { h += `<button type="button" class="dpm-chip${flagArm.len === n ? ' on' : ''}" data-flen="${n}">${n} ft</button>`; });
+      h += '</div><div style="height:10px"></div>';
     }
     h += `<div class="design-tool-group-label">Stone</div><div class="dpm-grid">`;
     F.stones.forEach((st) => { h += `<button type="button" class="dpm-card${flagArm.stone === st.key ? ' on' : ''}" data-fstone="${st.key}" title="${esc(st.note)}"><img alt="" src="${F.thumb({ stone: st.key, pattern: flagArm.pattern, infill: flagArm.infill, joint: flagArm.joint }, 64)}" /><span>${esc(st.name)}</span></button>`; });
     h += '</div>';
-    if (!isPath || flagArm.style === 'fill') {
+    if (flagArm.style === 'fill') {
       h += `<div class="design-tool-group-label" style="margin-top:10px">Layout</div><div class="dpm-row">`;
       F.patterns.forEach(([k, l]) => { h += `<button type="button" class="dpm-chip${flagArm.pattern === k ? ' on' : ''}" data-fpat="${k}">${l}</button>`; });
       h += '</div>';
@@ -622,12 +687,7 @@
     h += '<p class="empty-sub" style="margin-top:12px;opacity:.6">Flagstone tools: stepping-stones version</p>';
     flagSec.innerHTML = h;
     const again = () => renderFlagCatalog(tool);
-    flagSec.querySelectorAll('[data-fshape]').forEach((b) => b.addEventListener('click', () => {
-      const k = b.dataset.fshape;
-      if (k === 'area') { setActiveTool('area-flagstone'); return; }
-      flagArm.style = k; flagArm.width = F.styleWidth[k] || 3;
-      if (tool === 'line-flagpath') again(); else setActiveTool('line-flagpath');
-    }));
+    flagSec.querySelectorAll('[data-fstyle]').forEach((b) => b.addEventListener('click', () => { flagArm.style = b.dataset.fstyle; if (isPath) flagArm.width = F.styleWidth[flagArm.style] || 3; again(); }));
     flagSec.querySelectorAll('[data-fcut]').forEach((b) => b.addEventListener('click', () => { flagArm.cut = b.dataset.fcut; again(); }));
     flagSec.querySelectorAll('[data-flen]').forEach((b) => b.addEventListener('click', () => { flagArm.len = Number(b.dataset.flen); again(); }));
     flagSec.querySelectorAll('[data-fstone]').forEach((b) => b.addEventListener('click', () => { flagArm.stone = b.dataset.fstone; again(); }));
@@ -637,6 +697,7 @@
     const w = $('fl-width'); if (w) w.addEventListener('change', () => { flagArm.width = clamp(Number(w.value) || 3, 1, 12); });
     const cu = $('fl-curved'); if (cu) cu.addEventListener('click', () => { flagArm.curved = !flagArm.curved; again(); });
   }
+  DPRO.hints['area-flagstone'] = 'Click around the outline of the patio or path, like a bed. Press Enter to finish (Esc to cancel). Pick the style, stone and fill in the Catalog tab.';
   DPRO.hints['line-flagpath'] = 'Click along the path. Press Enter to finish (Esc to cancel). Pick the stone and fill in the Catalog tab.';
   DPRO.drawHandlers['line-flagpath'] = function (pts) {
     addElement({ id: uid(), type: 'stonepath', points: pts, widthFt: flagArm.width, curved: flagArm.curved, stone: flagArm.stone, pattern: flagArm.pattern, infill: flagArm.infill, joint: flagArm.joint, style: flagArm.style, cut: flagArm.cut, stoneLen: flagArm.len });
@@ -650,8 +711,8 @@
     const q = F.qty(el);
     const styOpts = F.styles.map(([k, l]) => `<option value="${k}" ${k === sp.style ? 'selected' : ''}>${l}</option>`).join('');
     const lenOpts = F.lens.map((n) => `<option value="${n}" ${n === sp.len ? 'selected' : ''}>${n} ft</option>`).join('');
-    const placed = isPath && sp.style !== 'fill';
-    let h = (isPath ? DPRO.fieldHtml('Path style', `<select id="fp-style">${styOpts}</select>`) : '') + (placed ? DPRO.fieldHtml('Stone cut', `<select id="fp-cut"><option value="square" ${sp.cut === 'square' ? 'selected' : ''}>Square-cut pavers</option><option value="natural" ${sp.cut === 'natural' ? 'selected' : ''}>Natural-cut</option></select>`) + DPRO.fieldHtml('Stone length', `<select id="fp-len">${lenOpts}</select>`) : '') + `<div class="design-properties-field"><label>Flagstone</label><div class="dpm-propwrap"><img alt="" src="${F.thumb(sp, 56)}" /><select id="fp-stone">${stoneOpts}</select></div></div>` +
+    const placed = sp.style !== 'fill';
+    let h = DPRO.fieldHtml(isPath ? 'Path style' : 'Flagstone style', `<select id="fp-style">${styOpts}</select>`) + (placed ? DPRO.fieldHtml('Stone cut', `<select id="fp-cut"><option value="square" ${sp.cut === 'square' ? 'selected' : ''}>Square-cut pavers</option><option value="natural" ${sp.cut === 'natural' ? 'selected' : ''}>Natural-cut</option></select>`) + DPRO.fieldHtml('Stone length', `<select id="fp-len">${lenOpts}</select>`) : '') + `<div class="design-properties-field"><label>Flagstone</label><div class="dpm-propwrap"><img alt="" src="${F.thumb(sp, 56)}" /><select id="fp-stone">${stoneOpts}</select></div></div>` +
       (placed ? '' : DPRO.fieldHtml('Layout', `<select id="fp-pat">${patOpts}</select>`)) +
       `<div class="design-properties-field"><label>Fill between the stones</label><div class="dpm-propwrap"><img alt="" src="${sp.infill === 'lawn' ? thumb('lawn', 40) : thumb(sp.infill, 40)}" /><select id="fp-inf">${infOpts}</select></div></div>` +
       DPRO.fieldHtml('Gap between stones', `<select id="fp-joint">${jOpts}</select>`);
@@ -662,7 +723,7 @@
     box.insertAdjacentHTML('beforeend', h);
     const upd = (k, v) => { el[k] = v; DPRO.rerender(el); markDirty(); DPRO.runLegend(); DPRO.renderProps(el); };
     $('fp-stone').addEventListener('change', (e) => upd('stone', e.target.value)); if ($('fp-pat')) $('fp-pat').addEventListener('change', (e) => upd('pattern', e.target.value));
-    if ($('fp-style')) $('fp-style').addEventListener('change', (e) => { const v = e.target.value; el.widthFt = F.styleWidth[v] || el.widthFt || 3; upd('style', v); });
+    if ($('fp-style')) $('fp-style').addEventListener('change', (e) => { const v = e.target.value; if (isPath) el.widthFt = F.styleWidth[v] || el.widthFt || 3; upd('style', v); });
     if ($('fp-cut')) $('fp-cut').addEventListener('change', (e) => upd('cut', e.target.value)); if ($('fp-len')) $('fp-len').addEventListener('change', (e) => upd('stoneLen', Number(e.target.value)));
     $('fp-inf').addEventListener('change', (e) => upd('infill', e.target.value)); $('fp-joint').addEventListener('change', (e) => upd('joint', Number(e.target.value)));
     if (isPath) { $('fp-w').addEventListener('change', (e) => upd('widthFt', clamp(Number(e.target.value) || 3, 1, 12))); $('fp-curve').addEventListener('change', (e) => upd('curved', e.target.checked)); }
@@ -701,6 +762,31 @@
   };
   DPRO.addLayer('stonepaths', 'Flagstone paths');
   DPRO.propHooks.push(function (el, box) { if (el.type === 'area' && el.subtype === 'flagstone') flagFields(el, box, false); });
+
+  // ---- flagstone areas laid as single pavers / stepping stones: draw the stones inside the outline ----
+  const prevBuildArea = window.buildAreaNode;
+  window.buildAreaNode = function (el) {
+    const g = prevBuildArea.apply(this, arguments);
+    try {
+      if (!el || el.subtype !== 'flagstone') return g;
+      const sp = F.spec(el); if (sp.style === 'fill') return g;
+      const lay = F.layout(el, pxPerFt); const line = (g.findOne && g.findOne('.main')) || (g.getChildren && g.getChildren()[0]); if (!line) return g;
+      if (sp.infill !== 'lawn') { const it = DPRO.texture(sp.infill); const isc = (pxPerFt * it.ft) / it.canvas.width; line.fillPatternImage(it.canvas); line.fillPatternScaleX(isc); line.fillPatternScaleY(isc); line.fillPatternRepeat('repeat'); }
+      else { line.fillPatternImage(null); line.fill('rgba(0,0,0,0.001)'); }
+      line.shadowEnabled(false);
+      if (!lay || !lay.stones.length) return g;
+      const st = DPRO.texture('stone|' + sp.stone); const ssc = (pxPerFt * st.ft) / st.canvas.width; const sg = new Konva.Group({ listening: false });
+      lay.stones.forEach((s) => {
+        const ca = Math.cos(s.ang), sa = Math.sin(s.ang); const pts = []; s.poly.forEach(([x, y]) => pts.push(s.cx + x * ca - y * sa, s.cy + x * sa + y * ca));
+        sg.add(new Konva.Line({ points: pts, closed: true, fillPatternImage: st.canvas, fillPatternRepeat: 'repeat', fillPatternScaleX: ssc, fillPatternScaleY: ssc, fillPatternOffsetX: s.off * 10 * pxPerFt, fillPatternOffsetY: ((s.off * 7) % 1) * 10 * pxPerFt, stroke: 'rgba(30,22,15,0.6)', strokeWidth: 0.5, lineJoin: 'round', shadowColor: 'rgba(0,0,0,0.45)', shadowBlur: 3, shadowOffset: { x: 1, y: 1.5 }, shadowOpacity: 0.7 }));
+        if (Math.abs(s.tone - 1) > 0.02) sg.add(new Konva.Line({ points: pts, closed: true, fill: s.tone > 1 ? 'rgba(255,255,255,' + ((s.tone - 1) * 0.9).toFixed(3) + ')' : 'rgba(0,0,0,' + ((1 - s.tone) * 1.1).toFixed(3) + ')' }));
+      });
+      line.moveToBottom && 0; g.add(sg);
+      line.on('dragmove', () => sg.position({ x: line.x(), y: line.y() })); line.on('dragend', () => { sg.position({ x: 0, y: 0 }); });
+      const lab = g.getChildren().filter((n) => n.className === 'Text'); lab.forEach((t) => t.moveToTop());
+    } catch (err) { console.warn('flagstone stones failed', err); }
+    return g;
+  };
 
   // ---- boulder element ----
   function boulderPoints(el) {

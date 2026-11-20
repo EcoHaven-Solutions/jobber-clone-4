@@ -694,6 +694,7 @@
     let idx = 0; stoneBudget = 7000;
     // surfaces first, then buildings/barriers (mounting heights), then plants, then lights
     const surfEls = elements.map((e) => {
+      if (e.type === 'area' && e.subtype === 'flagstone' && DPRO.mat && DPRO.mat.flag.spec(e).style !== 'fill' && e.points && e.points.length >= 6) { const sp0 = DPRO.mat.flag.spec(e); return Object.assign({}, e, { subtype: 'bed', material: sp0.infill === 'lawn' ? null : sp0.infill, _path: true, _src: e, _placed: true, _lawn: sp0.infill === 'lawn' }); }
       if (!(e.type === 'stonepath' && DPRO.mat)) return e;
       const sp = DPRO.mat.flag.spec(e), pp = DPRO.mat.flag.pathPoly(e, pxPerFt);
       if (sp.style === 'fill') return Object.assign({}, e, { type: 'area', subtype: 'flagstone', points: pp, _path: true });
