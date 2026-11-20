@@ -280,8 +280,8 @@
   const FLAG_BY = {}; FLAG_STONES.forEach((f) => { FLAG_BY[f.key] = f; });
   const FLAG_PATTERNS = [['irregular', 'Natural (irregular)'], ['ashlar', 'Rectangular mix'], ['square', 'Square cut (2 ft)'], ['stepping', 'Stepping stones']];
   const FLAG_JOINTS = [1, 1.5, 2, 3, 4, 6, 8, 12];
-  const FLAG_STYLES = [['fill', 'Full flagstone fill'], ['single', 'Single row of big pavers'], ['pairs', 'Two side by side'], ['zipper', 'Zipper (staggered)']];
-  const FLAG_LENS = [1.5, 2, 2.5, 3, 4];
+  const FLAG_STYLES = [['fill', 'Full flagstone fill'], ['single', 'Single row of big pavers'], ['pairs', 'Two big stones side by side'], ['zipper', 'Zipper (staggered)']];
+  const FLAG_LENS = [1.5, 2, 2.5, 3, 4, 5, 6];
   const STYLE_WIDTH = { fill: 3, single: 2, pairs: 4, zipper: 3.5 };
   const INFILLS = ['poly-sand-tan', 'poly-sand-grey', 'dg-gold', 'dg-gray', 'sand', 'pea-gravel', 'river-rock', 'beach-pebble', 'lava-black', 'lava-red', 'marble-white', 'bark-dark', 'cedar-red', 'mulch-black', 'wood-chips', 'topsoil', 'lawn'];
   const INFILL_NAME = (k) => (k === 'lawn' ? 'Grass (lawn)' : (BY[k] ? BY[k].name : k));
@@ -293,7 +293,8 @@
       pattern: FLAG_PATTERNS.some((p) => p[0] === el.pattern) ? el.pattern : FLAGDEF.pattern,
       infill: (BY[el.infill] || el.infill === 'lawn') ? el.infill : FLAGDEF.infill,
       joint: clamp(Number(el.joint) || FLAGDEF.joint, 0.5, 12),
-      style: FLAG_STYLES.some((p) => p[0] === el.style) ? el.style : 'fill',
+      // older paths that used the 'Stepping stones' layout become two big stones side by side
+      style: FLAG_STYLES.some((p) => p[0] === el.style) ? el.style : (el.type === 'stonepath' && el.pattern === 'stepping' ? 'pairs' : 'fill'),
       cut: el.cut === 'natural' ? 'natural' : 'square',
       len: FLAG_LENS.includes(Number(el.stoneLen)) ? Number(el.stoneLen) : 2,
     };
@@ -520,7 +521,7 @@
     return (thumbCache[k] = c.toDataURL('image/png'));
   }
 
-  DPRO.mat = { flag: { styles: FLAG_STYLES, lens: FLAG_LENS, styleWidth: STYLE_WIDTH, styleName, layout: stoneLayout, stones: FLAG_STONES, stoneBy: FLAG_BY, patterns: FLAG_PATTERNS, joints: FLAG_JOINTS, infills: INFILLS, infillName: INFILL_NAME, def: FLAGDEF, spec: flagSpec, key: flagKey, label: flagLabel, thumb: flagThumb, pathPoly, qty: flagQty }, list: MATS, by: BY, groups: G, rocks: ROCKS, rockBy: ROCK_BY, boulderSizes: BOULDER_SIZES, keyFor, tex, tex2d, thumb, legacy: LEGACY, rng, hashStr };
+  DPRO.mat = { flag: { styles: FLAG_STYLES, lens: FLAG_LENS, styleWidth: STYLE_WIDTH, styleName, layout: stoneLayout, stones: FLAG_STONES, stoneBy: FLAG_BY, patterns: FLAG_PATTERNS.filter((p) => p[0] !== 'stepping'), joints: FLAG_JOINTS, infills: INFILLS, infillName: INFILL_NAME, def: FLAGDEF, spec: flagSpec, key: flagKey, label: flagLabel, thumb: flagThumb, pathPoly, qty: flagQty }, list: MATS, by: BY, groups: G, rocks: ROCKS, rockBy: ROCK_BY, boulderSizes: BOULDER_SIZES, keyFor, tex, tex2d, thumb, legacy: LEGACY, rng, hashStr };
 
   // ============================================================================
   // Editor integration (skipped on the customer 3D page)
@@ -636,7 +637,7 @@
   function flagFields(el, box, isPath) {
     const sp = F.spec(el);
     const stoneOpts = F.stones.map((st) => `<option value="${st.key}" ${st.key === sp.stone ? 'selected' : ''}>${esc(st.name)}</option>`).join('');
-    const patOpts = F.patterns.map(([k, l]) => `<option value="${k}" ${k === sp.pattern ? 'selected' : ''}>${l}</option>`).join('');
+    const patOpts = (sp.pattern === 'stepping' ? [['stepping', 'Stepping stones (old)']].concat(F.patterns) : F.patterns).map(([k, l]) => `<option value="${k}" ${k === sp.pattern ? 'selected' : ''}>${l}</option>`).join('');
     const infOpts = F.infills.map((k) => `<option value="${k}" ${k === sp.infill ? 'selected' : ''}>${esc(F.infillName(k))}</option>`).join('');
     const jOpts = F.joints.map((j) => `<option value="${j}" ${j === sp.joint ? 'selected' : ''}>${j} in</option>`).join('');
     const q = F.qty(el);
@@ -673,7 +674,7 @@
         const st = DPRO.texture('stone|' + sp.stone); const ssc = (pxPerFt * st.ft) / st.canvas.width;
         lay.stones.forEach((s) => {
           const ca = Math.cos(s.ang), sa = Math.sin(s.ang); const pts = []; s.poly.forEach(([x, y]) => pts.push(s.cx + x * ca - y * sa, s.cy + x * sa + y * ca));
-          g.add(new Konva.Line({ points: pts, closed: true, fillPatternImage: st.canvas, fillPatternRepeat: 'repeat', fillPatternScaleX: ssc, fillPatternScaleY: ssc, fillPatternOffsetX: s.off * 40 * pxPerFt / 4, fillPatternOffsetY: (s.off * 7 % 1) * 40 * pxPerFt / 4, stroke: 'rgba(30,22,15,0.7)', strokeWidth: 1, lineJoin: 'round', shadowColor: 'rgba(0,0,0,0.45)', shadowBlur: 3, shadowOffset: { x: 1, y: 1.5 }, shadowOpacity: 0.7 }));
+          g.add(new Konva.Line({ points: pts, closed: true, fillPatternImage: st.canvas, fillPatternRepeat: 'repeat', fillPatternScaleX: ssc, fillPatternScaleY: ssc, fillPatternOffsetX: s.off * 40 * pxPerFt / 4, fillPatternOffsetY: (s.off * 7 % 1) * 40 * pxPerFt / 4, stroke: 'rgba(30,22,15,0.6)', strokeWidth: 0.5, lineJoin: 'round', shadowColor: 'rgba(0,0,0,0.45)', shadowBlur: 3, shadowOffset: { x: 1, y: 1.5 }, shadowOpacity: 0.7 }));
           if (Math.abs(s.tone - 1) > 0.02) g.add(new Konva.Line({ points: pts, closed: true, fill: s.tone > 1 ? 'rgba(255,255,255,' + ((s.tone - 1) * 0.9).toFixed(3) + ')' : 'rgba(0,0,0,' + ((1 - s.tone) * 1.1).toFixed(3) + ')', listening: false }));
         });
       } else {
