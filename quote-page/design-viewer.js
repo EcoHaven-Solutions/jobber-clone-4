@@ -703,7 +703,7 @@ function mulberry32(seed) {
   const FLAG_BY = {}; FLAG_STONES.forEach((f) => { FLAG_BY[f.key] = f; });
   const FLAG_PATTERNS = [['irregular', 'Natural (irregular)'], ['ashlar', 'Rectangular mix'], ['square', 'Square cut (2 ft)'], ['stepping', 'Stepping stones']];
   const FLAG_JOINTS = [1, 1.5, 2, 3, 4, 6, 8, 12];
-  const FLAG_STYLES = [['fill', 'Full flagstone fill'], ['single', 'Single row of big pavers'], ['pairs', 'Two big stones side by side'], ['zipper', 'Zipper (staggered)']];
+  const FLAG_STYLES = [['fill', 'Full flagstone fill'], ['single', 'Single row of big pavers'], ['pairs', 'Stepping stones: two side by side'], ['zipper', 'Stepping stones: zipper (staggered)']];
   const FLAG_LENS = [1.5, 2, 2.5, 3, 4, 5, 6];
   const STYLE_WIDTH = { fill: 3, single: 2, pairs: 4, zipper: 3.5 };
   const INFILLS = ['poly-sand-tan', 'poly-sand-grey', 'dg-gold', 'dg-gray', 'sand', 'pea-gravel', 'river-rock', 'beach-pebble', 'lava-black', 'lava-red', 'marble-white', 'bark-dark', 'cedar-red', 'mulch-black', 'wood-chips', 'topsoil', 'lawn'];
@@ -998,7 +998,8 @@ function mulberry32(seed) {
     armed.fromCard = false;
     const empty = $('design-catalog-empty');
     if (mine) { renderCatalog(); sec.hidden = false; if (empty) empty.hidden = true; switchSidePanel('catalog'); } else sec.hidden = true;
-    if (flagTool) { renderFlagCatalog(tool); flagSec.hidden = false; if (empty) empty.hidden = true; switchSidePanel('catalog'); } else flagSec.hidden = true;
+    { const fb = document.querySelector('[data-tool="area-flagstone"]'); if (fb) fb.classList.toggle('is-active', flagTool); }
+    if (flagTool) { renderFlagCatalog(tool); flagSec.hidden = false; if (empty) empty.hidden = true; switchSidePanel('catalog'); for (let n = flagSec; n; n = n.parentElement) if (n.scrollTop) n.scrollTop = 0; } else flagSec.hidden = true;
   };
   DPRO.hints.boulder = 'Click to place a boulder. Pick the rock type and size in the Catalog tab. Drag to move it.';
   DPRO.pointTools.boulder = function (pos) {
@@ -1010,13 +1011,13 @@ function mulberry32(seed) {
   const flagSec = document.createElement('div'); flagSec.id = 'design-catalog-flag'; flagSec.className = 'design-catalog-section'; flagSec.hidden = true;
   if (catPanel) catPanel.appendChild(flagSec);
   const F = DPRO.mat.flag;
+  { const ob = document.querySelector('[data-tool="area-flagstone"]'); if (ob) { ob.textContent = 'Flagstone'; ob.title = 'Flagstone patios, paths and stepping stones (two side by side, zipper)'; } }
   function renderFlagCatalog(tool) {
     const isPath = tool === 'line-flagpath';
-    let h = `<div class="design-tool-group-label">${isPath ? 'Flagstone path' : 'Flagstone area'}</div><p class="empty-sub" style="margin:4px 0 8px">${isPath ? 'Pick the stone and what goes between the stones, then click along the path. Enter to finish. You can change everything later.' : 'Pick the stone and what goes between the stones, then click the corners of the area. Enter to finish.'}</p>`;
+    let h = `<div class="design-tool-group-label">What are you laying?</div><div class="dpm-row"><button type="button" class="dpm-chip${!isPath ? ' on' : ''}" data-fshape="area">Patio / area</button>`;
+    F.styles.forEach(([k, l]) => { h += `<button type="button" class="dpm-chip${isPath && flagArm.style === k ? ' on' : ''}" data-fshape="${k}">${k === 'fill' ? 'Path: full flagstone' : l}</button>`; });
+    h += `</div><p class="empty-sub" style="margin:4px 0 8px">${isPath ? 'Click along the path, then press Enter to finish. You can change everything later.' : 'Click the corners of the area, then press Enter to finish. For a path or stepping stones, pick one above.'}</p>`;
     if (isPath) {
-      h += `<div class="design-tool-group-label">Path style</div><div class="dpm-row">`;
-      F.styles.forEach(([k, l]) => { h += `<button type="button" class="dpm-chip${flagArm.style === k ? ' on' : ''}" data-fstyle="${k}">${l}</button>`; });
-      h += '</div>';
       if (flagArm.style !== 'fill') {
         h += `<div class="design-tool-group-label" style="margin-top:10px">Stone cut</div><div class="dpm-row"><button type="button" class="dpm-chip${flagArm.cut === 'square' ? ' on' : ''}" data-fcut="square">Square-cut pavers</button><button type="button" class="dpm-chip${flagArm.cut === 'natural' ? ' on' : ''}" data-fcut="natural">Natural-cut</button></div>`;
         h += `<div class="design-tool-group-label" style="margin-top:10px">Stone length</div><div class="dpm-row">`;
@@ -1041,9 +1042,15 @@ function mulberry32(seed) {
     if (isPath) {
       h += `<div class="design-tool-group-label" style="margin-top:10px">Path</div><div class="dpm-row"><label class="dpm-price">Width (ft) <input id="fl-width" type="number" min="1" max="12" step="0.5" value="${flagArm.width}" /></label><button type="button" class="dpm-chip${flagArm.curved ? ' on' : ''}" id="fl-curved">Smooth curves</button></div>`;
     }
+    h += '<p class="empty-sub" style="margin-top:12px;opacity:.6">Flagstone tools: stepping-stones version</p>';
     flagSec.innerHTML = h;
     const again = () => renderFlagCatalog(tool);
-    flagSec.querySelectorAll('[data-fstyle]').forEach((b) => b.addEventListener('click', () => { flagArm.style = b.dataset.fstyle; flagArm.width = F.styleWidth[flagArm.style] || 3; again(); }));
+    flagSec.querySelectorAll('[data-fshape]').forEach((b) => b.addEventListener('click', () => {
+      const k = b.dataset.fshape;
+      if (k === 'area') { setActiveTool('area-flagstone'); return; }
+      flagArm.style = k; flagArm.width = F.styleWidth[k] || 3;
+      if (tool === 'line-flagpath') again(); else setActiveTool('line-flagpath');
+    }));
     flagSec.querySelectorAll('[data-fcut]').forEach((b) => b.addEventListener('click', () => { flagArm.cut = b.dataset.fcut; again(); }));
     flagSec.querySelectorAll('[data-flen]').forEach((b) => b.addEventListener('click', () => { flagArm.len = Number(b.dataset.flen); again(); }));
     flagSec.querySelectorAll('[data-fstone]').forEach((b) => b.addEventListener('click', () => { flagArm.stone = b.dataset.fstone; again(); }));
@@ -1234,7 +1241,6 @@ function mulberry32(seed) {
 
   DPRO.addToolGroup('dpro-group-rock', 'Rock, gravel & mulch', [
     { id: 'btn-dpm-lib', label: 'Rock & mulch library', title: 'Pick river rock, lava rock, pea gravel, bark mulch and more, then draw the area', onclick: () => { armed.active = true; armed.fromCard = true; setActiveTool('area-bed'); } },
-    { tool: 'line-flagpath', label: 'Flagstone path', title: 'Draw a stone path, then choose the stone and what goes between the stones' },
     { tool: 'boulder', label: 'Boulder', title: 'Place decorative boulders' },
     { id: 'btn-dpm-list', label: 'Quantities', title: 'Cubic yards and tons of each material', onclick: () => switchSidePanel('materials') },
   ]);
