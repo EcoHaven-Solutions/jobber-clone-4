@@ -301,7 +301,7 @@
     }
     geo.computeVertexNormals(); return (stoneGeo[kind] = geo);
   }
-  function scatterStones(pts, topY, m, g, seed) {
+  function scatterStones(pts, topY, m, g, seed, skip) {
     const diam = m.d3; const area = polyAreaFt(pts); if (area < 1 || stoneBudget <= 0) return;
     let want = Math.round((area * (m.cover || 0.5)) / (Math.PI * (diam / 2) * (diam / 2) * 0.9));
     let n = Math.min(want, stoneBudget, 9000); if (n < 8) return;
@@ -314,7 +314,7 @@
     let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; pts.forEach((p) => { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); });
     const d = new THREE.Object3D(); const col = new THREE.Color(); let placed = 0, tries = 0;
     while (placed < n && tries < n * 14) {
-      tries++; const x = x0 + R() * (x1 - x0), z = z0 + R() * (z1 - z0); if (!inPoly(pts, x, z)) continue;
+      tries++; const x = x0 + R() * (x1 - x0), z = z0 + R() * (z1 - z0); if (!inPoly(pts, x, z)) continue; if (skip && skip(x, z)) continue;
       const s = diam * sc * (0.7 + R() * 0.65), flat = 0.42 + R() * 0.3;
       d.position.set(x, topY + s * flat * 0.18, z); d.rotation.set((R() - 0.5) * 0.5, R() * 6.283, (R() - 0.5) * 0.5);
       d.scale.set(s * (0.85 + R() * 0.4), s * flat, s * (0.8 + R() * 0.35)); d.updateMatrix(); im.setMatrixAt(placed, d.matrix);
@@ -385,6 +385,22 @@
   // ======================= Geometry helpers =======================
   const ftPts = (el) => { const out = []; for (let i = 0; i < el.points.length; i += 2) out.push({ x: el.points[i] / pxPerFt, z: el.points[i + 1] / pxPerFt }); return out; };
   function shapeOf(pts) { const sh = new THREE.Shape(); pts.forEach((p, i) => (i ? sh.lineTo(p.x, -p.z) : sh.moveTo(p.x, -p.z))); sh.closePath(); return sh; }
+  // individually placed pavers / stepping stones along a path (one big paver, two side by side, zipper)
+  function placedStones(el, g, idx, onLawn) {
+    const F = DPRO.mat.flag, src = el._src || el, lay = F.layout(src, pxPerFt); if (!lay) return null;
+    const sp = F.spec(src), key = 'stone|' + sp.stone, mp = matMaps(key); if (!mp) return null;
+    const base = onLawn ? 0.02 : 0.05, topY = onLawn ? 0.15 : 0.19; const polys = [];
+    lay.stones.forEach((st) => {
+      const ca = Math.cos(st.ang), sa = Math.sin(st.ang); const pts = st.poly.map(([x, y]) => ({ x: (st.cx + x * ca - y * sa) / pxPerFt, z: (st.cy + x * sa + y * ca) / pxPerFt }));
+      const tb = Math.round(st.tone * 33) / 33; const c = Math.min(1, 0.95 * tb);
+      const top = std('pstone-' + sp.stone + '-' + tb, { map: mp.map, bumpMap: mp.bump, bumpScale: 2.4, roughness: 0.82, color: new THREE.Color(c, c, c) });
+      const sd = std('pstone-side-' + sp.stone, { color: new THREE.Color(((DPRO.mat.flag.stoneBy[sp.stone] || {}).pal || ['#8a7f70'])[0]).multiplyScalar(0.8), roughness: 0.9 });
+      const m = slab(pts, topY + idx * 0.0003, base, top, sd); m.castShadow = true;
+      m.userData.pick = { title: 'Flagstone path · ' + F.stoneBy[sp.stone].name, sub: F.styleName(sp.style) + ' · ' + sp.len + ' ft stones · ' + F.infillName(sp.infill) + ' between' + (el.label ? ' · ' + el.label : '') };
+      g.add(m); polys.push(pts);
+    });
+    return polys;
+  }
   function slab(pts, top, base, topMat, sideMat) {
     const geo = new THREE.ExtrudeGeometry(shapeOf(pts), { depth: Math.max(0.02, top - base), bevelEnabled: false, curveSegments: 1 });
     geo.rotateX(-Math.PI / 2); geo.translate(0, base, 0);
@@ -677,14 +693,21 @@
     const info = { buildings: [], barriers: [], litCount: 0 };
     let idx = 0; stoneBudget = 7000;
     // surfaces first, then buildings/barriers (mounting heights), then plants, then lights
-    const surfEls = elements.map((e) => (e.type === 'stonepath' && DPRO.mat ? Object.assign({}, e, { type: 'area', subtype: 'flagstone', points: DPRO.mat.flag.pathPoly(e, pxPerFt), _path: true }) : e));
+    const surfEls = elements.map((e) => {
+      if (!(e.type === 'stonepath' && DPRO.mat)) return e;
+      const sp = DPRO.mat.flag.spec(e), pp = DPRO.mat.flag.pathPoly(e, pxPerFt);
+      if (sp.style === 'fill') return Object.assign({}, e, { type: 'area', subtype: 'flagstone', points: pp, _path: true });
+      return Object.assign({}, e, { type: 'area', subtype: 'bed', material: sp.infill === 'lawn' ? null : sp.infill, points: pp, _path: true, _src: e, _placed: true, _lawn: sp.infill === 'lawn' });
+    });
     surfEls.forEach((el) => {
       if (el.type !== 'area' || !el.points || el.points.length < 6) return;
       idx++;
       if (el.subtype === 'building') return;
       const pts = ftPts(el);
+      let stonePolys = null;
+      if (el._placed) { try { stonePolys = placedStones(el, root, idx, el._lawn); } catch (err) { console.warn('path stones failed', err); } if (el._lawn) return; }
       if (el.subtype === 'boundary') { const ln = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts.map((p) => new THREE.Vector3(p.x, 0.2, p.z))), new THREE.LineBasicMaterial({ color: '#E5E5E5' })); root.add(ln); return; }
-      const top = (LIFT[el.subtype] || 0.1) + idx * 0.0008;
+      const top = el._placed ? 0.12 + idx * 0.0008 : (LIFT[el.subtype] || 0.1) + idx * 0.0008;
       let topMat = surfaceMat(el);
       if (!topMat) {
         if (el.subtype === 'bed') topMat = std('bed-' + (el.surface || 'bark'), { map: planTex({ rock: 'rock', soil: 'soil' }[el.surface] || 'bark'), roughness: 1 });
@@ -695,8 +718,9 @@
       const sl = slab(pts, top, 0, topMat, el.subtype === 'flagstone' && DPRO.mat && DPRO.mat.flag.spec(el).infill === 'lawn' ? std('side-hidden', { visible: false }) : side);
       const mk = DPRO.mat && (el.subtype === 'bed' || el.subtype === 'gravel') ? DPRO.mat.keyFor(el) : null; const mdef = mk && DPRO.mat.by[mk];
       sl.userData.pick = { title: mdef ? mdef.name : (el.subtype === 'flagstone' && DPRO.mat ? (el._path ? 'Flagstone path' : 'Flagstone') + ' \u00b7 ' + DPRO.mat.flag.stoneBy[DPRO.mat.flag.spec(el).stone].name : ((CATP.AREA_PRESETS.find((p) => p.key === el.subtype) || {}).name || 'Surface')), sub: (el.subtype === 'flagstone' && DPRO.mat ? INFILL_LABEL(el) + ' \u00b7 ' : '') + Math.round(polyAreaFt(pts)) + ' sq ft' + (el.label ? ' \u00b7 ' + el.label : '') };
+      if (el._placed) sl.userData.pick = { title: 'Flagstone path \u00b7 ' + DPRO.mat.flag.infillName(el.material) + ' between the stones', sub: Math.round(polyAreaFt(pts)) + ' sq ft' + (el.label ? ' \u00b7 ' + el.label : '') };
       root.add(sl);
-      if (mdef && mdef.d3) scatterStones(pts, top, mdef, root, idx);
+      if (mdef && mdef.d3) scatterStones(pts, top, mdef, root, idx, stonePolys ? (x, z) => stonePolys.some((pp) => inPoly(pp, x, z)) : null);
     });
     const tagged = (el, pick, fn) => { const n0 = root.children.length; fn(); for (let i = n0; i < root.children.length; i++) root.children[i].userData.pick = pick; };
     elements.forEach((el) => { if (el.type === 'area' && el.subtype === 'building') tagged(el, { title: el.label || 'House / building', sub: Math.round(polyAreaFt(ftPts(el))) + ' sq ft footprint' }, () => buildBuilding(el, root, info)); });

@@ -726,7 +726,7 @@
   };
   function texture(name) {
     if (!texCache[name]) {
-      const m = DPRO.mat && ((DPRO.mat.by && DPRO.mat.by[name]) || /^flag\|/.test(name)); // rock / gravel / mulch / flagstone library (design-materials.js)
+      const m = DPRO.mat && ((DPRO.mat.by && DPRO.mat.by[name]) || /^(flag|stone)\|/.test(name)); // rock / gravel / mulch / flagstone library (design-materials.js)
       texCache[name] = m ? DPRO.mat.tex2d(name) : TEXTURES[name]();
     }
     return texCache[name];
