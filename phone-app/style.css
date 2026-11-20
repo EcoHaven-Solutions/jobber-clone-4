@@ -1789,4 +1789,6 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
 .dpm-price { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 11px; }
 .dpm-price input { width: 64px; padding: 3px 4px; font-size: 12px; }
 .dpm-cost { font-weight: 700; font-size: 12px; }
+.dpm-card.dpm-small img { height: 36px; }
+.dpm-card.dpm-small span { font-size: 10.5px; }
 /* DESIGN-PRO-PATCH-END */

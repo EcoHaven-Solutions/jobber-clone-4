@@ -274,12 +274,13 @@
   function surfaceMat(el) {
     const M = DPRO.mat; const sub = el.subtype;
     let key = null;
-    if (M && (sub === 'bed' || sub === 'gravel')) key = M.keyFor(el); else if (SURF_KEY[sub]) key = SURF_KEY[sub];
+    if (M && (sub === 'bed' || sub === 'gravel')) key = M.keyFor(el); else if (M && sub === 'flagstone') key = M.flag.key(el); else if (SURF_KEY[sub]) key = SURF_KEY[sub];
     const mp = key && matMaps(key);
     if (!mp) return null;
     const m = M && M.by[key];
-    return std('pbr-' + key, { map: mp.map, bumpMap: mp.bump, bumpScale: m ? m.bump * 0.55 : (SURF_BUMP[key] || SURF_BUMP[sub] || 1), roughness: m ? m.rough : (SURF_ROUGH[key] || 0.9) });
+    return std('pbr-' + key, { map: mp.map, bumpMap: mp.bump, bumpScale: m ? m.bump * 0.55 : (sub === 'flagstone' ? 2.4 : (SURF_BUMP[key] || SURF_BUMP[sub] || 1)), roughness: m ? m.rough : (sub === 'flagstone' ? 0.82 : (SURF_ROUGH[key] || 0.9)), alphaTest: sub === 'flagstone' && /\|lawn\|/.test(key) ? 0.5 : 0 });
   }
+  const INFILL_LABEL = (el) => { const sp = DPRO.mat.flag.spec(el); return DPRO.mat.flag.infillName(sp.infill) + ' between stones'; };
   function inPoly(pts, x, z) {
     let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
       const a = pts[i], b = pts[j]; if ((a.z > z) !== (b.z > z) && x < ((b.x - a.x) * (z - a.z)) / (b.z - a.z) + a.x) c = !c;
@@ -676,7 +677,8 @@
     const info = { buildings: [], barriers: [], litCount: 0 };
     let idx = 0; stoneBudget = 7000;
     // surfaces first, then buildings/barriers (mounting heights), then plants, then lights
-    elements.forEach((el) => {
+    const surfEls = elements.map((e) => (e.type === 'stonepath' && DPRO.mat ? Object.assign({}, e, { type: 'area', subtype: 'flagstone', points: DPRO.mat.flag.pathPoly(e, pxPerFt), _path: true }) : e));
+    surfEls.forEach((el) => {
       if (el.type !== 'area' || !el.points || el.points.length < 6) return;
       idx++;
       if (el.subtype === 'building') return;
@@ -690,9 +692,9 @@
         else topMat = std('surf-default', { color: '#B5B0A0' });
       }
       const side = el.subtype === 'deck' ? std('deck-side', { color: '#6B4A2A' }) : (el.subtype === 'bed' || el.subtype === 'gravel') && DPRO.mat ? std('edge-' + DPRO.mat.keyFor(el), { color: new THREE.Color((DPRO.mat.by[DPRO.mat.keyFor(el)] || {}).base || '#4a3a2a').multiplyScalar(1.6) }) : std('slab-side', { color: '#6F6F68' });
-      const sl = slab(pts, top, 0, topMat, side);
+      const sl = slab(pts, top, 0, topMat, el.subtype === 'flagstone' && DPRO.mat && DPRO.mat.flag.spec(el).infill === 'lawn' ? std('side-hidden', { visible: false }) : side);
       const mk = DPRO.mat && (el.subtype === 'bed' || el.subtype === 'gravel') ? DPRO.mat.keyFor(el) : null; const mdef = mk && DPRO.mat.by[mk];
-      sl.userData.pick = { title: mdef ? mdef.name : ((CATP.AREA_PRESETS.find((p) => p.key === el.subtype) || {}).name || 'Surface'), sub: Math.round(polyAreaFt(pts)) + ' sq ft' + (el.label ? ' \u00b7 ' + el.label : '') };
+      sl.userData.pick = { title: mdef ? mdef.name : (el.subtype === 'flagstone' && DPRO.mat ? (el._path ? 'Flagstone path' : 'Flagstone') + ' \u00b7 ' + DPRO.mat.flag.stoneBy[DPRO.mat.flag.spec(el).stone].name : ((CATP.AREA_PRESETS.find((p) => p.key === el.subtype) || {}).name || 'Surface')), sub: (el.subtype === 'flagstone' && DPRO.mat ? INFILL_LABEL(el) + ' \u00b7 ' : '') + Math.round(polyAreaFt(pts)) + ' sq ft' + (el.label ? ' \u00b7 ' + el.label : '') };
       root.add(sl);
       if (mdef && mdef.d3) scatterStones(pts, top, mdef, root, idx);
     });
