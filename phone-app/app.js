@@ -834,7 +834,7 @@ jobCreateInvoiceBtn.addEventListener('click', async () => {
 // pinned to the Dock/installed as an app, macOS should route it there.
 function openTextCompose(phone, text) {
   const digits = (phone || '').replace(/[^\d+]/g, '');
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0 && Math.min(screen.width, screen.height) <= 700); // MOBILE-TEXT-PATCH: Chrome 'Desktop site' mode hides the phone's user-agent
 
   if (isMobile && digits) {
     window.open(`sms:${digits}?&body=${encodeURIComponent(text)}`, '_blank');
