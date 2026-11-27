@@ -639,6 +639,22 @@ window.api = {
     sendEstimateText: (quoteId) => invokeFunction('send-sms', { quoteId }),
   },
 
+  // TWO-LINES-SYNC: texts sent from the work SIM by the Two Lines app, and
+  // the texts/calls Two Lines logs back here.
+  twoLines: {
+    queue: async (toPhone, body, customerId) => unwrap(await sb.from('sms_queue')
+      .insert({ to_phone: toPhone, body, customer_id: customerId || null }).select().single()),
+    listQueue: async () => unwrap(await sb.from('sms_queue').select('*')
+      .in('status', ['pending', 'sending', 'failed']).order('created_at')),
+    retry: async (id) => unwrap(await sb.from('sms_queue').update({ status: 'pending', error: null }).eq('id', id).select()),
+    cancel: async (id) => unwrap(await sb.from('sms_queue').update({ status: 'canceled' }).eq('id', id).select()),
+    history: async ({ customerId, leadId }) => {
+      let q = sb.from('communications').select('*').order('occurred_at', { ascending: false }).limit(50);
+      q = customerId ? q.eq('customer_id', customerId) : q.eq('lead_id', leadId);
+      return unwrap(await q);
+    },
+  },
+
   payments: {
     createLinkForInvoice: async (invoiceId) => {
       const result = await invokeFunction('create-payment-link', { invoiceId });

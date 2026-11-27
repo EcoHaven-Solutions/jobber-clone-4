@@ -167,6 +167,7 @@ function openCustomerDrawer(customer = null) {
   }
 
   renderCustomerCardStatus(customer); // AUTOPAY-PATCH
+  renderCommsHistory(customer ? { customerId: customer.id } : null); // TWO-LINES-SYNC
   overlay.hidden = false;
   drawer.hidden = false;
 }
@@ -835,6 +836,15 @@ jobCreateInvoiceBtn.addEventListener('click', async () => {
 function openTextCompose(phone, text) {
   const digits = (phone || '').replace(/[^\d+]/g, '');
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0 && Math.min(screen.width, screen.height) <= 700); // MOBILE-TEXT-PATCH: Chrome 'Desktop site' mode hides the phone's user-agent
+
+  // TWO-LINES-SYNC: hand the text to Two Lines, which sends it from the work
+  // SIM. Works from the computer too, so it's checked before the phone-only modes.
+  let tlMode = 'sms';
+  try { tlMode = localStorage.getItem('eh_text_mode') || 'sms'; } catch (e) { /* optional */ }
+  if (tlMode === 'twolines' && digits) {
+    queueTwoLinesText(phone, text);
+    return;
+  }
 
   // TEXT-MODE-PATCH: choose what "Copy for text" does on a phone (Settings -> Texting)
   if (isMobile) {
@@ -5132,8 +5142,134 @@ function radarDetailHtml(p) {
     '<option value="sms">Open my default texting app</option>' +
     '<option value="share">Open the Share menu (pick Two Lines from the list)</option>' +
     '<option value="copy">Just copy the message (I will open Two Lines and paste)</option>' +
-    '</select></label><p class="empty-sub">Saved on this phone only. The message is always copied first.</p></div>';
+    '<option value="twolines">Send it automatically from my work line (Two Lines)</option>' +
+    '</select></label><p class="empty-sub">Saved on this device only, so set it on your phone and your computer. With "Send it automatically", the text goes out from your Pixel\'s work number within about a minute, even when you tap it on the computer.</p></div>';
   host.parentNode.insertBefore(card, host);
   const sel = document.getElementById('text-mode-select'); sel.value = mode;
   sel.addEventListener('change', () => { try { localStorage.setItem('eh_text_mode', sel.value); } catch (e) { /* optional */ } });
+})();
+
+
+/* ===================== TWO-LINES-SYNC ===================== */
+// Texts queued here are sent by the Two Lines app from the work SIM, and
+// every work-line text/call Two Lines sees is logged back to the customer.
+
+async function queueTwoLinesText(phone, text) {
+  const digits = (phone || '').replace(/\D/g, '').slice(-10);
+  const match = (typeof customers !== 'undefined' ? customers : []).find((c) => (c.phone || '').replace(/\D/g, '').slice(-10) === digits);
+  try {
+    await window.api.twoLines.queue(phone, text, match ? match.id : null);
+    alert('Queued. Two Lines will send it from your work number within about a minute.' +
+      '\n\n(Check Settings -> Two Lines if it does not go out.)');
+  } catch (err) {
+    try { navigator.clipboard.writeText(text); } catch (e) { /* optional */ }
+    alert('Could not queue the text (' + (err && err.message ? err.message : err) + ').\n\n' +
+      'The message is copied so you can paste it into Two Lines yourself. ' +
+      'If this keeps happening, run add_two_lines_sync.sql in Supabase.');
+  }
+}
+
+const COMMS_KIND = { sms: 'Text', call: 'Call', missed_call: 'Missed call' };
+
+async function renderCommsHistory(who) {
+  const form = document.getElementById('customer-form');
+  if (!form) return;
+  let wrap = document.getElementById('comms-history');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'comms-history';
+    const anchor = form.querySelector('.drawer-actions');
+    form.insertBefore(wrap, anchor);
+  }
+  if (!who) { wrap.hidden = true; wrap.innerHTML = ''; return; }
+  wrap.hidden = false;
+  wrap.innerHTML = '<div class="drawer-section-label">Work-line texts &amp; calls</div><p class="empty-sub">Loading...</p>';
+  let rows = [];
+  try { rows = await window.api.twoLines.history(who); } catch (err) {
+    wrap.innerHTML = '<div class="drawer-section-label">Work-line texts &amp; calls</div><p class="empty-sub">Not set up yet (run add_two_lines_sync.sql).</p>';
+    return;
+  }
+  const items = rows.map((r) => {
+    const when = new Date(r.occurred_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const arrow = r.direction === 'out' ? '&rarr; Sent' : '&larr; Received';
+    const label = r.kind === 'sms' ? arrow : (r.kind === 'missed_call' ? 'Missed call' : (r.direction === 'out' ? 'Outgoing call' : 'Incoming call'));
+    const dur = r.kind === 'call' && r.duration_sec ? ' &middot; ' + Math.max(1, Math.round(r.duration_sec / 60)) + ' min' : '';
+    return '<div class="comms-row comms-' + r.direction + '">' +
+      '<div class="comms-meta">' + label + dur + ' &middot; ' + escapeHtml(when) + '</div>' +
+      (r.body ? '<div class="comms-body">' + escapeHtml(r.body) + '</div>' : '') + '</div>';
+  }).join('');
+  wrap.innerHTML = '<div class="drawer-section-label">Work-line texts &amp; calls</div>' +
+    (items ? '<div class="comms-list">' + items + '</div>' : '<p class="empty-sub">Nothing logged from Two Lines yet.</p>');
+}
+
+/* Settings -> Two Lines card: new-lead toggle and the send queue.
+   (The missed-call auto-reply and text menu are set in Two Lines itself.) */
+(function () {
+  const view = document.getElementById('view-settings');
+  if (!view || document.getElementById('two-lines-card')) return;
+  const host = document.getElementById('text-mode-card') || view.querySelector('.settings-card');
+  if (!host) return;
+  const card = document.createElement('div');
+  card.className = 'table-wrap settings-card'; card.id = 'two-lines-card'; card.style.marginBottom = '16px';
+  card.innerHTML = '<div class="drawer-body" style="padding:24px;">' +
+    '<div class="drawer-section-label" style="margin-top:0;">Two Lines (work SIM)</div>' +
+    '<p class="empty-sub">Work-line texts and calls show on each customer. Texts you send with "Copy for text" go out from your work number when Settings -> Texting is set to "Send it automatically". The missed-call auto-reply and text menu are set in Two Lines itself.</p>' +
+    '<label style="flex-direction:row; align-items:center; gap:8px;"><input type="checkbox" id="tl-new-leads" style="width:auto;" /> Make a new Lead when an unknown number texts or calls the work line</label>' +
+    '<div style="display:flex; gap:8px; margin:8px 0 16px;"><button type="button" class="btn btn-primary btn-small" id="tl-save">Save</button><span class="empty-sub" id="tl-save-msg"></span></div>' +
+    '<div class="drawer-section-label">Waiting to send</div><div id="tl-queue"><p class="empty-sub">Loading...</p></div>' +
+    '<button type="button" class="btn btn-ghost btn-small" id="tl-refresh">Refresh</button>' +
+    '</div>';
+  host.parentNode.insertBefore(card, host.nextSibling);
+
+  async function loadSettings() {
+    try {
+      const s = await window.api.settings.get();
+      document.getElementById('tl-new-leads').checked = String(s.two_lines_new_leads ?? 'true') === 'true';
+    } catch (e) { /* optional */ }
+  }
+
+  async function loadQueue() {
+    const el = document.getElementById('tl-queue');
+    let rows = [];
+    try { rows = await window.api.twoLines.listQueue(); } catch (err) {
+      el.innerHTML = '<p class="empty-sub">Not set up yet. Run add_two_lines_sync.sql in Supabase (SQL Editor), then tap Refresh.</p>';
+      return;
+    }
+    if (!rows.length) { el.innerHTML = '<p class="empty-sub">Nothing waiting. Everything has gone out.</p>'; return; }
+    el.innerHTML = rows.map((r) => {
+      const ageMin = Math.round((Date.now() - new Date(r.created_at).getTime()) / 60000);
+      const status = r.status === 'failed' ? 'Failed: ' + escapeHtml(r.error || '') : (r.status === 'sending' ? 'Sending...' : 'Waiting for Two Lines (' + ageMin + ' min)');
+      return '<div class="comms-row" data-id="' + r.id + '"><div class="comms-meta">To ' + escapeHtml(r.to_phone) + ' &middot; ' + status + '</div>' +
+        '<div class="comms-body">' + escapeHtml(r.body) + '</div>' +
+        '<div style="display:flex; gap:8px; margin-top:6px;">' +
+        (r.status === 'failed' ? '<button type="button" class="btn btn-ghost btn-small" data-tl="retry">Retry</button>' : '') +
+        '<button type="button" class="btn btn-ghost btn-small" data-tl="cancel">Cancel</button></div></div>';
+    }).join('');
+    if (rows.some((r) => r.status === 'pending' && Date.now() - new Date(r.created_at).getTime() > 5 * 60000)) {
+      el.insertAdjacentHTML('afterbegin', '<p class="empty-sub" style="color:#f0b429;">Texts have been waiting 5+ minutes. Is your Pixel on, online, and is Two Lines\' sync turned on?</p>');
+    }
+  }
+
+  card.addEventListener('click', async (e) => {
+    if (e.target.id === 'tl-refresh') { loadQueue(); return; }
+    if (e.target.id === 'tl-save') {
+      const msg = document.getElementById('tl-save-msg');
+      try {
+        await window.api.settings.set('two_lines_new_leads', document.getElementById('tl-new-leads').checked ? 'true' : 'false');
+        msg.textContent = 'Saved.';
+      } catch (err) { msg.textContent = 'Could not save: ' + (err && err.message ? err.message : err); }
+      return;
+    }
+    const btn = e.target.closest('[data-tl]');
+    if (!btn) return;
+    const id = Number(btn.closest('[data-id]').dataset.id);
+    try {
+      if (btn.dataset.tl === 'retry') await window.api.twoLines.retry(id);
+      if (btn.dataset.tl === 'cancel') await window.api.twoLines.cancel(id);
+    } catch (err) { alert(err && err.message ? err.message : err); }
+    loadQueue();
+  });
+
+  loadSettings();
+  loadQueue();
 })();

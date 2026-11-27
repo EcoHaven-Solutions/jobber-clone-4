@@ -1792,3 +1792,12 @@ label.batch-customer-row.batch-customer-row input[type="checkbox"]:checked::afte
 .dpm-card.dpm-small img { height: 36px; }
 .dpm-card.dpm-small span { font-size: 10.5px; }
 /* DESIGN-PRO-PATCH-END */
+
+/* TWO-LINES-SYNC */
+.comms-list { max-height: 280px; overflow-y: auto; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
+.comms-row { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+.comms-list .comms-row { margin-bottom: 0; }
+.comms-row.comms-out { border-left: 3px solid #4CAF50; }
+.comms-row.comms-in { border-left: 3px solid #3E7C98; }
+.comms-meta { font-size: 12px; opacity: 0.75; }
+.comms-body { white-space: pre-wrap; word-break: break-word; margin-top: 2px; }
