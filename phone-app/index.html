@@ -158,10 +158,14 @@
             <h1>Leads</h1>
             <p class="subtitle" id="lead-count">0 on file</p>
           </div>
-          <button class="btn btn-primary" id="btn-new-lead">+ New lead</button>
+          <div>
+            <button class="btn btn-ghost" id="btn-scan-leads" type="button">Scan for leads</button>
+            <button class="btn btn-primary" id="btn-new-lead">+ New lead</button>
+          </div>
         </header>
 
         <div class="toolbar">
+          <span id="lead-scan-status" role="status"></span>
           <select id="lead-status-filter">
             <option value="">All statuses</option>
             <option value="new">New</option>
@@ -2036,6 +2040,14 @@
       <label>Notes
         <textarea name="notes" rows="3"></textarea>
       </label>
+      <div id="discovered-lead-outreach" hidden>
+        <label>Advance SMS consent (when and how they opted in)
+          <input id="lead-sms-consent" type="text" maxlength="2000" />
+        </label>
+        <button type="button" class="btn btn-ghost" id="btn-queue-lead-sms">Queue Work text</button>
+        <button type="button" class="btn btn-ghost" id="btn-send-lead-email">Send outreach email</button>
+        <p id="lead-outreach-status" role="status"></p>
+      </div>
       <div id="lead-quote-info" style="font-size:13px;color:#A9AC9E;margin-top:-8px;" hidden></div>
 
       <!-- LEAD-PHOTOS-PATCH -->
@@ -2255,10 +2267,10 @@
       <button class="myqr-close" id="myqr-close" type="button">Close</button>
     </div>
   </div>
-  <script src="supabase-api.js?v=202611261530"></script>
+  <script src="supabase-api.js?v=20261128-leads"></script>
   <script src="design-data.js?v=202611201015"></script>
   <script src="design-data-pro.js?v=202611201015"></script>
-  <script src="app.js?v=202611261530"></script>
+  <script src="app.js?v=20261128-leads"></script>
   <script src="design.js?v=202611201015"></script>
   <script src="design-pro.js?v=202611201015"></script>
   <script src="design-checks.js?v=202611201015"></script>

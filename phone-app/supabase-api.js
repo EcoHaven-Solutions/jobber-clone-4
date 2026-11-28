@@ -228,6 +228,15 @@ async function uploadFileToStorage(file, folder) {
   return sb.storage.from('attachments').getPublicUrl(path).data.publicUrl;
 }
 
+async function callLeadGenerator(body) {
+  const { data, error } = await sb.functions.invoke('lead-generator', { body });
+  if (error) {
+    const details = await error.context?.json?.().catch(() => null);
+    throw new Error(details?.error || error.message);
+  }
+  return data;
+}
+
 window.api = {
   isElectron: false,
 
@@ -526,6 +535,7 @@ window.api = {
     },
   },
 
+  leadGenerator: (body) => callLeadGenerator(body),
   leads: {
     list: async () => unwrap(await sb.from('leads').select('*').order('created_at', { ascending: false })),
     create: async (l) => unwrap(await sb.from('leads').insert(cleanLead(l)).select().single()),

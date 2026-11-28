@@ -2815,6 +2815,54 @@ async function loadLeads() {
   renderLeads();
 }
 
+const scanLeadsButton = document.getElementById('btn-scan-leads');
+scanLeadsButton.addEventListener('click', async () => {
+  const status = document.getElementById('lead-scan-status');
+  scanLeadsButton.disabled = true;
+  status.textContent = 'Scanning…';
+  try {
+    const result = await window.api.leadGenerator({ action: 'scan' });
+    status.textContent = `${result.added} new leads` +
+      (result.unavailable.length ? `. Unavailable: ${result.unavailable.join(', ')}` : '');
+    await loadLeads();
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    scanLeadsButton.disabled = false;
+  }
+});
+
+const leadSmsButton = document.getElementById('btn-queue-lead-sms');
+const leadEmailButton = document.getElementById('btn-send-lead-email');
+async function sendDiscoveredLeadOutreach(channel) {
+  const lead = leads.find((item) => item.id === editingLeadId);
+  if (!lead?.discovery_key) return;
+  const consent = document.getElementById('lead-sms-consent').value.trim();
+  const status = document.getElementById('lead-outreach-status');
+  const field = channel === 'sms' ? 'phone' : 'email';
+  const recipient = lead[field];
+  if (!recipient || leadForm.elements[field].value.trim() !== recipient.trim()) {
+    status.textContent = 'Save the contact on this lead, then reopen it.';
+    return;
+  }
+  if (channel === 'sms' && !consent) {
+    status.textContent = 'Record the recipient’s advance text opt-in first.';
+    return;
+  }
+  if (!confirm(`${channel === 'sms' ? 'Queue a Work text' : 'Send marketing email'} to ${recipient}?`)) return;
+  leadSmsButton.disabled = leadEmailButton.disabled = true;
+  try {
+    const result = await window.api.leadGenerator({ action: 'outreach', id: lead.id, channel, consent });
+    status.textContent = result.status;
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    leadSmsButton.disabled = leadEmailButton.disabled = false;
+  }
+}
+leadSmsButton.addEventListener('click', () => sendDiscoveredLeadOutreach('sms'));
+leadEmailButton.addEventListener('click', () => sendDiscoveredLeadOutreach('email'));
+
 function renderLeads() {
   const statusQuery = leadStatusFilter.value;
   const filtered = statusQuery ? leads.filter((l) => l.status === statusQuery) : leads;
@@ -2882,6 +2930,15 @@ document.getElementById('btn-delete-selected-leads').addEventListener('click', a
 function openLeadDrawer(lead = null) {
   editingLeadId = lead ? lead.id : null;
   leadForm.reset();
+  document.getElementById('discovered-lead-outreach').hidden =
+    !lead?.discovery_key || ['converted', 'lost'].includes(lead.status);
+  const outreachStatus = document.getElementById('lead-outreach-status');
+  outreachStatus.textContent = '';
+  if (lead?.discovery_key) {
+    window.api.leadGenerator({ action: 'status', id: lead.id }).then((result) => {
+      if (editingLeadId === lead.id && !outreachStatus.textContent) outreachStatus.textContent = result.status;
+    }).catch(() => {});
+  }
 
   if (lead) {
     leadDrawerTitle.textContent = 'Edit lead';
