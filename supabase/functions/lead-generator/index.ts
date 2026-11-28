@@ -109,6 +109,7 @@ async function outreach(body: Record<string, unknown>, config: Record<string, st
   if (error) throw error;
   if (!lead?.discovery_key || ['converted', 'lost'].includes(lead.status)) return reply({ error: 'Lead is unavailable.' }, 404);
   if (body.channel === 'sms') {
+    if (env('LEAD_WORK_SMS_READY') !== 'true') return reply({ error: 'Work SMS is waiting for the CRM text bridge setup.' }, 503);
     const consent = text(body.consent, 2000);
     const phone = text(lead.phone, 50).replace(/[^0-9]/g, '').replace(/^1(?=\d{10}$)/, '');
     if (!consent || !/^\d{10}$/.test(phone)) return reply({ error: 'Save an opted-in US phone and record advance consent.' }, 400);
