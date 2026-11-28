@@ -76,10 +76,12 @@ async function feed(url: string): Promise<Candidate[]> {
   });
 }
 
-async function scan() {
+async function scan(config: Record<string, string>) {
   const sources: { name: string; run: () => Promise<Candidate[]> }[] = [];
-  if (env('PERMITSTACK_API_KEY')) sources.push({ name: 'Spokane permits', run: () => permits(env('PERMITSTACK_API_KEY')) });
-  if (env('LEAD_FEED_URL')) sources.push({ name: 'Builder/listing feed', run: () => feed(env('LEAD_FEED_URL')) });
+  const permitKey = config.ecohaven_permitstack_key || env('PERMITSTACK_API_KEY');
+  if (permitKey) sources.push({ name: 'Spokane permits', run: () => permits(permitKey) });
+  const feedUrl = config.ecohaven_lead_feed_url || env('LEAD_FEED_URL');
+  if (feedUrl) sources.push({ name: 'Builder/listing feed', run: () => feed(feedUrl) });
   if (!sources.length) return reply({ error: 'Configure a permit key or lead feed first.' }, 503);
   const settled = await Promise.allSettled(sources.map((source) => source.run()));
   const rows = new Map<string, Candidate>();
@@ -99,7 +101,7 @@ async function scan() {
 
 const message = 'Hi, this is Justen with EcoHaven Solutions. Are you looking for sprinkler installation or drought-tolerant landscaping for your project? EcoHavenPro.com';
 
-async function outreach(body: Record<string, unknown>) {
+async function outreach(body: Record<string, unknown>, config: Record<string, string>) {
   const id = Number(body.id);
   if (!Number.isSafeInteger(id) || id < 1) return reply({ error: 'Invalid lead.' }, 400);
   const { data: lead, error } = await db.from('leads')
@@ -120,9 +122,9 @@ async function outreach(body: Record<string, unknown>) {
   if (body.channel !== 'email') return reply({ error: 'Unknown outreach channel.' }, 400);
   const email = text(lead.email).toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return reply({ error: 'Save a valid business email first.' }, 400);
-  const gateway = env('LEAD_EMAIL_GATEWAY');
-  const gatewayKey = env('LEAD_EMAIL_GATEWAY_KEY');
-  const address = env('LEAD_MAILING_ADDRESS');
+  const gateway = config.ecohaven_lead_email_gateway || env('LEAD_EMAIL_GATEWAY');
+  const gatewayKey = config.ecohaven_lead_email_gateway_key || env('LEAD_EMAIL_GATEWAY_KEY');
+  const address = config.ecohaven_lead_mailing_address || env('LEAD_MAILING_ADDRESS');
   if (!gateway || !gatewayKey || !address) return reply({ error: 'Configure the email gateway and business mailing address first.' }, 503);
   const { error: claimError } = await db.from('lead_outreach').insert({
     lead_id: id, channel: 'email', recipient: email, status: 'attempted',
@@ -170,16 +172,18 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const token = (req.headers.get('Authorization') || '').replace(/^Bearer /i, '');
-    const cron = env('LEAD_CRON_SECRET');
-    if (cron && token === cron && body.action === 'scan') return await scan();
+    const { data: config, error: configError } = await db.rpc('ecohaven_lead_configuration');
+    if (configError || !config) throw new Error('Configuration unavailable');
+    const cron = config.ecohaven_lead_cron || env('LEAD_CRON_SECRET');
+    if (cron && token === cron && body.action === 'scan') return await scan(config);
     if (!token) return reply({ error: 'Sign in to EcoHaven first.' }, 401);
     const { data, error } = await db.auth.getUser(token);
     const operators = env('LEAD_OPERATOR_EMAILS').split(',').map((email) => email.trim().toLowerCase());
-    if (error || !data.user?.email_confirmed_at || !data.user.email || !operators.includes(data.user.email.toLowerCase())) {
+    if (error || !data.user?.email_confirmed_at || !data.user.email || (data.user.id !== config.operator_id && !operators.includes(data.user.email.toLowerCase()))) {
       return reply({ error: 'This account cannot run lead outreach.' }, 403);
     }
-    if (body.action === 'scan') return await scan();
-    if (body.action === 'outreach') return await outreach(body);
+    if (body.action === 'scan') return await scan(config);
+    if (body.action === 'outreach') return await outreach(body, config);
     if (body.action === 'status') return await outreachStatus(Number(body.id));
     return reply({ error: 'Unknown action.' }, 400);
   } catch (error) {
